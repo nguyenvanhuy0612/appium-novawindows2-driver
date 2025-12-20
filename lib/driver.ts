@@ -59,6 +59,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
     powerShell?: ChildProcessWithoutNullStreams;
     powerShellStdOut: string = '';
     powerShellStdErr: string = '';
+    commandQueue: Promise<any> = Promise.resolve();
     keyboardState: KeyboardState = {
         pressed: new Set(),
         alt: false,
@@ -66,6 +67,8 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         meta: false,
         shift: false,
     };
+
+    activeCommands: number = 0;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {
         super(opts, shouldValidateCaps);
@@ -76,6 +79,22 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         for (const key in commands) { // TODO: create a decorator that will do that for the class
             NovaWindows2Driver.prototype[key] = commands[key].bind(this);
         }
+    }
+
+    override async executeCommand(cmd: string, ...args: any[]): Promise<any> {
+        this.activeCommands++;
+        try {
+            return await super.executeCommand(cmd, ...args);
+        } finally {
+            this.activeCommands--;
+        }
+    }
+
+    override async startNewCommandTimeout() {
+        if (this.activeCommands > 0) {
+            return;
+        }
+        await super.startNewCommandTimeout();
     }
 
     override async findElement(strategy: string, selector: string): Promise<Element> {

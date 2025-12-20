@@ -170,48 +170,58 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
     const magicNumber = 0xF2EE;
     // this.log.debug(`Sending PowerShell command: ${command.substring(0, 50)}...`);
 
-    if (!this.powerShell) {
-        this.log.warn('PowerShell session not running. It was either closed or has crashed. Attempting to start a new session...');
-        await this.startPowerShellSession();
-    }
+    const nextCommand = async () => {
+        if (!this.powerShell) {
+            this.log.warn('PowerShell session not running. It was either closed or has crashed. Attempting to start a new session...');
+            await this.startPowerShellSession();
+        }
 
-    const result = await new Promise<string>((resolve, reject) => {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const powerShell = this.powerShell!;
+        const result = await new Promise<string>((resolve, reject) => {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const powerShell = this.powerShell!;
 
-        this.powerShellStdOut = '';
-        this.powerShellStdErr = '';
+            this.powerShellStdOut = '';
+            this.powerShellStdErr = '';
 
-        powerShell.stdin.write(`${command}\n`);
-        powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
+            powerShell.stdin.write(`${command}\n`);
+            powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
 
-        const onClose = (code: number) => {
-            reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
-            this.powerShell = undefined; // Clear the reference as the process is dead
-        };
-        powerShell.on('close', onClose);
+            const onClose = (code: number) => {
+                reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
+                this.powerShell = undefined; // Clear the reference as the process is dead
+            };
+            powerShell.on('close', onClose);
 
-        const onData: Parameters<typeof powerShell.stdout.on>[1] = ((chunk: any) => {
-            const magicChar = String.fromCharCode(magicNumber);
-            if (chunk.toString().includes(magicChar)) {
-                powerShell.stdout.off('data', onData);
-                powerShell.off('close', onClose);
-                if (this.powerShellStdErr) {
-                    reject(new errors.UnknownError(this.powerShellStdErr));
-                } else {
-                    // this.log.debug(`Received magic char, resolving command.`);
-                    resolve(this.powerShellStdOut.replace(`${magicChar}`, '').trim());
+            const onData: Parameters<typeof powerShell.stdout.on>[1] = ((chunk: any) => {
+                const magicChar = String.fromCharCode(magicNumber);
+                if (chunk.toString().includes(magicChar)) {
+                    powerShell.stdout.off('data', onData);
+                    powerShell.off('close', onClose);
+                    if (this.powerShellStdErr) {
+                        reject(new errors.UnknownError(this.powerShellStdErr));
+                    } else {
+                        // this.log.debug(`Received magic char, resolving command.`);
+                        resolve(this.powerShellStdOut.replace(`${magicChar}`, '').trim());
+                    }
                 }
-            }
-        }).bind(this);
+            }).bind(this);
 
-        powerShell.stdout.on('data', onData);
+            powerShell.stdout.on('data', onData);
+        });
+
+        // commented out for now to avoid cluttering the logs with long command outputs
+        // this.log.debug(`PowerShell command executed:\n${command}\n\nCommand output below:\n${result}\n   --------`);
+
+        return result;
+    };
+
+    // Chain the command to the queue
+    this.commandQueue = this.commandQueue.then(nextCommand).catch(() => {
+        // If a previous command failed, we still want to try this one
+        return nextCommand();
     });
 
-    // commented out for now to avoid cluttering the logs with long command outputs
-    // this.log.debug(`PowerShell command executed:\n${command}\n\nCommand output below:\n${result}\n   --------`);
-
-    return result;
+    return this.commandQueue;
 }
 
 export async function terminatePowerShellSession(this: NovaWindows2Driver): Promise<void> {
