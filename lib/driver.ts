@@ -184,6 +184,8 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
 
         try {
             this.log.debug('Creating NovaWindows driver session...');
+            this.log.debug(`User provided capabilities: \n${JSON.stringify(w3cCaps ?? jwpCaps)}`);
+            this.log.debug(`Supported capabilities: \n${Object.keys(UI_AUTOMATION_DRIVER_CONSTRAINTS).join(', ')}`);
             const [sessionId, caps] = await super.createSession(jwpCaps, reqCaps, w3cCaps, driverData);
             if (caps.smoothPointerMove) {
                 assertSupportedEasingFunction(caps.smoothPointerMove);
@@ -203,7 +205,8 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             }
 
             setDpiAwareness();
-            this.log.debug(`Started session ${sessionId}.`);
+            this.log.debug(`Started session: ${sessionId}`);
+            this.log.debug(`Session capabilities: \n${JSON.stringify(caps)}`);
             return [sessionId, caps];
         } catch (e) {
             await this.deleteSession();

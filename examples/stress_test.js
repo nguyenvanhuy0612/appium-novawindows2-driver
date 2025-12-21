@@ -9,10 +9,24 @@ async function main() {
         port: 4723,
         path: '/',
         capabilities: {
-            "appium:automationName": "NovaWindows2",
             "platformName": "Windows",
-            "appium:app": "Root",
-            "appium:newCommandTimeout": 60
+            "appium:automationName": "NovaWindows2",
+            "appium:deviceName": "WindowsPC",
+            // "appium:app": "Root", // "Root" or "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"
+            "appium:app": "Root", // Using Root for now
+            "appium:newCommandTimeout": 3600,
+            "appium:isolatedScriptExecution": false,
+            // "appium:appTopLevelWindow": "0x123456", // Hex string of the window handle
+            // "appium:smoothPointerMove": "linear", // e.g., "linear", "ease-in-out"
+            // "appium:delayBeforeClick": 500, // ms
+            // "appium:delayAfterClick": 500, // ms
+            // "appium:shouldCloseApp": true,
+            // "appium:appArguments": "",
+            // "appium:appWorkingDir": "",
+            "appium:appWaitForLaunchRetries": 20,
+            "appium:appWaitForLaunchRetryIntervalMs": 500,
+            // "appium:prerun": { "command": "...", "script": "..." },
+            // "appium:postrun": { "command": "...", "script": "..." }
         },
         logLevel: 'error'
     };
@@ -27,7 +41,7 @@ async function main() {
         const actions = {
             getPageSource: async () => {
                 const startTime = Date.now();
-                try  {
+                try {
                     const source = await client.getPageSource();
                     console.log(`Page Source retrieval successful (Length: ${source.length} chars)`);
                 } catch (e) {

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
+import { ChildProcessWithoutNullStreams } from 'node:child_process';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
 const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
@@ -26,6 +27,38 @@ async function executeRawCommand(driver: NovaWindows2Driver, command: string): P
         const onClose = (code: number) => {
             reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
             driver.powerShell = undefined; // Clear the reference as the process is dead
+        };
+        powerShell.on('close', onClose);
+
+        const onData: Parameters<typeof powerShell.stdout.on>[1] = ((chunk: any) => {
+            const magicChar = String.fromCharCode(magicNumber);
+            if (chunk.toString().includes(magicChar)) {
+                powerShell.stdout.off('data', onData);
+                powerShell.off('close', onClose);
+                if (driver.powerShellStdErr) {
+                    reject(new errors.UnknownError(driver.powerShellStdErr));
+                } else {
+                    resolve(driver.powerShellStdOut.replace(`${magicChar}`, '').trim());
+                }
+            }
+        }).bind(driver);
+
+        powerShell.stdout.on('data', onData);
+    });
+}
+
+async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: string, powerShell: ChildProcessWithoutNullStreams): Promise<string> {
+    const magicNumber = 0xF2EE;
+
+    driver.powerShellStdOut = '';
+    driver.powerShellStdErr = '';
+
+    powerShell.stdin.write(`${command}\n`);
+    powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
+
+    return await new Promise<string>((resolve, reject) => {
+        const onClose = (code: number) => {
+            reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
         };
         powerShell.on('close', onClose);
 
@@ -129,12 +162,10 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
 }
 
 export async function sendIsolatedPowerShellCommand(this: NovaWindows2Driver, command: string): Promise<string> {
-    const magicNumber = 0xF2EE;
-
     const powerShell = spawn('powershell.exe', ['-NoExit', '-Command', '-']);
     try {
         powerShell.stdout.setEncoding('utf8');
-        powerShell.stdout.setEncoding('utf8');
+        powerShell.stderr.setEncoding('utf8');
 
         powerShell.stdout.on('data', (chunk: any) => {
             this.powerShellStdOut += chunk.toString();
@@ -144,55 +175,25 @@ export async function sendIsolatedPowerShellCommand(this: NovaWindows2Driver, co
             this.powerShellStdErr += chunk.toString();
         });
 
-        const result = await new Promise<string>((resolve, reject) => {
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            const powerShell = this.powerShell!;
+        let fullCommand = `${SET_UTF8_ENCODING}\n`;
 
-            this.powerShellStdOut = '';
-            this.powerShellStdErr = '';
+        if (this.caps.appWorkingDir) {
+            const envVarsSet: Set<string> = new Set();
+            const matches = this.caps.appWorkingDir.matchAll(/%([^%]+)%/g);
 
-            powerShell.stdin.write(`${SET_UTF8_ENCODING}\n`);
-            if (this.caps.appWorkingDir) {
-                const envVarsSet: Set<string> = new Set();
-                const matches = this.caps.appWorkingDir.matchAll(/%([^%]+)%/g);
-
-                for (const match of matches) {
-                    envVarsSet.add(match[1]);
-                }
-                const envVars = Array.from(envVarsSet);
-                for (const envVar of envVars) {
-                    this.caps.appWorkingDir = this.caps.appWorkingDir.replaceAll(`%${envVar}%`, process.env[envVar.toUpperCase()] ?? '');
-                }
-                powerShell.stdin.write(`Set-Location -Path '${this.caps.appWorkingDir}'\n`);
+            for (const match of matches) {
+                envVarsSet.add(match[1]);
             }
-            powerShell.stdin.write(`${command}\n`);
-            powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
+            const envVars = Array.from(envVarsSet);
+            for (const envVar of envVars) {
+                this.caps.appWorkingDir = this.caps.appWorkingDir.replaceAll(`%${envVar}%`, process.env[envVar.toUpperCase()] ?? '');
+            }
+            fullCommand += `Set-Location -Path '${this.caps.appWorkingDir}'\n`;
+        }
 
-            const onClose = (code: number) => {
-                reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
-            };
-            powerShell.on('close', onClose);
+        fullCommand += command;
 
-            const onData: Parameters<typeof powerShell.stdout.on>[1] = ((chunk: any) => {
-                const magicChar = String.fromCharCode(magicNumber);
-                if (chunk.toString().includes(magicChar)) {
-                    powerShell.stdout.off('data', onData);
-                    powerShell.off('close', onClose);
-                    if (this.powerShellStdErr) {
-                        reject(new errors.UnknownError(this.powerShellStdErr));
-                    } else {
-                        resolve(this.powerShellStdOut.replace(`${magicChar}`, '').trim());
-                    }
-                }
-            }).bind(this);
-
-            powerShell.stdout.on('data', onData);
-        });
-
-        // commented out for now to avoid cluttering the logs with long command outputs
-        // this.log.debug(`PowerShell command executed:\n${command}\n\nCommand output below:\n${result}\n   --------`);
-
-        return result;
+        return await executeIsolatedRawCommand(this, fullCommand, powerShell);
     } finally {
         // Ensure the isolated PowerShell process is terminated
         try {
