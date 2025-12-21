@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@appium/base-driver": "^10.1.0",
+    "adm-zip": "^0.5.16",
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
     "xpath-analyzer": "^3.0.1"
@@ -54,12 +55,12 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^24.8.1",
+    "axios": "^1.4.0",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^9.38.0",
     "semantic-release": "^25.0.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.1",
-    "webdriverio": "^9.21.0",
-    "axios": "^1.4.0"
+    "webdriverio": "^9.21.0"
   }
 }

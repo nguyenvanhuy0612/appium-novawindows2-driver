@@ -4,6 +4,8 @@ import { PSString, pwsh$ } from '../powershell';
 const GET_SYSTEM_TIME_COMMAND = pwsh$ /* ps1 */ `(Get-Date).ToString(${0})`;
 const ISO_8061_FORMAT = 'yyyy-MM-ddTHH:mm:sszzz';
 
+// command: 'getDeviceTime'
+// payloadParams: { optional: ['format'] }
 export async function getDeviceTime(this: NovaWindows2Driver, format?: string): Promise<string> {
     format = format ? new PSString(format).toString() : `'${ISO_8061_FORMAT}'`;
     return await this.sendPowerShellCommand(GET_SYSTEM_TIME_COMMAND.format(format));

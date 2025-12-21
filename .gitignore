@@ -1,6 +1,7 @@
 # IDE
 .idea
 .vscode
+temp
 
 # Logs
 screenshot.png
