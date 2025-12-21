@@ -46,7 +46,7 @@ async function main() {
                     const processStr = process.toString();
                     console.log(`[${name}] Process output length: ${processStr.length}`);
 
-                    const buttons = await client.findElements('xpath', '//*[@Name="Button"]');
+                    const buttons = await client.findElements('xpath', '//Button');
                     console.log(`[${name}] Buttons found: ${buttons.length}`);
                     count++;
                 } catch (e) {
