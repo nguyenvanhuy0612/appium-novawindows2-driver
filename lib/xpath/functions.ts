@@ -36,11 +36,11 @@ import { processExprNode } from './core';
 
 const FUNCTION_ARGUMENT_ERROR = $`Function ${0}() requires ${1}.`;
 
-export async function handleFunctionCall<T>(name: FunctionName, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, ...args: ExprNode[]): Promise<T[]> {
+export async function handleFunctionCall<T>(name: FunctionName, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean, ...args: ExprNode[]): Promise<T[]> {
     const processArgs = async <T>(...args: ExprNode[]): Promise<T[][]> => {
         const results: T[][] = [];
         for (const arg of args) {
-            results.push(await processExprNode(arg, context, sendPowerShellCommand));
+            results.push(await processExprNode(arg, context, sendPowerShellCommand, includeContextElementInSearch));
         }
 
         return results;
@@ -227,7 +227,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
 
             throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be string or element'));
         }
-        case TRANSLATE:{
+        case TRANSLATE: {
             if (args.length !== 3) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'exactly 3 arguments'));
             }

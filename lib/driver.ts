@@ -110,11 +110,17 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
 
     override async findElementFromElement(strategy: string, selector: string, elementId: string): Promise<Element> {
         [strategy, selector] = this.processSelector(strategy, selector);
+        if (this.caps.convertAbsoluteXPathToRelativeFromElement && strategy === 'xpath' && selector.startsWith('/')) {
+            selector = `.${selector}`;
+        }
         return super.findElementFromElement(strategy, selector, elementId);
     }
 
     override async findElementsFromElement(strategy: string, selector: string, elementId: string): Promise<Element[]> {
         [strategy, selector] = this.processSelector(strategy, selector);
+        if (this.caps.convertAbsoluteXPathToRelativeFromElement && strategy === 'xpath' && selector.startsWith('/')) {
+            selector = `.${selector}`;
+        }
         return super.findElementsFromElement(strategy, selector, elementId);
     }
 
@@ -156,7 +162,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
                 condition = convertStringToCondition(selector);
                 break;
             case 'xpath':
-                return await xpathToElIdOrIds(selector, mult, context, this.sendPowerShellCommand.bind(this));
+                return await xpathToElIdOrIds(selector, mult, context, this.sendPowerShellCommand.bind(this), this.caps.includeContextElementInSearch);
             default:
                 throw new errors.InvalidArgumentError(`Invalid find strategy ${strategy}`);
         }
@@ -213,6 +219,12 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             }
             if (this.caps.powerShellCommandTimeout === undefined) {
                 this.caps.powerShellCommandTimeout = 60000; // set default value
+            }
+            if (this.caps.convertAbsoluteXPathToRelativeFromElement === undefined) {
+                this.caps.convertAbsoluteXPathToRelativeFromElement = true; // set default value
+            }
+            if (this.caps.includeContextElementInSearch === undefined) {
+                this.caps.includeContextElementInSearch = false; // set default value
             }
 
             await this.startPowerShellSession();

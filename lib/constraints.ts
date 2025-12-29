@@ -44,6 +44,12 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     },
     powerShellCommandTimeout: {
         isNumber: true,
+    },
+    convertAbsoluteXPathToRelativeFromElement: {
+        isBoolean: true,
+    },
+    includeContextElementInSearch: {
+        isBoolean: true,
     }
 } as const satisfies Constraints;
 
