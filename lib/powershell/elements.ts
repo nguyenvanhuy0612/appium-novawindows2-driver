@@ -337,7 +337,14 @@ const GET_ELEMENT_TEXT = pwsh$ /* ps1 */ `
 const INVOKE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([InvokePattern]::Pattern).Invoke()`;
 const EXPAND_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Expand()`;
 const COLLAPSE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Collapse()`;
-const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ScrollItemPattern]::Pattern).ScrollIntoView()`;
+const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
+    $pattern = ${0}.GetCurrentPattern([ScrollItemPattern]::Pattern);
+    if ($null -ne $pattern) {
+        $pattern.ScrollIntoView()
+    } else {
+        throw "ScrollItemPattern is not supported for this element"
+    }
+`;
 const IS_MULTIPLE_SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.CanSelectMultiple`;
 const GET_SELECTED_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.GetSelection()`;
 const IS_ELEMENT_SELECTED = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionItemPattern]::Pattern).Current.IsSelected`;
