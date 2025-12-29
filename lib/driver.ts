@@ -224,7 +224,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
                 this.caps.convertAbsoluteXPathToRelativeFromElement = true; // set default value
             }
             if (this.caps.includeContextElementInSearch === undefined) {
-                this.caps.includeContextElementInSearch = false; // set default value
+                this.caps.includeContextElementInSearch = true; // set default value
             }
 
             await this.startPowerShellSession();
