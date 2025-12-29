@@ -45,11 +45,16 @@ export async function clear(this: NovaWindows2Driver, elementId: string): Promis
 
 export async function setValue(this: NovaWindows2Driver, value: string | string[], elementId: string): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildSetFocusCommand());
-    const metaKeyStates = {
-        shift: false,
-        ctrl: false,
-        meta: false,
-        alt: false,
+    const metaKeyStates: {
+        shift?: string;
+        ctrl?: string;
+        meta?: string;
+        alt?: string;
+    } = {
+        shift: undefined,
+        ctrl: undefined,
+        meta: undefined,
+        alt: undefined,
     };
 
     if (!Array.isArray(value)) {
@@ -69,16 +74,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_SHIFT:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.shift) {
-                    metaKeyStates.shift = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
+                    metaKeyStates.shift = undefined;
                     break;
                 }
 
-                metaKeyStates.shift = true;
+                metaKeyStates.shift = char;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -89,16 +94,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_CONTROL:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.ctrl) {
-                    metaKeyStates.ctrl = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
+                    metaKeyStates.ctrl = undefined;
                     break;
                 }
 
-                metaKeyStates.ctrl = true;
+                metaKeyStates.ctrl = char;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -109,16 +114,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_META:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.meta) {
-                    metaKeyStates.meta = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
+                    metaKeyStates.meta = undefined;
                     break;
                 }
 
-                metaKeyStates.meta = true;
+                metaKeyStates.meta = char;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -129,16 +134,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_ALT:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.alt) {
-                    metaKeyStates.alt = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
+                    metaKeyStates.alt = undefined;
                     break;
                 }
 
-                metaKeyStates.alt = true;
+                metaKeyStates.alt = char;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -160,6 +165,37 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
     }
 
     await sendKeysAndResetArray();
+
+    if (this.caps.releaseModifierKeys) {
+        if (metaKeyStates.shift) {
+            await this.handleKeyActionSequence({
+                type: 'key',
+                id: 'default keyboard',
+                actions: [{ type: 'keyUp', value: metaKeyStates.shift }]
+            });
+        }
+        if (metaKeyStates.ctrl) {
+            await this.handleKeyActionSequence({
+                type: 'key',
+                id: 'default keyboard',
+                actions: [{ type: 'keyUp', value: metaKeyStates.ctrl }]
+            });
+        }
+        if (metaKeyStates.meta) {
+            await this.handleKeyActionSequence({
+                type: 'key',
+                id: 'default keyboard',
+                actions: [{ type: 'keyUp', value: metaKeyStates.meta }]
+            });
+        }
+        if (metaKeyStates.alt) {
+            await this.handleKeyActionSequence({
+                type: 'key',
+                id: 'default keyboard',
+                actions: [{ type: 'keyUp', value: metaKeyStates.alt }]
+            });
+        }
+    }
 }
 
 export async function getElementRect(this: NovaWindows2Driver, elementId: string): Promise<Rect> {

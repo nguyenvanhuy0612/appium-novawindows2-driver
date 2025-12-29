@@ -50,6 +50,9 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     },
     includeContextElementInSearch: {
         isBoolean: true,
+    },
+    releaseModifierKeys: {
+        isBoolean: true,
     }
 } as const satisfies Constraints;
 

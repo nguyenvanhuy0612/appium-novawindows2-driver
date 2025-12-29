@@ -9,8 +9,7 @@ async function main() {
             "appium:automationName": "NovaWindows2",
             "platformName": "Windows",
             "appium:app": "Root",
-            "appium:newCommandTimeout": 120,
-            "appium:includeContextElementInSearch": false
+            "appium:newCommandTimeout": 120
         },
         logLevel: 'error'
     };

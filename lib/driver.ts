@@ -226,6 +226,9 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             if (this.caps.includeContextElementInSearch === undefined) {
                 this.caps.includeContextElementInSearch = true; // set default value
             }
+            if (this.caps.releaseModifierKeys === undefined) {
+                this.caps.releaseModifierKeys = true; // set default value
+            }
 
             await this.startPowerShellSession();
 
