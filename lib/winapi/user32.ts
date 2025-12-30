@@ -175,7 +175,15 @@ const easingFunctions = Object.freeze({
 const UINT32_MAX = 0xFFFFFFFF;
 const UINT16_MAX = 0xFFFF;
 
-const user32 = load('user32.dll');
+const isWindows = process.platform === 'win32';
+
+const dummyLibrary = {
+    func: () => () => { throw new Error('Not implemented on this platform'); }
+};
+
+const user32 = isWindows ? load('user32.dll') : dummyLibrary;
+const kernel32 = isWindows ? load('kernel32.dll') : dummyLibrary;
+const psapi = isWindows ? load('psapi.dll') : dummyLibrary;
 
 const POINT = struct('POINT', {
     x: 'long',
@@ -300,6 +308,12 @@ const GetWindowTextA = user32.func(/* c */ `int __stdcall GetWindowTextA(HWND hW
 const IsWindowVisible = user32.func(/* c */ `BOOL __stdcall IsWindowVisible(HWND hWnd)`) as (hWnd: HWND) => BOOL;
 const EnumWindows = user32.func(/* c */ `BOOL __stdcall EnumWindows(EnumWindowsProc *enumProc, LPARAM lParam)`) as (enumProc: EnumWindowsProc, lParam: LPARAM) => BOOL;
 const SetForegroundWindow = user32.func(/* c */ `BOOL __stdcall SetForegroundWindow(HWND hWnd)`) as (hWnd: HWND) => BOOL;
+const ShowWindow = user32.func(/* c */ `BOOL __stdcall ShowWindow(HWND hWnd, int nCmdShow)`) as (hWnd: HWND, nCmdShow: number) => BOOL;
+
+const OpenProcess = kernel32.func(/* c */ `HANDLE __stdcall OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId)`) as (dwDesiredAccess: number, bInheritHandle: boolean, dwProcessId: number) => number;
+const CloseHandle = kernel32.func(/* c */ `BOOL __stdcall CloseHandle(HANDLE hObject)`) as (hObject: number) => boolean;
+const GetModuleBaseNameA = psapi.func(/* c */ `DWORD __stdcall GetModuleBaseNameA(HANDLE hProcess, HANDLE hModule, LPSTR lpBaseName, DWORD nSize)`) as (hProcess: number, hModule: any, lpBaseName: Buffer, nSize: number) => number;
+
 
 function makeKeyboardEvent(args: {
     /** A virtual-key code. The code must be a value in the range 1 to 254. If the dwFlags member specifies KEYEVENTF_UNICODE, wVk must be 0. */
@@ -832,6 +846,49 @@ export function trySetForegroundWindow(windowHandle: number): boolean {
 
         return true;
     }, 0);
+}
+
+export function setForegroundWindow(windowHandle: number): boolean {
+    return SetForegroundWindow(windowHandle);
+}
+
+export function showWindow(windowHandle: number, nCmdShow: number): boolean {
+    return ShowWindow(windowHandle, nCmdShow);
+}
+
+export function findWindowHandle(processName: string): number | null {
+    let foundHandle: number | null = null;
+    const PROCESS_QUERY_INFORMATION = 0x0400;
+    const PROCESS_VM_READ = 0x0010;
+
+    EnumWindows((hWnd) => {
+        if (!IsWindowVisible(hWnd)) {
+            return true;
+        }
+
+        const ptr: [LPDWORD | null] = [null];
+        GetWindowThreadProcessId(hWnd, ptr);
+        const pid = ptr[0];
+
+        if (pid) {
+            const hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
+            if (hProcess) {
+                const buffer = Buffer.alloc(1024);
+                if (GetModuleBaseNameA(hProcess, null, buffer, buffer.length)) {
+                    const name = buffer.toString('utf8').replace(/\0/g, '');
+                    if (name.toLowerCase() === processName.toLowerCase()) {
+                        foundHandle = Number(address(hWnd));
+                        CloseHandle(hProcess);
+                        return false; // Stop enumeration
+                    }
+                }
+                CloseHandle(hProcess);
+            }
+        }
+        return true;
+    }, 0);
+
+    return foundHandle;
 }
 
 export function sendKeyboardEvents(inputs: (KeyboardEvent['u']['ki'])[]): number {

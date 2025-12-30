@@ -342,7 +342,45 @@ const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
     if ($null -ne $pattern) {
         $pattern.ScrollIntoView()
     } else {
-        throw "ScrollItemPattern is not supported for this element"
+        $success = $false
+        try {
+            ${0}.SetFocus()
+            $success = $true
+        } catch {}
+
+        if (-not $success) {
+            try {
+                $legacy = ${0}.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
+                if ($null -ne $legacy) {
+                    $legacy.Select(3);
+                    $success = $true
+                }
+            } catch {}
+        }
+
+        if (-not $success) {
+             # Try ItemContainerPattern on parent
+            try {
+                $parent = [TreeWalker]::ControlViewWalker.GetParent(${0});
+                if ($null -ne $parent) {
+                    $containerPattern = $parent.GetCurrentPattern([ItemContainerPattern]::Pattern);
+                    if ($null -ne $containerPattern) {
+                        # We have the element, so we pass it directly to be realized/scrolled to
+                        $found = $containerPattern.FindItemByProperty($null, [AutomationElement]::RuntimeIdProperty, ${0}.GetRuntimeId());
+                        if ($null -ne $found) {
+                             # Accessing the found item usually brings it into view or realizes it?
+                             # Actually FindItemByProperty returns the element. We might need to ScrollIntoView THAT element?
+                             # But we already have the element. The docs say "retrieves an element... and scrolls it into view".
+                             $success = $true
+                        }
+                    }
+                }
+            } catch {}
+        }
+
+        if (-not $success) {
+            throw "Failed to scroll into view: ScrollItemPattern not supported, and SetFocus/LegacySelect/ItemContainerPattern failed."
+        }
     }
 `;
 const IS_MULTIPLE_SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.CanSelectMultiple`;
