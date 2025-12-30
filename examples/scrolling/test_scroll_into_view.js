@@ -14,7 +14,7 @@ const opts = {
 async function main() {
     const driver = await wdio.remote(opts);
     try {
-        const listItem = await driver.$("//Window[@Name='SecureAge Data Migration Tool']/List/ListItem[@Name='a']");
+        const listItem = await driver.$("//Window[contains(@Name,'Migration Tool')]/List/ListItem[@Name='a']");
 
         console.log('Found element, executing scrollIntoView...');
         await driver.execute('windows: scrollIntoView', listItem);

@@ -14,7 +14,7 @@ async function main() {
     };
     const driver = await remote(opts);
     try {
-        const elements = await driver.$$("//Window[starts-with(@Name, 'SecureAge')]//ComboBox[contains(@Name,'Recipients') and @ClassName='ComboBox']");
+        const elements = await driver.$$("//Window[starts-with(@Name, 'Sec')]//ComboBox[contains(@Name,'Recip') and @ClassName='ComboBox']");
         const attributes = [
             'Name', 'ControlType', 'LocalizedControlType', 'BoundingRectangle', 'IsEnabled', 'IsOffscreen',
             'IsKeyboardFocusable', 'HasKeyboardFocus', 'AccessKey', 'ProcessId', 'RuntimeId', 'AutomationId',
