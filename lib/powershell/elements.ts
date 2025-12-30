@@ -295,7 +295,13 @@ const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
 const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `$elementTable['${0}']`;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
-const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property)`;
+const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
+    try {
+        ${0}.GetCachedPropertyValue([AutomationElement]::${1}Property)
+    } catch {
+        ${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property)
+    }
+`;
 
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
     ${0} | ForEach-Object {
@@ -304,14 +310,16 @@ const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
 `;
 
 const GET_ELEMENT_RECT = pwsh$ /* ps1 */ `
-    ${0}.Current.BoundingRectangle |
+    try { $rect = ${0}.Cached.BoundingRectangle } catch { $rect = ${0}.Current.BoundingRectangle }
+    $rect |
     Select-Object X, Y, Width, Height |
     ForEach-Object { $_ | ConvertTo-Json -Compress } |
     ForEach-Object { if ($null -ne $_) { $_.ToLower() } }
 `;
 
 const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
-    ${0}.Current.ControlType.ProgrammaticName |
+    try { $ct = ${0}.Cached.ControlType } catch { $ct = ${0}.Current.ControlType }
+    $ct.ProgrammaticName |
     ForEach-Object {
         $type = $_.Split('.')[-1]
         if ($type -eq 'DataGrid') { 'List' }

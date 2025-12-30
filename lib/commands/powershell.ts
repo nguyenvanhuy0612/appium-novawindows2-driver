@@ -7,7 +7,17 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process';
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
 const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
 const USE_UI_AUTOMATION_CLIENT = /* ps1 */ `using namespace System.Windows.Automation`;
-const INIT_CACHE_REQUEST = /* ps1 */ `($cacheRequest = New-Object System.Windows.Automation.CacheRequest).TreeFilter = [AndCondition]::new([Automation]::ControlViewCondition, [NotCondition]::new([PropertyCondition]::new([AutomationElement]::FrameworkIdProperty, 'Chrome'))); $cacheRequest.Push()`;
+const INIT_CACHE_REQUEST = /* ps1 */ `
+    ($cacheRequest = New-Object System.Windows.Automation.CacheRequest).TreeFilter = [AndCondition]::new([Automation]::ControlViewCondition, [NotCondition]::new([PropertyCondition]::new([AutomationElement]::FrameworkIdProperty, 'Chrome')));
+    $cacheRequest.Add([AutomationElement]::NameProperty);
+    $cacheRequest.Add([AutomationElement]::AutomationIdProperty);
+    $cacheRequest.Add([AutomationElement]::ClassNameProperty);
+    $cacheRequest.Add([AutomationElement]::ControlTypeProperty);
+    $cacheRequest.Add([AutomationElement]::IsOffscreenProperty);
+    $cacheRequest.Add([AutomationElement]::IsEnabledProperty);
+    $cacheRequest.Add([AutomationElement]::BoundingRectangleProperty);
+    $cacheRequest.Push()
+`;
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;

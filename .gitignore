@@ -1,6 +1,7 @@
 # IDE
 .idea
 .vscode
+.npmrc
 temp
 
 # Logs
