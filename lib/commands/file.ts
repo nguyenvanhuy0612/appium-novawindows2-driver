@@ -1,4 +1,4 @@
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 
 export async function pushFile(this: NovaWindows2Driver, remotePath: string, base64Data: string): Promise<void> {
     this.log.debug(`Pushing file to: ${remotePath}`);

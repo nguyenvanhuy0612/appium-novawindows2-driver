@@ -1,6 +1,6 @@
 import { normalize } from 'node:path';
 import { Element, Rect } from '@appium/types';
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 import {
     AutomationElement,
     FoundAutomationElement,

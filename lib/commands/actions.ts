@@ -11,7 +11,7 @@ import {
 } from '@appium/types';
 
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 import { keyDown, keyUp, mouseMoveRelative, mouseMoveAbsolute, mouseDown, mouseUp, mouseScroll } from '../winapi/user32';
 import { sleep } from '../util';
 import { AutomationElement, FoundAutomationElement } from '../powershell';

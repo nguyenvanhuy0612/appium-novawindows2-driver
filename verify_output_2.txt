@@ -1,0 +1,53 @@
+Initializing session...
+2025-12-29T16:45:31.198Z INFO webdriver: Initiate new session using the WebDriver protocol
+2025-12-29T16:45:31.199Z INFO @wdio/utils: Connecting to existing driver at http://127.0.0.1:4725/
+2025-12-29T16:45:31.206Z INFO webdriver: [POST] http://127.0.0.1:4725/session
+Session initialized.
+finding element by xpath: /Pane
+2025-12-29T16:45:31.233Z INFO webdriver: COMMAND findElement("xpath", "/Pane")
+2025-12-29T16:45:31.233Z INFO webdriver: [POST] http://127.0.0.1:4725/session/6cadd68b-7c0f-4e77-be27-15d6158b3ece/element
+2025-12-29T16:45:31.234Z INFO webdriver: DATA {"using":"xpath","value":"/Pane"}
+2025-12-29T16:45:31.432Z INFO webdriver: RESULT {
+  ELEMENT: 'NATIVE_ee69dfc2-5e24-4276-9cf1-ee468faae2ee',
+  'element-6066-11e4-a52e-4f735466cecf': 'NATIVE_ee69dfc2-5e24-4276-9cf1-ee468faae2ee'
+}
+Found element: NATIVE_ee69dfc2-5e24-4276-9cf1-ee468faae2ee
+finding element by xpath: /Pane/Button[1]
+2025-12-29T16:45:31.435Z INFO webdriver: COMMAND findElement("xpath", "/Pane/Button[1]")
+2025-12-29T16:45:31.436Z INFO webdriver: [POST] http://127.0.0.1:4725/session/6cadd68b-7c0f-4e77-be27-15d6158b3ece/element
+2025-12-29T16:45:31.436Z INFO webdriver: DATA {"using":"xpath","value":"/Pane/Button[1]"}
+2025-12-29T16:45:31.678Z INFO webdriver: RESULT {
+  error: 'no such element',
+  message: 'An element could not be located on the page using the given search parameters.',
+  stacktrace: 'NoSuchElementError: An element could not be located on the page using the given search parameters.\n' +
+    '    at NovaWindows2Driver.findElOrElsNative (D:\\SecureAge\\appium-novawindows2-driver\\lib\\driver.ts:310:58)\n' +
+    '    at NovaWindows2Driver.findElOrEls (D:\\SecureAge\\appium-novawindows2-driver\\lib\\driver.ts:203:35)\n' +
+    '    at NovaWindows2Driver.findElOrElsWithProcessing (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\@appium\\base-driver\\lib\\basedriver\\commands\\find.ts:60:23)\n' +
+    '    at NovaWindows2Driver.findElement (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\@appium\\base-driver\\lib\\basedriver\\commands\\find.ts:75:23)\n' +
+    '    at NovaWindows2Driver.findElement (D:\\SecureAge\\appium-novawindows2-driver\\lib\\driver.ts:174:22)\n' +
+    '    at runCommandPromise (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\@appium\\base-driver\\lib\\basedriver\\driver.ts:116:20)\n' +
+    '    at D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\async-lock\\lib\\index.js:171:12\n' +
+    '    at AsyncLock._promiseTry (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\async-lock\\lib\\index.js:306:31)\n' +
+    '    at exec (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\async-lock\\lib\\index.js:170:9)\n' +
+    '    at AsyncLock.acquire (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\async-lock\\lib\\index.js:189:3)\n' +
+    '    at NovaWindows2Driver.executeCommand (D:\\SecureAge\\appium-novawindows2-driver\\node_modules\\@appium\\base-driver\\lib\\basedriver\\driver.ts:160:39)\n' +
+    '    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n' +
+    '    at NovaWindows2Driver.executeCommand (D:\\SecureAge\\appium-novawindows2-driver\\lib\\driver.ts:159:20)\n' +
+    '    at defaultBehavior (C:\\Users\\HUYNGUYEN\\AppData\\Roaming\\npm\\node_modules\\appium\\lib\\appium.js:730:14)\n' +
+    '    at AppiumDriver.executeWrappedCommand (C:\\Users\\HUYNGUYEN\\AppData\\Roaming\\npm\\node_modules\\appium\\lib\\appium.js:843:16)\n' +
+    '    at AppiumDriver.executeCommand (C:\\Users\\HUYNGUYEN\\AppData\\Roaming\\npm\\node_modules\\appium\\lib\\appium.js:742:17)\n' +
+    '    at asyncHandler (C:\\Users\\HUYNGUYEN\\AppData\\Roaming\\npm\\node_modules\\appium\\node_modules\\@appium\\base-driver\\lib\\protocol\\protocol.ts:409:19)'
+}
+Found start button: undefined
+finding element by xpath: /Pane[1]
+2025-12-29T16:45:31.680Z INFO webdriver: COMMAND findElement("xpath", "/Pane[1]")
+2025-12-29T16:45:31.680Z INFO webdriver: [POST] http://127.0.0.1:4725/session/6cadd68b-7c0f-4e77-be27-15d6158b3ece/element
+2025-12-29T16:45:31.680Z INFO webdriver: DATA {"using":"xpath","value":"/Pane[1]"}
+2025-12-29T16:45:31.875Z INFO webdriver: RESULT {
+  ELEMENT: 'NATIVE_745b8917-3ab5-49ed-ba33-7d626a3f116c',
+  'element-6066-11e4-a52e-4f735466cecf': 'NATIVE_745b8917-3ab5-49ed-ba33-7d626a3f116c'
+}
+Found pane1: NATIVE_745b8917-3ab5-49ed-ba33-7d626a3f116c
+2025-12-29T16:45:31.877Z INFO webdriver: COMMAND deleteSession()
+2025-12-29T16:45:31.877Z INFO webdriver: [DELETE] http://127.0.0.1:4725/session/6cadd68b-7c0f-4e77-be27-15d6158b3ece
+2025-12-29T16:45:31.880Z INFO webdriver: RESULT null

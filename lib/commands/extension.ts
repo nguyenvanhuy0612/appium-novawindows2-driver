@@ -1,6 +1,6 @@
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { Element, Rect } from '@appium/types';
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 import { $, sleep } from '../util';
 import { POWER_SHELL_FEATURE } from '../constants';
 import {

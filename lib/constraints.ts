@@ -53,7 +53,10 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     },
     releaseModifierKeys: {
         isBoolean: true,
-    }
+    },
+    useNativeUia: {
+        isBoolean: true,
+    },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;

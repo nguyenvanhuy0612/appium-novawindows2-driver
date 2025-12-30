@@ -1,5 +1,6 @@
+
 import { Element, Rect } from '@appium/types';
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 import {
     AndCondition,
     AutomationElement,
@@ -13,7 +14,7 @@ import {
     PSString,
     TreeScope,
 } from '../powershell';
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';
@@ -199,6 +200,19 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
 }
 
 export async function getElementRect(this: NovaWindows2Driver, elementId: string): Promise<Rect> {
+    if (this.caps.useNativeUia && elementId.startsWith('NATIVE_')) {
+        const el = this.uiaElementCache.get(elementId);
+        if (!el) throw new errors.NoSuchElementError();
+        const rect = el.getBoundingRectangle();
+        // Return absolute screen coordinates for now
+        return {
+            x: rect.left,
+            y: rect.top,
+            width: rect.right - rect.left,
+            height: rect.bottom - rect.top
+        };
+    }
+
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
     const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
     const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
@@ -233,6 +247,32 @@ export async function elementEnabled(this: NovaWindows2Driver, elementId: string
 
 export async function click(this: NovaWindows2Driver, elementId: string): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
+
+    if (this.caps.useNativeUia && elementId.startsWith('NATIVE_')) {
+        const el = this.uiaElementCache.get(elementId);
+        if (!el) throw new errors.NoSuchElementError();
+
+        // Try to set focus (best effort)
+        try {
+            el.setFocus();
+        } catch (e) {
+            // Ignore focus failure as some elements are not focusable but clickable
+        }
+
+        const rect = el.getBoundingRectangle();
+        const centerX = rect.left + (rect.right - rect.left) / 2;
+        const centerY = rect.top + (rect.bottom - rect.top) / 2;
+
+        await mouseMoveAbsolute(centerX, centerY, this.caps.delayBeforeClick ?? 0, easingFunction);
+        mouseDown();
+        mouseUp();
+
+        if (this.caps.delayAfterClick) {
+            await sleep(this.caps.delayAfterClick ?? 0);
+        }
+        return;
+    }
+
     const element = new FoundAutomationElement(elementId);
 
     const focusCondition = new AndCondition(

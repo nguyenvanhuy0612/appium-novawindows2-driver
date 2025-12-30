@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';

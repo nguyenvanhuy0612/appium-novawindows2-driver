@@ -1,4 +1,4 @@
-import { NovaWindows2Driver } from '../driver';
+import { type NovaWindows2Driver } from '../driver';
 import { PSString, pwsh$ } from '../powershell';
 
 const GET_SYSTEM_TIME_COMMAND = pwsh$ /* ps1 */ `(Get-Date).ToString(${0})`;
