@@ -112,10 +112,10 @@ export async function execute(this: NovaWindows2Driver, script: string, args: an
         return await this[EXTENSION_COMMANDS[script]](...args);
     }
 
-    if (script === 'powerShell') {
+    if (script.toLowerCase() === 'powershell') {
         this.assertFeatureEnabled(POWER_SHELL_FEATURE);
-        // this.log.info(`Executing command: \n${args[0]}`);
-        return await this.executePowerShellScript(args[0]);
+        const args0 = args[0] || {};
+        return await this.executePowerShellScript(args0);
     }
 
     if (script === 'return window.name') {

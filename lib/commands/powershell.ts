@@ -5,7 +5,7 @@ import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
 import { ChildProcessWithoutNullStreams } from 'node:child_process';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
-const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
+const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; Add-Type -AssemblyName UIAutomationClientsideProviders; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
 const USE_UI_AUTOMATION_CLIENT = /* ps1 */ `using namespace System.Windows.Automation`;
 const INIT_CACHE_REQUEST = /* ps1 */ `
     ($cacheRequest = New-Object System.Windows.Automation.CacheRequest).TreeFilter = [AndCondition]::new([Automation]::ControlViewCondition, [NotCondition]::new([PropertyCondition]::new([AutomationElement]::FrameworkIdProperty, 'Chrome')));
@@ -21,6 +21,64 @@ const INIT_CACHE_REQUEST = /* ps1 */ `
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
+
+const MSAA_HELPER_CODE = /* ps1 */ `
+    $msaaCode = @"
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Reflection;
+    
+    public static class MSAAHelper {
+        [DllImport("oleacc.dll")]
+        private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwId, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out object ppvObject);
+
+        public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
+           if (hwnd == IntPtr.Zero) return null;
+           
+           Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+           object acc = null;
+           // OBJID_CLIENT = 0xFFFFFFFC (-4)
+           int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out acc);
+           if (res == 0 && acc != null) {
+               try {
+                   // propertyName maps to: accName, accValue, accDescription, accRole, accState, accHelp, accKeyboardShortcut, accDefaultAction
+                   return acc.GetType().InvokeMember(propertyName, 
+                       BindingFlags.GetProperty, 
+                       null, 
+                       acc, 
+                       new object[] { 0 }); // 0 = CHILDID_SELF
+               } catch {
+                   return null;
+               }
+           }
+           return null;
+        }
+
+        public static bool SetLegacyValue(IntPtr hwnd, string value) {
+           if (hwnd == IntPtr.Zero) return false;
+           
+           Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+           object acc = null;
+           int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out acc);
+           if (res == 0 && acc != null) {
+               try {
+                   acc.GetType().InvokeMember("accValue", 
+                       BindingFlags.SetProperty, 
+                       null, 
+                       acc, 
+                       new object[] { 0, value }); // 0 = CHILDID_SELF
+                   return true;
+               } catch {
+                   return false;
+               }
+           }
+           return false;
+        }
+    }
+"@
+    Add-Type -TypeDefinition $msaaCode -Language CSharp
+`;
+
 
 // Global execution chain to enforce sequential execution across all sessions
 let globalExecutionChain = Promise.resolve();
@@ -178,6 +236,7 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
     await executeRawCommand(this, USE_UI_AUTOMATION_CLIENT);
     await executeRawCommand(this, INIT_CACHE_REQUEST);
     await executeRawCommand(this, INIT_ELEMENT_TABLE);
+    await executeRawCommand(this, MSAA_HELPER_CODE);
 
     // initialize functions
     await executeRawCommand(this, PAGE_SOURCE);
