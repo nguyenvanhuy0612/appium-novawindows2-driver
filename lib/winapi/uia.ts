@@ -128,30 +128,33 @@ export const IUIAutomationElementVtbl = struct('IUIAutomationElementVtbl', {
     GetCurrentPattern: method('HRESULT __stdcall (void *this, int patternId, void **patternObject)'), // 16
     GetCachedPattern: method('HRESULT __stdcall (void *this, int patternId, void **patternObject)'), // 17
 
-    get_CurrentProcessId: method('HRESULT __stdcall (void *this, int *retVal)'), // 18
-    get_CurrentControlType: method('HRESULT __stdcall (void *this, int *retVal)'), // 19
-    get_CurrentLocalizedControlType: method('HRESULT __stdcall (void *this, void **retVal)'), // 20
-    get_CurrentName: method('HRESULT __stdcall (void *this, void **retVal)'), // 21
-    get_CurrentAcceleratorKey: method('HRESULT __stdcall (void *this, void **retVal)'), // 22
-    get_CurrentAccessKey: method('HRESULT __stdcall (void *this, void **retVal)'), // 23
-    get_CurrentHasKeyboardFocus: method('HRESULT __stdcall (void *this, int *retVal)'), // 24
-    get_CurrentIsKeyboardFocusable: method('HRESULT __stdcall (void *this, int *retVal)'), // 25
-    get_CurrentIsEnabled: method('HRESULT __stdcall (void *this, int *retVal)'), // 26
-    get_CurrentAutomationId: method('HRESULT __stdcall (void *this, void **retVal)'), // 27
-    get_CurrentClassName: method('HRESULT __stdcall (void *this, void **retVal)'), // 28
-    get_CurrentHelpText: method('HRESULT __stdcall (void *this, void **retVal)'), // 29
-    get_CurrentCulture: method('HRESULT __stdcall (void *this, int *retVal)'), // 30
-    get_CurrentIsControlElement: method('HRESULT __stdcall (void *this, int *retVal)'), // 31
-    get_CurrentIsContentElement: method('HRESULT __stdcall (void *this, int *retVal)'), // 32
-    get_CurrentIsPassword: method('HRESULT __stdcall (void *this, int *retVal)'), // 33
-    get_CurrentNativeWindowHandle: method('HRESULT __stdcall (void *this, void **retVal)'), // 34
-    get_CurrentItemType: method('HRESULT __stdcall (void *this, void **retVal)'), // 35
-    get_CurrentIsOffscreen: method('HRESULT __stdcall (void *this, int *retVal)'), // 36
-    get_CurrentOrientation: method('HRESULT __stdcall (void *this, int *retVal)'), // 37
-    get_CurrentFrameworkId: method('HRESULT __stdcall (void *this, void **retVal)'), // 38
-    get_CurrentIsRequiredForForm: method('HRESULT __stdcall (void *this, int *retVal)'), // 39
-    get_CurrentItemStatus: method('HRESULT __stdcall (void *this, void **retVal)'), // 40
-    get_CurrentBoundingRectangle: pointer(get_CurrentBoundingRectangleProto), // 41
+    Placeholder18: method('HRESULT __stdcall (void *this, void *p1, void *p2)'), // 18
+    Placeholder19: method('HRESULT __stdcall (void *this, void *p1)'), // 19
+
+    get_CurrentProcessId: method('HRESULT __stdcall (void *this, int *retVal)'), // 20
+    get_CurrentControlType: method('HRESULT __stdcall (void *this, int *retVal)'), // 21
+    get_CurrentLocalizedControlType: method('HRESULT __stdcall (void *this, void **retVal)'), // 22
+    get_CurrentName: method('HRESULT __stdcall (void *this, void **retVal)'), // 23
+    get_CurrentAcceleratorKey: method('HRESULT __stdcall (void *this, void **retVal)'), // 24
+    get_CurrentAccessKey: method('HRESULT __stdcall (void *this, void **retVal)'), // 25
+    get_CurrentHasKeyboardFocus: method('HRESULT __stdcall (void *this, int *retVal)'), // 26
+    get_CurrentIsKeyboardFocusable: method('HRESULT __stdcall (void *this, int *retVal)'), // 27
+    get_CurrentIsEnabled: method('HRESULT __stdcall (void *this, int *retVal)'), // 28
+    get_CurrentAutomationId: method('HRESULT __stdcall (void *this, void **retVal)'), // 29
+    get_CurrentClassName: method('HRESULT __stdcall (void *this, void **retVal)'), // 30
+    get_CurrentHelpText: method('HRESULT __stdcall (void *this, void **retVal)'), // 31
+    get_CurrentCulture: method('HRESULT __stdcall (void *this, int *retVal)'), // 32
+    get_CurrentIsControlElement: method('HRESULT __stdcall (void *this, int *retVal)'), // 33
+    get_CurrentIsContentElement: method('HRESULT __stdcall (void *this, int *retVal)'), // 34
+    get_CurrentIsPassword: method('HRESULT __stdcall (void *this, int *retVal)'), // 35
+    get_CurrentNativeWindowHandle: method('HRESULT __stdcall (void *this, void **retVal)'), // 36
+    get_CurrentItemType: method('HRESULT __stdcall (void *this, void **retVal)'), // 37
+    get_CurrentIsOffscreen: method('HRESULT __stdcall (void *this, int *retVal)'), // 38
+    get_CurrentOrientation: method('HRESULT __stdcall (void *this, int *retVal)'), // 39
+    get_CurrentFrameworkId: method('HRESULT __stdcall (void *this, void **retVal)'), // 40
+    get_CurrentIsRequiredForForm: method('HRESULT __stdcall (void *this, int *retVal)'), // 41
+    get_CurrentItemStatus: method('HRESULT __stdcall (void *this, void **retVal)'), // 42
+    get_CurrentBoundingRectangle: pointer(get_CurrentBoundingRectangleProto), // 43
 });
 
 
@@ -309,6 +312,25 @@ export class UIAClient {
         this.automation = decode(ppvBuf, PVOID);
     }
 
+    public getDesktopWindow(): any {
+        try {
+            const user32 = load('user32.dll');
+            const GetDesktopWindow = user32.func('HWND __stdcall GetDesktopWindow()');
+            return GetDesktopWindow();
+        } catch {
+            return null;
+        }
+    }
+
+    public elementFromHandle(hwnd: any): UIAElement {
+        const vtable = decode(decode(this.automation, PVOID), IUIAutomationVtbl);
+        const func = decode(vtable.ElementFromHandle, proto('HRESULT __stdcall (void *this, void *hwnd, void **element)'));
+        const buf = Buffer.alloc(8);
+        const res = func(this.automation, hwnd, buf);
+        if (res < 0) throw new Error(`ElementFromHandle failed: ${res}`);
+        return new UIAElement(decode(buf, PVOID));
+    }
+
     public getRootElement(): UIAElement {
         if (!this.automation) throw new Error('Automation object is null');
 
@@ -341,6 +363,15 @@ export class UIAClient {
     // We use JS-based filtering in the engine instead.
     public createPropertyCondition(propertyId: number, value: any): any {
         throw new Error("Native CreatePropertyCondition is currently disabled for stability");
+    }
+
+    public getRawViewCondition(): any {
+        const vtable = decode(decode(this.automation, PVOID), IUIAutomationVtbl);
+        const func = decode(vtable.get_RawViewCondition, proto('HRESULT __stdcall (void *this, void **condition)'));
+        const buf = Buffer.alloc(8);
+        const res = func(this.automation, buf);
+        if (res < 0) throw new Error(`get_RawViewCondition failed: ${res}`);
+        return decode(buf, PVOID);
     }
 
     public createAndCondition(c1: any, c2: any): any {
@@ -568,6 +599,42 @@ export class UIAElement {
                         }
                     } else {
                         value = "";
+                    }
+                    break;
+                case 0x2003: // VT_ARRAY | VT_I4
+                    const safeArrayPtr = decode(variantBuf.subarray(8, 16), PVOID);
+                    if (safeArrayPtr) {
+                        try {
+                            const SafeArrayGetVartype = oleaut32.func('HRESULT __stdcall SafeArrayGetVartype(void *, uint16 *)');
+                            const SafeArrayGetLBound = oleaut32.func('HRESULT __stdcall SafeArrayGetLBound(void *, uint, long *)');
+                            const SafeArrayGetUBound = oleaut32.func('HRESULT __stdcall SafeArrayGetUBound(void *, uint, long *)');
+                            const SafeArrayAccessData = oleaut32.func('HRESULT __stdcall SafeArrayAccessData(void *, void **)');
+                            const SafeArrayUnaccessData = oleaut32.func('HRESULT __stdcall SafeArrayUnaccessData(void *)');
+
+                            let lboundBuf = Buffer.alloc(4);
+                            let uboundBuf = Buffer.alloc(4);
+                            SafeArrayGetLBound(safeArrayPtr, 1, lboundBuf);
+                            SafeArrayGetUBound(safeArrayPtr, 1, uboundBuf);
+                            const lbound = lboundBuf.readInt32LE(0);
+                            const ubound = uboundBuf.readInt32LE(0);
+                            const count = ubound - lbound + 1;
+
+                            if (count > 0) {
+                                let dataPtrBuf = Buffer.alloc(8);
+                                SafeArrayAccessData(safeArrayPtr, dataPtrBuf);
+                                const dataPtr = decode(dataPtrBuf, PVOID);
+                                const ints = decode(dataPtr, 'int32', count);
+                                value = Array.from(ints);
+                                SafeArrayUnaccessData(safeArrayPtr);
+                            } else {
+                                value = [];
+                            }
+                        } catch (e) {
+                            console.error('Error decoding SafeArray:', e);
+                            value = [];
+                        }
+                    } else {
+                        value = [];
                     }
                     break;
                 case 0: // VT_EMPTY

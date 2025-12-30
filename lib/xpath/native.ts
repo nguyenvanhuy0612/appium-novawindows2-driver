@@ -122,18 +122,18 @@ export class NativeXPathEngine {
 
     private async evaluateSteps(steps: any[], initialContexts: UIAElement[]): Promise<UIAElement[]> {
         // Simple optimization: if first step is descendant-or-self::node() and second is child::tag,
-        // merge them into descendant::tag.
+        // merge them into descendant::tag for better performance.
         const optimizedSteps = [...steps];
         for (let i = 0; i < optimizedSteps.length - 1; i++) {
             const current = optimizedSteps[i];
             const next = optimizedSteps[i + 1];
-            if (current.axis === DESCENDANT_OR_SELF &&
-                current.test.type === NODE_TYPE_TEST && current.test.name === NODE &&
+            if (current.axis === 'descendant-or-self' &&
+                current.test.type === 'nodeTypeTest' && current.test.name === 'node' &&
                 current.predicates.length === 0 &&
-                next.axis === CHILD) {
+                next.axis === 'child') {
 
                 optimizedSteps.splice(i, 2, {
-                    axis: DESCENDANT,
+                    axis: 'descendant',
                     test: next.test,
                     predicates: next.predicates
                 });
@@ -160,38 +160,37 @@ export class NativeXPathEngine {
 
     private async evaluateStep(step: any, context: UIAElement): Promise<UIAElement[]> {
         const { axis, test, predicates } = step;
+        const axisStr = String(axis);
         let scope: number;
 
-        switch (axis) {
-            case CHILD:
+        switch (axisStr) {
+            case 'child':
                 scope = TreeScope.Children;
                 break;
-            case DESCENDANT:
-            case DESCENDANT_OR_SELF:
+            case 'descendant':
+            case 'descendant-or-self':
                 scope = TreeScope.Descendants;
                 break;
-            case SELF:
+            case 'self':
                 scope = TreeScope.Element;
                 break;
-            case PARENT:
+            case 'parent':
                 scope = TreeScope.Parent;
                 break;
+            case 'ancestor':
+            case 'ancestor-or-self':
+                scope = TreeScope.Ancestors;
+                break;
             default:
-                throw new Error(`Unsupported XPath axis: ${axis}`);
+                throw new Error(`Unsupported XPath axis: ${axisStr}`);
         }
 
-        let condition: any = this.client.createTrueCondition();
-
-        // Try to optimize condition if it's a simple name test
+        let condition: any;
         try {
-            if (test.type === NODE_NAME_TEST && test.name !== '*') {
-                const controlTypeId = CONTROL_TYPE_MAP[test.name.toLowerCase()];
-                if (controlTypeId) {
-                    condition = this.client.createPropertyCondition(UIA.UIA_ControlTypePropertyId, controlTypeId);
-                }
-            }
+            // Use RawViewCondition as the most reliable base condition
+            condition = this.client.getRawViewCondition();
         } catch (e) {
-            // Fallback to TrueCondition + JS filtering
+            // Fallback to TrueCondition if getRawViewCondition fails
             condition = this.client.createTrueCondition();
         }
 
@@ -201,7 +200,27 @@ export class NativeXPathEngine {
             results = found.toArray();
         }
 
-        // Apply JS filtering for ControlType (matches condition if optimized, or acts as fallback)
+        // Handle self-matching for appropriate axes
+        if (axisStr === 'descendant-or-self' || axisStr === 'self' || axisStr === 'ancestor-or-self') {
+            let matches = true;
+            if (test.type === NODE_NAME_TEST && test.name !== '*') {
+                const controlTypeId = CONTROL_TYPE_MAP[test.name.toLowerCase()];
+                if (controlTypeId) {
+                    try {
+                        if (context.getCurrentPropertyValue(UIA.UIA_ControlTypePropertyId) !== controlTypeId) {
+                            matches = false;
+                        }
+                    } catch {
+                        matches = false;
+                    }
+                }
+            }
+            if (matches) {
+                results = [context, ...results];
+            }
+        }
+
+        // Apply JS filtering for ControlType if not already handled by axis match (context)
         if (test.type === NODE_NAME_TEST && test.name !== '*') {
             const controlTypeId = CONTROL_TYPE_MAP[test.name.toLowerCase()];
             if (controlTypeId) {
@@ -213,7 +232,6 @@ export class NativeXPathEngine {
                     }
                 });
             } else {
-                // If it's an unknown control type, it won't match anything for now
                 results = [];
             }
         }
