@@ -1,5 +1,5 @@
 
-const { UIAClient } = require('../build/lib/winapi/uia');
+const { UIAClient } = require('../../build/lib/winapi/uia');
 
 console.log('Loading UIAClient...');
 try {

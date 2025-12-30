@@ -1,5 +1,5 @@
 
-const { NovaWindows2Driver } = require('../build/lib/driver');
+const { NovaWindows2Driver } = require('../../build/lib/driver');
 
 async function main() {
     console.log("Starting Native Click Test...");

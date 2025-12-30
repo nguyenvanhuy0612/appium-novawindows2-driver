@@ -1,4 +1,4 @@
-const { UIAClient, TreeScope, UIA_NamePropertyId, UIA_ControlTypePropertyId, UIA_AutomationIdPropertyId } = require('../build/lib/winapi/uia');
+const { UIAClient, TreeScope, UIA_NamePropertyId, UIA_ControlTypePropertyId, UIA_AutomationIdPropertyId } = require('../../build/lib/winapi/uia');
 
 async function debugRoot() {
     try {

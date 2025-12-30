@@ -1,5 +1,5 @@
 
-import { NovaWindows2Driver } from '../lib/driver';
+import { NovaWindows2Driver } from '../../lib/driver';
 import * as os from 'os';
 
 async function runSession(useNative: boolean) {

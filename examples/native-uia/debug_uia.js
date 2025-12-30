@@ -1,5 +1,5 @@
 
-const { UIAClient, CoInitializeEx, COINIT_APARTMENTTHREADED } = require('../build/lib/winapi/uia');
+const { UIAClient, CoInitializeEx, COINIT_APARTMENTTHREADED } = require('../../build/lib/winapi/uia');
 
 try {
     console.log("Initializing UIAClient...");

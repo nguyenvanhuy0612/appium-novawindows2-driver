@@ -1,4 +1,4 @@
-const { UIAClient, PVOID } = require('../build/lib/winapi/uia');
+const { UIAClient, PVOID } = require('../../build/lib/winapi/uia');
 const koffi = require('koffi');
 
 async function probeIndices() {

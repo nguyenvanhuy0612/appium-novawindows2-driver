@@ -1,4 +1,4 @@
-const { UIAClient, TreeScope } = require('../build/lib/winapi/uia');
+const { UIAClient, TreeScope } = require('../../build/lib/winapi/uia');
 
 async function testFindAll() {
     try {

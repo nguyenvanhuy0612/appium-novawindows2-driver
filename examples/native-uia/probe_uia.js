@@ -1,4 +1,4 @@
-const { UIAClient } = require('../build/lib/winapi/uia');
+const { UIAClient } = require('../../build/lib/winapi/uia');
 
 async function probe() {
     try {

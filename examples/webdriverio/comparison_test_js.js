@@ -1,5 +1,5 @@
 
-const { NovaWindows2Driver } = require('../build/lib/driver');
+const { NovaWindows2Driver } = require('../../build/lib/driver');
 const { performance } = require('perf_hooks');
 
 async function runSession(useNative) {

@@ -1,5 +1,5 @@
 
-import { UIAClient, TreeScope } from '../lib/winapi/uia';
+import { UIAClient, TreeScope } from '../../lib/winapi/uia';
 
 async function main() {
     try {

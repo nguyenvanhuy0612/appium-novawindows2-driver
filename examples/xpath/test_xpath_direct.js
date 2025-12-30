@@ -1,5 +1,5 @@
-const { UIAClient } = require('../build/lib/winapi/uia');
-const { NativeXPathEngine } = require('../build/lib/xpath/native');
+const { UIAClient } = require('../../build/lib/winapi/uia');
+const { NativeXPathEngine } = require('../../build/lib/xpath/native');
 
 async function test() {
     try {

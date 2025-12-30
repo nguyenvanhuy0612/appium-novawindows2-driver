@@ -1,5 +1,5 @@
 
-import { UIAClient, PVOID, VARIANT } from '../lib/winapi/uia';
+import { UIAClient, PVOID, VARIANT } from '../../lib/winapi/uia';
 import { decode, proto, struct, pointer } from 'koffi';
 
 async function main() {

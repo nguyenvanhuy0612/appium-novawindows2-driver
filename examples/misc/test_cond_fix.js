@@ -1,4 +1,4 @@
-const { UIAClient, UIA_ControlTypePropertyId, UIA_PaneControlTypeId } = require('../build/lib/winapi/uia');
+const { UIAClient, UIA_ControlTypePropertyId, UIA_PaneControlTypeId } = require('../../build/lib/winapi/uia');
 
 async function testCond() {
     try {
