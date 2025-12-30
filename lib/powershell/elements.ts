@@ -298,7 +298,76 @@ const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `$elementTable['${0}']`;
 
 
 const GET_CACHED_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `if ($null -ne ${0}) { ${0}.GetCachedPropertyValue([AutomationElement]::${1}Property) }`;
-const GET_CURRENT_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `if ($null -ne ${0}) { ${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property) }`;
+const GET_CURRENT_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
+    if ($null -ne ${0}) { 
+        try {
+            $target = "${1}"
+            
+            # 1. Handle dotted Pattern.Property format (e.g. Window.CanMaximize or LegacyIAccessible.Name)
+            if ($target.Contains(".")) {
+                $parts = $target.Split(".")
+                if ($parts.Length -ge 2) {
+                    $pKey = $parts[0]
+                    $propName = $parts[1]
+                    
+                    # Sweep supported properties for a match on the programmatic name (pattern + property)
+                    foreach ($prop in ${0}.GetSupportedProperties()) {
+                        # ProgrammaticName is usually something like "WindowPatternIdentifiers.CanMaximizeProperty"
+                        if ($prop.ProgrammaticName -like "*$pKey*$propName*") {
+                            $val = ${0}.GetCurrentPropertyValue($prop)
+                            if ($null -ne $val) { return $val.ToString() }
+                        }
+                    }
+
+                    # Custom Aliases / MSAA Fallback for dotted names (LegacyIAccessible.Name -> Name)
+                    if ($pKey -eq "LegacyIAccessible") {
+                        if ($propName -eq "Name") { return ${0}.Current.Name }
+                        if ($propName -eq "Description") { return ${0}.Current.HelpText }
+                        if ($propName -eq "Role") { return ${0}.Current.LocalizedControlType }
+                        if ($propName -eq "State") { return "" }
+                        if ($propName -eq "Value") { return "" }
+                    }
+                }
+            }
+
+            # 2. Try standard AutomationElement property (e.g. NameProperty)
+            try {
+                $p = [System.Windows.Automation.AutomationElement]::($target + "Property")
+                if ($null -ne $p) { 
+                    $val = ${0}.GetCurrentPropertyValue($p)
+                    if ($null -ne $val) { return $val.ToString() }
+                }
+            } catch {}
+
+            # 3. Fallback search through all supported properties for short names (e.g. "CanMaximize")
+            foreach ($prop in ${0}.GetSupportedProperties()) {
+                if ($prop.ProgrammaticName.EndsWith(".$($target)Property") -or $prop.ProgrammaticName.Contains(".$($target)")) {
+                    $val = ${0}.GetCurrentPropertyValue($prop)
+                    if ($null -ne $val) { return $val.ToString() }
+                }
+            }
+            
+            # 4. Try pattern-based lookup for short names using common identifiers
+            $commonPatterns = @("Window", "Transform", "ExpandCollapse", "Toggle", "Value", "RangeValue", "LegacyIAccessible")
+            foreach ($pKey in $commonPatterns) {
+                try {
+                    $pTypeName = "System.Windows.Automation.$($pKey)Pattern"
+                    $pProp = Invoke-Expression "[$pTypeName]::$($target)Property"
+                    if ($null -ne $pProp) {
+                        $val = ${0}.GetCurrentPropertyValue($pProp)
+                        if ($null -ne $val) { return $val.ToString() }
+                    }
+                } catch {}
+            }
+
+            # 5. UIA 3.0 / Driver-specific aliases (Safe Defaults)
+            if ($target -eq "IsDialog") { return "False" }
+            if ($target -eq "ProviderDescription") { return "" }
+            if ($target -eq "LegacyName") { return ${0}.Current.Name }
+
+        } catch { return $null }
+    }
+`;
 
 
 const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
@@ -451,6 +520,17 @@ const GET_ELEMENT_LEGACY_DEFAULT_ACTION = pwsh$ /* ps1 */ `
     }
 `;
 
+const GET_ELEMENT_WINDOW_CAN_MAXIMIZE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Current.CanMaximize } catch { $null } }`;
+const GET_ELEMENT_WINDOW_CAN_MINIMIZE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Current.CanMinimize } catch { $null } }`;
+const GET_ELEMENT_WINDOW_IS_MODAL = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Current.IsModal } catch { $null } }`;
+const GET_ELEMENT_WINDOW_IS_TOPMOST = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Current.IsTopmost } catch { $null } }`;
+const GET_ELEMENT_WINDOW_INTERACTION_STATE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Current.WindowInteractionState.ToString() } catch { $null } }`;
+const GET_ELEMENT_WINDOW_VISUAL_STATE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Current.WindowVisualState.ToString() } catch { $null } }`;
+
+const GET_ELEMENT_TRANSFORM_CAN_MOVE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([TransformPattern]::Pattern).Current.CanMove } catch { $null } }`;
+const GET_ELEMENT_TRANSFORM_CAN_RESIZE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([TransformPattern]::Pattern).Current.CanResize } catch { $null } }`;
+const GET_ELEMENT_TRANSFORM_CAN_ROTATE = pwsh$ /* ps1 */ `if ($null -ne ${0}) { try { ${0}.GetCurrentPattern([TransformPattern]::Pattern).Current.CanRotate } catch { $null } }`;
+
 const GET_ELEMENT_LEGACY_CHILD_ID = pwsh$ /* ps1 */ `
     if ($null -ne ${0}) {
         try {
@@ -512,6 +592,148 @@ const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
 
 // Let's use multi_replace for cleaner insertion.
 
+
+const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
+    if ($null -ne ${0}) {
+        $result = @{}
+        
+        # 1. Standard Properties from AutomationElement
+        $standardProps = @(
+            "Name", "AutomationId", "ClassName", "ControlType", "LocalizedControlType", 
+            "BoundingRectangle", "IsEnabled", "IsOffscreen", "IsKeyboardFocusable", 
+            "HasKeyboardFocus", "AccessKey", "ProcessId", "RuntimeId", "FrameworkId", 
+            "NativeWindowHandle", "IsContentElement", "IsControlElement", "IsPassword", 
+            "HelpText", "ItemStatus", "ItemType", "AcceleratorKey"
+        )
+        
+        foreach ($pName in $standardProps) {
+            try {
+                $prop = [AutomationElement]::($pName + "Property")
+                $val = ${0}.GetCurrentPropertyValue($prop)
+                if ($null -ne $val) {
+                    if ($pName -eq "RuntimeId") { $result[$pName] = $val -join "." }
+                    else { $result[$pName] = $val.ToString() }
+                }
+            } catch {}
+        }
+        
+        # UIA 3.0+ Compatibility (Safe Defaults for UIA 2.0)
+        $result["IsDialog"] = "False"
+        $result["ProviderDescription"] = ""
+
+        # 2. Pattern Availability check
+        $patterns = @(
+            "Annotation", "Dock", "Drag", "DropTarget", "ExpandCollapse", "GridItem", 
+            "Grid", "Invoke", "ItemContainer", "LegacyIAccessible", "MultipleView", 
+            "ObjectModel", "RangeValue", "ScrollItem", "Scroll", "SelectionItem", 
+            "Selection", "SpreadsheetItem", "Spreadsheet", "Styles", "SynchronizedInput", 
+            "TableItem", "Table", "TextChild", "TextEdit", "Text", "Toggle", "Transform", 
+            "Value", "VirtualizedItem", "Window", "CustomNavigation"
+        )
+        
+        foreach ($pName in $patterns) {
+            $propName = "Is" + $pName + "PatternAvailable"
+            try {
+                $prop = [AutomationElement]::($propName + "Property")
+                $val = ${0}.GetCurrentPropertyValue($prop)
+                $result[$propName] = $val.ToString()
+            } catch {
+                $result[$propName] = "False"
+            }
+        }
+        
+        # Pattern2 Compatibility (UIA 3.0)
+        $result["IsTextPattern2Available"] = "False"
+        $result["IsTransform2PatternAvailable"] = "False"
+        $result["IsSelectionPattern2Available"] = "False"
+
+        # 3. Pattern Specific Properties (Force Retrieval)
+        $patternsToQuery = @{
+            "Value" = @("Value", "IsReadOnly");
+            "RangeValue" = @("Value", "IsReadOnly", "Minimum", "Maximum", "LargeChange", "SmallChange");
+            "ExpandCollapse" = @("ExpandCollapseState");
+            "Toggle" = @("ToggleState");
+            "Window" = @("CanMaximize", "CanMinimize", "IsModal", "IsTopmost", "WindowInteractionState", "WindowVisualState");
+            "Transform" = @("CanMove", "CanResize", "CanRotate");
+            "Scroll" = @("HorizontalScrollPercent", "HorizontalViewSize", "VerticalScrollPercent", "VerticalViewSize", "HorizontallyScrollable", "VerticallyScrollable");
+            "Selection" = @("CanSelectMultiple", "IsSelectionRequired");
+            "SelectionItem" = @("IsSelected");
+            "Grid" = @("ColumnCount", "RowCount");
+            "GridItem" = @("Column", "Row", "ColumnSpan", "RowSpan");
+            "Table" = @("RowOrColumnMajor");
+        }
+
+        foreach ($pKey in $patternsToQuery.Keys) {
+            try {
+                $pTypeName = "System.Windows.Automation.$($pKey)Pattern"
+                $pPropField = Invoke-Expression "[$pTypeName]::Pattern"
+                $pObj = ${0}.GetCurrentPattern($pPropField)
+                if ($null -ne $pObj) {
+                    $result["Is" + $pKey + "PatternAvailable"] = "True"
+                    foreach ($propName in $patternsToQuery[$pKey]) {
+                        try {
+                            # Key used for dotted names in Inspect.exe
+                            $dottedKey = $pKey + "." + $propName
+                            
+                            # Try to get value from pattern object
+                            $val = $pObj.Current.$propName
+                            if ($null -ne $val) {
+                                $result[$dottedKey] = $val.ToString()
+                                # Also provide short name if not already set
+                                if (-not $result.ContainsKey($propName)) {
+                                    $result[$propName] = $val.ToString()
+                                }
+                            }
+                        } catch {}
+                    }
+                }
+            } catch {}
+        }
+
+        # 4. Legacy Properties (Force Retrieval)
+        try {
+            $legacy = ${0}.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern).Current
+            if ($null -ne $legacy) {
+                $result["IsLegacyIAccessiblePatternAvailable"] = "True"
+                
+                # Standard Aliases (Backward Compatibility)
+                $result['LegacyName'] = $legacy.Name
+                $result['LegacyDescription'] = $legacy.Description
+                $result['LegacyRole'] = $legacy.Role.ToString()
+                $result['LegacyState'] = $legacy.State.ToString()
+                $result['LegacyValue'] = $legacy.Value
+                $result['LegacyHelp'] = $legacy.Help
+                $result['LegacyKeyboardShortcut'] = $legacy.KeyboardShortcut
+                $result['LegacyDefaultAction'] = $legacy.DefaultAction
+                $result['LegacyChildId'] = $legacy.ChildId.ToString()
+
+                # Dotted Names (Inspect.exe matching)
+                $result['LegacyIAccessible.Name'] = $legacy.Name
+                $result['LegacyIAccessible.Description'] = $legacy.Description
+                $result['LegacyIAccessible.Role'] = $legacy.Role.ToString()
+                $result['LegacyIAccessible.State'] = $legacy.State.ToString()
+                $result['LegacyIAccessible.Value'] = $legacy.Value
+                $result['LegacyIAccessible.Help'] = $legacy.Help
+                $result['LegacyIAccessible.KeyboardShortcut'] = $legacy.KeyboardShortcut
+                $result['LegacyIAccessible.DefaultAction'] = $legacy.DefaultAction
+                $result['LegacyIAccessible.ChildId'] = $legacy.ChildId.ToString()
+            }
+        } catch {}
+        
+        # 5. GetSupportedProperties (Final sweep)
+        try {
+            foreach ($prop in ${0}.GetSupportedProperties()) {
+                $name = $prop.ProgrammaticName.Split('.')[-1].Replace('Property', '')
+                if (-not $result.ContainsKey($name)) {
+                    $val = ${0}.GetCurrentPropertyValue($prop)
+                    if ($null -ne $val) { $result[$name] = $val.ToString() }
+                }
+            }
+        } catch {}
+
+        $result | ConvertTo-Json -Compress
+    }
+`;
 
 const SET_FOCUS_TO_ELEMENT = pwsh$ /* ps1 */ `if ($null -ne ${0}) { ${0}.SetFocus() }`;
 
@@ -752,6 +974,10 @@ export class AutomationElement extends PSObject {
 
 
     buildGetPropertyCommand(property: string): string {
+        if (!property || property.toLowerCase() === 'all') {
+            return this.buildGetAllPropertiesCommand();
+        }
+
         const cachedProperties = [
             'name',
             'automationid',
@@ -837,8 +1063,37 @@ export class AutomationElement extends PSObject {
             return '$false'; // Return generic false for unsupported features in UIA2
         }
 
-        if (property.toLowerCase() === 'expandcollapse.expandcollapsestate') {
+        if (property.toLowerCase() === 'expandcollapse.expandcollapsestate' || property.toLowerCase() === 'expandcollapsestate') {
             return GET_ELEMENT_EXPAND_COLLAPSE_STATE.format(this);
+        }
+
+        if (property.toLowerCase() === 'canmaximize') {
+            return GET_ELEMENT_WINDOW_CAN_MAXIMIZE.format(this);
+        }
+        if (property.toLowerCase() === 'canminimize') {
+            return GET_ELEMENT_WINDOW_CAN_MINIMIZE.format(this);
+        }
+        if (property.toLowerCase() === 'ismodal') {
+            return GET_ELEMENT_WINDOW_IS_MODAL.format(this);
+        }
+        if (property.toLowerCase() === 'istopmost') {
+            return GET_ELEMENT_WINDOW_IS_TOPMOST.format(this);
+        }
+        if (property.toLowerCase() === 'windowinteractionstate') {
+            return GET_ELEMENT_WINDOW_INTERACTION_STATE.format(this);
+        }
+        if (property.toLowerCase() === 'windowvisualstate') {
+            return GET_ELEMENT_WINDOW_VISUAL_STATE.format(this);
+        }
+
+        if (property.toLowerCase() === 'canmove') {
+            return GET_ELEMENT_TRANSFORM_CAN_MOVE.format(this);
+        }
+        if (property.toLowerCase() === 'canresize') {
+            return GET_ELEMENT_TRANSFORM_CAN_RESIZE.format(this);
+        }
+        if (property.toLowerCase() === 'canrotate') {
+            return GET_ELEMENT_TRANSFORM_CAN_ROTATE.format(this);
         }
 
         if (property.toLowerCase() === 'providerdescription') {
@@ -850,6 +1105,10 @@ export class AutomationElement extends PSObject {
         }
 
         return GET_CURRENT_ELEMENT_PROPERTY.format(this, property);
+    }
+
+    buildGetAllPropertiesCommand(): string {
+        return GET_ALL_ELEMENT_PROPERTIES.format(this);
     }
 
     buildGetElementRectCommand(): string {

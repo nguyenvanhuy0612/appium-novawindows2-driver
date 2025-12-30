@@ -1,7 +1,7 @@
-NovaWindows Driver
+NovaWindows2 Driver
 ===================
 
-NovaWindows Driver is a custom Appium driver designed to tackle the limitations of existing Windows automation solutions like WinAppDriver. NovaWindows Driver supports testing Universal Windows Platform (UWP), Windows Forms (WinForms), Windows Presentation Foundation (WPF), and Classic Windows (Win32) apps on Windows 10 PCs. Built to improve performance and reliability for traditional desktop applications, it offers:
+NovaWindows2 Driver is a custom Appium driver designed to tackle the limitations of existing Windows automation solutions like WinAppDriver. NovaWindows2 Driver supports testing Universal Windows Platform (UWP), Windows Forms (WinForms), Windows Presentation Foundation (WPF), and Classic Windows (Win32) apps on Windows 10 PCs. Built to improve performance and reliability for traditional desktop applications, it offers:
 
 Faster XPath locator performance — Reduces element lookup times, even in complex UIs.
 RawView element support — Access elements typically hidden from the default ControlView/ContentView.
@@ -13,12 +13,12 @@ It’s designed to handle real-world scenarios where traditional drivers fall sh
 >
 > This driver is built for Appium 2/3 and is not compatible with Appium 1. To install
 > the driver, simply run:
-> `appium driver install --source=npm appium-novawindows-driver`
+> `appium driver install --source=npm appium-novawindows2-driver`
 
 
 ## Usage
 
-Beside of standard Appium requirements NovaWindows Driver adds the following prerequisites:
+Beside of standard Appium requirements NovaWindows2 Driver adds the following prerequisites:
 
 - Appium Windows Driver only supports Windows 10 and later as the host.
 
@@ -30,14 +30,14 @@ Beside of standard Appium requirements NovaWindows Driver adds the following pre
 > realiability and better code and error management, as well as supporting
 > more features, that are currently not possible using PowerShell alone.
 > It is unlikely for the prerequisites to change, as this is one of the
-> main goals of NovaWindows driver – seamless setup on any PC.
+> main goals of NovaWindows2 driver – seamless setup on any PC.
 
-NovaWindows Driver supports the following capabilities:
+NovaWindows2 Driver supports the following capabilities:
 
 Capability Name | Description
 --- | ---
 platformName | Must be set to `Windows` (case-insensitive).
-automationName | Must be set to `NovaWindows` (case-insensitive).
+automationName | Must be set to `NovaWindows2` (case-insensitive).
 smoothPointerMove | CSS-like easing function (including valid Bezier curve). This controls the smooth movement of the mouse for `delayBeforeClick` ms. Example: `ease-in`, `cubic-bezier(0.42, 0, 0.58, 1)`.
 delayBeforeClick | Time in milliseconds before a click is performed.
 delayAfterClick | Time in milliseconds after a click is performed.
@@ -65,11 +65,11 @@ def generate_options():
     # How to get the app ID for Universal Windows Apps (UWP):
     # https://www.securitylearningacademy.com/mod/book/view.php?id=13829&chapterid=678
     uwp_options.app = 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
-    uwp_options.automation_name = 'NovaWindows'
+    uwp_options.automation_name = 'NovaWindows2'
 
     classic_options = WindowsOptions()
     classic_options.app = 'C:\\Windows\\System32\\notepad.exe'
-    classic_options.automation_name = 'NovaWindows'
+    classic_options.automation_name = 'NovaWindows2'
 
     use_existing_app_options = WindowsOptions()
     # Active window handles could be retrieved from any compatible UI inspector app:
@@ -81,7 +81,7 @@ def generate_options():
     # This capability could be used to create a workaround for UWP apps startup:
     # https://github.com/microsoft/WinAppDriver/blob/master/Samples/C%23/StickyNotesTest/StickyNotesSession.cs
     use_existing_app_options.app_top_level_window = hex(12345)
-    use_existing_app_options.automation_name = 'NovaWindows'
+    use_existing_app_options.automation_name = 'NovaWindows2'
 
     return [uwp_options, classic_options, use_existing_app_options]
 

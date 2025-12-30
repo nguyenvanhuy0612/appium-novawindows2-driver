@@ -2,7 +2,8 @@ const { remote } = require('webdriverio');
 
 async function main() {
     const opts = {
-        hostname: '172.16.1.52',
+        // hostname: '172.16.1.52',
+        hostname: '192.168.196.155',
         port: 4723,
         path: '/',
         capabilities: {
@@ -14,7 +15,7 @@ async function main() {
     };
     const driver = await remote(opts);
     try {
-        const elements = await driver.$$("//Window[starts-with(@Name, 'Sec')]//ComboBox[contains(@Name,'Recip') and @ClassName='ComboBox']");
+        const elements = await driver.$$("//*");
         const attributes = [
             'Name', 'ControlType', 'LocalizedControlType', 'BoundingRectangle', 'IsEnabled', 'IsOffscreen',
             'IsKeyboardFocusable', 'HasKeyboardFocus', 'AccessKey', 'ProcessId', 'RuntimeId', 'AutomationId',

@@ -12,7 +12,12 @@ if (!(Get-PSDrive -Name $driveLetter -ErrorAction SilentlyContinue)) {
     New-PSDrive -Name $driveLetter -PSProvider FileSystem -Root $networkPath -Credential $creds -Persist -Scope Global
 }
 
-# 2. Run Robocopy without the /ZB flag to avoid the privilege error
+# 2. Build
+Write-Host "Building..." -ForegroundColor Cyan
+Set-Location $source
+npm run build
+
+# 3. Run Robocopy without the /ZB flag to avoid the privilege error
 # We use /E /IS to force overwrite without deleting extra files, OR /MIR to exact mirror.
 Write-Host "Syncing files and overwriting destination..." -ForegroundColor Cyan
 robocopy $source $destination /E /IS /XD node_modules .git /R:5 /W:5 /MT:8

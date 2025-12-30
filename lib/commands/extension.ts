@@ -60,6 +60,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     getClipboard: 'getClipboardBase64',
     setClipboard: 'setClipboardFromBase64',
     setForegroundWindow: 'setForegroundWindow',
+    getAttributes: 'getAttributes',
 } as const);
 
 const ContentType = Object.freeze({
@@ -745,4 +746,12 @@ export async function setForegroundWindow(this: NovaWindows2Driver, args: { proc
     } else {
         throw new errors.NoSuchElementError(`Could not find a window for process '${args.process}'`);
     }
+}
+
+export async function getAttributes(this: NovaWindows2Driver, arg: any): Promise<string> {
+    const elementId = arg?.[W3C_ELEMENT_KEY] || arg?.elementId || (typeof arg === 'string' ? arg : undefined);
+    if (!elementId) {
+        throw new errors.InvalidArgumentError('Element ID is required. Pass either an element object or an object with "elementId" property.');
+    }
+    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetAllPropertiesCommand());
 }
