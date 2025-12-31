@@ -69,6 +69,8 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         shift: false,
     };
 
+    _typeDelay?: number;
+
     activeCommands: number = 0;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {

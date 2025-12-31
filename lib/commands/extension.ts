@@ -61,6 +61,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     setClipboard: 'setClipboardFromBase64',
     setForegroundWindow: 'setForegroundWindow',
     getAttributes: 'getAttributes',
+    typeDelay: 'typeDelay',
 } as const);
 
 const ContentType = Object.freeze({
@@ -754,4 +755,23 @@ export async function getAttributes(this: NovaWindows2Driver, arg: any): Promise
         throw new errors.InvalidArgumentError('Element ID is required. Pass either an element object or an object with "elementId" property.');
     }
     return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetAllPropertiesCommand());
+}
+
+export async function typeDelay(this: NovaWindows2Driver, args: { delay: number | string } | string | number | undefined) {
+    let delay: number;
+    if (typeof args === 'object' && args !== null && 'delay' in args) {
+        delay = Number(args.delay);
+    } else if (typeof args === 'string') {
+        delay = Number(args);
+    } else if (typeof args === 'number') {
+        delay = args;
+    } else {
+        throw new errors.InvalidArgumentError('Delay must be provided as an object { delay: number } or a number/string.');
+    }
+
+    if (isNaN(delay) || delay < 0) {
+        throw new errors.InvalidArgumentError('Delay must be a non-negative number.');
+    }
+
+    this._typeDelay = delay;
 }

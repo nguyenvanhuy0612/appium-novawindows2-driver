@@ -69,8 +69,11 @@ NovaWindows2 Driver supports the following capabilities:
 | `convertAbsoluteXPathToRelativeFromElement` | Convert absolute XPath to relative when searching from an element. | `true` | `true` |
 | `includeContextElementInSearch` | Include the context element itself in the search. | `true` | `true` |
 | `releaseModifierKeys` | Whether to release modifier keys after `sendKeys`. | `true` | `true` |
+| `typeDelay` | Time in milliseconds to wait after inputting each character. Note that this delay does not apply to modifier keys (Shift, Ctrl, Alt, Win). | `0` | `100` |
 
 ---
+
+
 
 ## 💡 Example Usage
 
@@ -132,6 +135,13 @@ await driver.executeScript('powerShell', { script: '$p = Get-Process Notepad; $p
 
 // Shorthand (executes as command/script depending on context)
 await driver.executeScript('powerShell', 'Get-Process');
+```
+
+### Enhanced Text Input
+You can specify the delay directly within the text string using the `[delay:ms]` pattern. This overrides the session setting (set via `windows: typeDelay` or `typeDelay` capability) for that specific action.
+
+```python
+driver.find_element(...).send_keys("[delay:500]Slow text")
 ```
 
 ---
@@ -215,6 +225,20 @@ driver.execute_script('windows: hover', {
 ```
 
 ### Keyboard
+
+#### `windows: typeDelay`
+Sets the delay between key injections in milliseconds. This persistent setting applies to the entire session until changed.
+
+| Name | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `delay` | `number` | yes | Delay in milliseconds. | `100` |
+
+#### Usage
+```python
+driver.execute_script('windows: typeDelay', {'delay': 500})
+# or shorthand
+driver.execute_script('windows: typeDelay', '500')
+```
 
 #### `windows: keys`
 This is a shortcut for a customized keyboard input. Selenium keys should also work as modifier keys.

@@ -53,6 +53,9 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     },
     releaseModifierKeys: {
         isBoolean: true,
+    },
+    typeDelay: {
+        isNumber: true,
     }
 } as const satisfies Constraints;
 

@@ -59,7 +59,14 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         alt: undefined,
     };
 
+    let delayOverride: number | undefined;
+
     if (!Array.isArray(value)) {
+        const match = value.match(/^\[delay:(\d+)\]/);
+        if (match) {
+            delayOverride = parseInt(match[1], 10);
+            value = value.substring(match[0].length);
+        }
         value = value.split('');
     }
 
@@ -69,6 +76,8 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         await this.sendPowerShellCommand(/* ps1 */ `[Windows.Forms.SendKeys]::SendWait(${new PSString(keysToSend.join(''))})`);
         keysToSend = [];
     };
+
+    const typeDelay = delayOverride ?? this._typeDelay ?? this.caps.typeDelay;
 
     for (const char of value) {
         switch (char) {
@@ -160,8 +169,15 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
                         id: 'default keyboard',
                         actions: [{ type: 'keyDown', value: char }, { type: 'keyUp', value: char }]
                     });
+                    if (typeDelay) {
+                        await sleep(typeDelay);
+                    }
                 } else {
                     keysToSend.push(char.replace(/[+^%~()]/, '{$&}'));
+                    if (typeDelay) {
+                        await sendKeysAndResetArray();
+                        await sleep(typeDelay);
+                    }
                 }
         }
     }
