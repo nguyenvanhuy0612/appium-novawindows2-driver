@@ -1,6 +1,6 @@
 {
   "name": "appium-novawindows2-driver",
-  "version": "0.1.13",
+  "version": "0.2.1",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
