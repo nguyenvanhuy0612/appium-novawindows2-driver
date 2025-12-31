@@ -60,15 +60,9 @@ NovaWindows2 Driver supports the following capabilities:
 | `shouldCloseApp` | Whether to close the app after the session. Default: `true`. | `false` |
 | `appArguments` | Arguments to pass to the app on launch. | `--debug` |
 | `appWorkingDir` | Working directory for the application. | `C:\Temp` |
-| `appWaitForLaunchRetries` | Number of retries to wait for the app to launch. | `3` |
-| `appWaitForLaunchRetryIntervalMs` | Interval (ms) between retries for app launch. | `1000` |
 | `prerun` | PowerShell script/command to run before session start. | `{script: '...'}` |
 | `postrun` | PowerShell script/command to run after session stop. | `{command: '...'}` |
 | `isolatedScriptExecution` | Execute scripts in an isolated session. Default: `false`. | `true` |
-| `powerShellCommandTimeout` | Timeout (ms) for internal PowerShell commands. Default: `60000`. | `30000` |
-| `convertAbsoluteXPathToRelativeFromElement` | Converts absolute XPath to relative when searching from element. Default: `true`. | `false` |
-| `includeContextElementInSearch` | Includes the context element in the search results. Default: `true`. | `false` |
-| `releaseModifierKeys` | Automatically releases modifier keys after a session. Default: `true`. | `false` |
 
 ---
 
