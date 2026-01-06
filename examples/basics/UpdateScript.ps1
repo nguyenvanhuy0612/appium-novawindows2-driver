@@ -22,4 +22,14 @@ npm run build
 Write-Host "Syncing files and overwriting destination..." -ForegroundColor Cyan
 robocopy $source $destination /E /IS /XD node_modules .git /R:5 /W:5 /MT:8
 
-Write-Host "Done!" -ForegroundColor Green
+# 5. Remote Restart Appium via SSH
+Write-Host "Restarting Remote Appium..." -ForegroundColor Cyan
+
+# Use SSH (Password input required unless keys are set up)
+# Note: We must use the 'C:\' path because 'N:\' (Mapped Drive) is not visible in the SSH session.
+$remoteScriptPath = "C:\Share\appium-novawindows2-driver\examples\basics\Start_Appium_TS.ps1"
+
+Write-Host "NOTE: SSH Automation enabled via authorized_keys." -ForegroundColor Green
+ssh admin@192.168.196.155 "powershell -ExecutionPolicy Bypass -File $remoteScriptPath"
+
+Write-Host "Done! Appium should be restarting." -ForegroundColor Green

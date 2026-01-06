@@ -24,12 +24,16 @@ const GET_PAGE_SOURCE_COMMAND = pwsh$ /* ps1 */ `
     $el = ${0}
 
     if ($el -eq $null) {
-        $dummy = [xml]'<DummyRoot></DummyRoot>'
-        return $dummy.OuterXml
+        $el = [AutomationElement]::RootElement
     }
 
-    Get-PageSource $el |
-    ForEach-Object { $_.OuterXml }
+    $source = Get-PageSource $el
+    if ($null -ne $source) {
+        $source.OuterXml
+    } else {
+        # Final fallback if even Get-PageSource fails for some reason
+        "<DummyRoot />"
+    }
 `;
 
 const GET_SCREENSHOT_COMMAND = pwsh /* ps1 */ `

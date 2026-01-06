@@ -22,6 +22,7 @@ import {
     PSControlType,
     PSInt32Array,
 } from './powershell';
+import { ensureMsaaHelperCompiled } from './powershell/msaa';
 import { xpathToElIdOrIds } from './xpath';
 import { setDpiAwareness } from './winapi/user32';
 
@@ -56,7 +57,6 @@ const LOCATION_STRATEGIES = Object.freeze([
 ] as const);
 
 export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints, StringRecord> {
-    isPowerShellSessionStarted: boolean = false;
     powerShell?: ChildProcessWithoutNullStreams;
     powerShellStdOut: string = '';
     powerShellStdErr: string = '';
@@ -79,8 +79,13 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         this.locatorStrategies = [...LOCATION_STRATEGIES];
         this.desiredCapConstraints = UI_AUTOMATION_DRIVER_CONSTRAINTS;
 
-        for (const key in commands) { // TODO: create a decorator that will do that for the class
-            NovaWindows2Driver.prototype[key] = commands[key].bind(this);
+        // Start compilation early
+        ensureMsaaHelperCompiled(this.log).catch((e) => {
+            this.log.warn(`Background compilation of MSAA helper failed: ${e.message}`);
+        });
+
+        for (const key in commands) {
+            (this as any)[key] = commands[key].bind(this);
         }
     }
 

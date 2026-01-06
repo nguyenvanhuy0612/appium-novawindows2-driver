@@ -1,6 +1,6 @@
 {
   "name": "appium-novawindows2-driver",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -58,6 +58,7 @@
     "eslint": "^9.38.0",
     "semantic-release": "^25.0.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.1"
+    "typescript-eslint": "^8.46.1",
+    "webdriverio": "^9.23.0"
   }
 }

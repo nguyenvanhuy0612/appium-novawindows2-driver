@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
-import { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { ensureMsaaHelperCompiled, CompilationResult, getMsaaHelperCode } from '../powershell/msaa';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
 const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; Add-Type -AssemblyName UIAutomationClientsideProviders; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
@@ -13,6 +13,7 @@ const INIT_CACHE_REQUEST = /* ps1 */ `
     $cacheRequest.Add([AutomationElement]::AutomationIdProperty);
     $cacheRequest.Add([AutomationElement]::ClassNameProperty);
     $cacheRequest.Add([AutomationElement]::ControlTypeProperty);
+    $cacheRequest.Add([AutomationElement]::LocalizedControlTypeProperty);
     $cacheRequest.Add([AutomationElement]::IsOffscreenProperty);
     $cacheRequest.Add([AutomationElement]::IsEnabledProperty);
     $cacheRequest.Add([AutomationElement]::BoundingRectangleProperty);
@@ -20,188 +21,133 @@ const INIT_CACHE_REQUEST = /* ps1 */ `
 `;
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
-const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
-
-const MSAA_HELPER_CODE = /* ps1 */ `
-    $msaaCode = @"
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Reflection;
-    
-    public static class MSAAHelper {
-        [DllImport("oleacc.dll")]
-        private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwId, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out object ppvObject);
-
-        public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
-           if (hwnd == IntPtr.Zero) return null;
-           
-           Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-           object acc = null;
-           // OBJID_CLIENT = 0xFFFFFFFC (-4)
-           int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out acc);
-           if (res == 0 && acc != null) {
-               try {
-                   // propertyName maps to: accName, accValue, accDescription, accRole, accState, accHelp, accKeyboardShortcut, accDefaultAction
-                   return acc.GetType().InvokeMember(propertyName, 
-                       BindingFlags.GetProperty, 
-                       null, 
-                       acc, 
-                       new object[] { 0 }); // 0 = CHILDID_SELF
-               } catch {
-                   return null;
-               }
-           }
-           return null;
+const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object 'System.Collections.Generic.Dictionary[string,System.Windows.Automation.AutomationElement]'`;
+const DISABLE_QUICK_EDIT = /* ps1 */ `
+    try {
+        if (-not ([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {
+            # Not loaded yet, skip
+        } else {
+            [ConsoleHelper]::DisableConsoleInteractions()
         }
-
-        public static bool SetLegacyValue(IntPtr hwnd, string value) {
-           if (hwnd == IntPtr.Zero) return false;
-           
-           Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-           object acc = null;
-           int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out acc);
-           if (res == 0 && acc != null) {
-               try {
-                   acc.GetType().InvokeMember("accValue", 
-                       BindingFlags.SetProperty, 
-                       null, 
-                       acc, 
-                       new object[] { 0, value }); // 0 = CHILDID_SELF
-                   return true;
-               } catch {
-                   return false;
-               }
-           }
-           return false;
-        }
-    }
-"@
-    Add-Type -TypeDefinition $msaaCode -Language CSharp
+    } catch {}
 `;
 
-
-// Global execution chain to enforce sequential execution across all sessions
-let globalExecutionChain = Promise.resolve();
+// Basic execution logic for PowerShell commands within the established session.
 async function executeRawCommand(driver: NovaWindows2Driver, command: string): Promise<string> {
-    const nextCommand = async () => {
-        const magicNumber = 0xF2EE;
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        const powerShell = driver.powerShell!;
+    const magicNumber = 0xF2EE;
+    const powerShell = driver.powerShell;
 
-        driver.powerShellStdOut = '';
-        driver.powerShellStdErr = '';
+    if (!powerShell || powerShell.exitCode !== null || !powerShell.stdin.writable) {
+        throw new errors.UnknownError('PowerShell session is not available or closed.');
+    }
 
+    driver.powerShellStdOut = '';
+    driver.powerShellStdErr = '';
+
+    try {
         powerShell.stdin.write(`${command}\n`);
         powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
+    } catch (e) {
+        throw new errors.UnknownError(`Failed to write to PowerShell: ${e.message}`);
+    }
 
-        return await new Promise<string>((resolve, reject) => {
-            const timeoutMs = (driver.caps as any).powerShellCommandTimeout || 60000;
-            const timeout = setTimeout(() => {
-                if (driver.powerShell === powerShell) {
-                    driver.log.warn(`PowerShell command timed out after ${timeoutMs}ms. Terminating process...`);
-                    try {
-                        driver.powerShell.kill();
-                    } catch (e) {
-                        driver.log.warn(`Failed to kill PowerShell process: ${e}`);
-                    }
-                    driver.powerShell = undefined;
-                } else {
-                    driver.log.warn('PowerShell command timed out, but the session has already been replaced. Ignoring process termination.');
+    return await new Promise<string>((resolve, reject) => {
+        const timeoutMs = (driver.caps as any).powerShellCommandTimeout || 60000;
+        const timeout = setTimeout(() => {
+            if (driver.powerShell === powerShell) {
+                driver.log.warn(`PowerShell command timed out after ${timeoutMs}ms. Terminating process...`);
+                try {
+                    powerShell.kill();
+                } catch (e) {
+                    driver.log.warn(`Failed to kill PowerShell process: ${e}`);
                 }
-                reject(new errors.TimeoutError(`PowerShell command timed out after ${timeoutMs}ms`));
-            }, timeoutMs);
+                driver.powerShell = undefined;
+            }
+            reject(new errors.TimeoutError(`PowerShell command timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
 
-            const onClose = (code: number) => {
+        const onClose = (code: number) => {
+            clearTimeout(timeout);
+            reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
+            if (driver.powerShell === powerShell) {
+                driver.powerShell = undefined;
+            }
+        };
+        powerShell.once('close', onClose);
+
+        const onData = (chunk: any) => {
+            const magicChar = String.fromCharCode(magicNumber);
+            if (chunk.toString().includes(magicChar)) {
                 clearTimeout(timeout);
-                reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
-                driver.powerShell = undefined; // Clear the reference as the process is dead
-            };
-            powerShell.on('close', onClose);
-
-            const onData: Parameters<typeof powerShell.stdout.on>[1] = ((chunk: any) => {
-                const magicChar = String.fromCharCode(magicNumber);
-                if (chunk.toString().includes(magicChar)) {
-                    clearTimeout(timeout);
-                    powerShell.stdout.off('data', onData);
-                    powerShell.off('close', onClose);
-                    if (driver.powerShellStdErr) {
-                        reject(new errors.UnknownError(driver.powerShellStdErr));
-                    } else {
-                        resolve(driver.powerShellStdOut.replace(`${magicChar}`, '').trim());
-                    }
+                powerShell.stdout.off('data', onData);
+                powerShell.off('close', onClose);
+                if (driver.powerShellStdErr) {
+                    driver.log.error(`PowerShell command failed: ${driver.powerShellStdErr}`);
+                    reject(new errors.UnknownError(driver.powerShellStdErr));
+                } else {
+                    const result = driver.powerShellStdOut.replace(`${magicChar}`, '').trim();
+                    driver.log.debug(`PowerShell command completed. Result length: ${result.length}`);
+                    resolve(result);
                 }
-            }).bind(driver);
+            }
+        };
 
-            powerShell.stdout.on('data', onData);
-        });
-    };
-
-    // Chain the command to the global execution queue
-    // We append the new command to the chain, ensuring strictly sequential execution
-    // regardless of which driver instance calls it.
-    const resultPromise = globalExecutionChain
-        .catch(() => { /* ignore previous error */ })
-        .then(nextCommand);
-
-    // Update the chain head
-    // We handle both success and failure here to ensure the chain always resolves to void
-    // and prevents unhandled rejections.
-    globalExecutionChain = resultPromise.then(() => { }, () => { });
-
-    return resultPromise;
+        powerShell.stdout.on('data', onData);
+    });
 }
 
 async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: string, powerShell: ChildProcessWithoutNullStreams): Promise<string> {
-    const nextCommand = async () => {
-        const magicNumber = 0xF2EE;
+    const magicNumber = 0xF2EE;
 
-        driver.powerShellStdOut = '';
-        driver.powerShellStdErr = '';
+    driver.powerShellStdOut = '';
+    driver.powerShellStdErr = '';
 
-        powerShell.stdin.write(`${command}\n`);
-        powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
+    powerShell.stdin.write(`${command}\n`);
+    powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
 
-        return await new Promise<string>((resolve, reject) => {
-            const onClose = (code: number) => {
-                reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
-            };
-            powerShell.on('close', onClose);
+    return await new Promise<string>((resolve, reject) => {
+        const timeoutMs = (driver.caps as any).powerShellCommandTimeout || 60000;
+        const timeout = setTimeout(() => {
+            driver.log.warn(`Isolated PowerShell command timed out after ${timeoutMs}ms. Terminating process...`);
+            try {
+                powerShell.kill();
+            } catch (e) {
+                driver.log.warn(`Failed to kill isolated PowerShell process: ${e}`);
+            }
+            reject(new errors.TimeoutError(`Isolated PowerShell command timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
 
-            const onData: Parameters<typeof powerShell.stdout.on>[1] = ((chunk: any) => {
-                const magicChar = String.fromCharCode(magicNumber);
-                if (chunk.toString().includes(magicChar)) {
-                    powerShell.stdout.off('data', onData);
-                    powerShell.off('close', onClose);
-                    if (driver.powerShellStdErr) {
-                        reject(new errors.UnknownError(driver.powerShellStdErr));
-                    } else {
-                        resolve(driver.powerShellStdOut.replace(`${magicChar}`, '').trim());
-                    }
+        const onClose = (code: number) => {
+            clearTimeout(timeout);
+            reject(new errors.UnknownError(`Isolated PowerShell process exited unexpectedly with code ${code}`));
+        };
+        powerShell.once('close', onClose);
+
+        const onData = (chunk: any) => {
+            const magicChar = String.fromCharCode(magicNumber);
+            if (chunk.toString().includes(magicChar)) {
+                clearTimeout(timeout);
+                powerShell.stdout.off('data', onData);
+                powerShell.off('close', onClose);
+                if (driver.powerShellStdErr) {
+                    driver.log.error(`Isolated PowerShell command failed: ${driver.powerShellStdErr}`);
+                    reject(new errors.UnknownError(driver.powerShellStdErr));
+                } else {
+                    const result = driver.powerShellStdOut.replace(`${magicChar}`, '').trim();
+                    driver.log.debug(`Isolated PowerShell command completed. Result length: ${result.length}`);
+                    resolve(result);
                 }
-            }).bind(driver);
+            }
+        };
 
-            powerShell.stdout.on('data', onData);
-        });
-    };
-
-    // Chain the isolated command to the global execution queue as well
-    // Windows UIA is single-threaded system-wide, so even isolated processes must be serialized
-    // to prevent deadlocks when accessing UIA concurrently.
-    const resultPromise = globalExecutionChain
-        .catch(() => { /* ignore previous error */ })
-        .then(nextCommand);
-
-    // Update the chain head
-    // We handle both success and failure here to ensure the chain always resolves to void
-    // and prevents unhandled rejections.
-    globalExecutionChain = resultPromise.then(() => { }, () => { });
-
-    return resultPromise;
+        powerShell.stdout.on('data', onData);
+    });
 }
 
 export async function startPowerShellSession(this: NovaWindows2Driver): Promise<void> {
-    this.log.debug('Starting new PowerShell session...');
-    const powerShell = spawn('powershell.exe', ['-NoExit', '-Command', '-']);
+    this.log.debug(`Starting new PowerShell session...`);
+
+    const powerShell = spawn('powershell.exe', ['-NoProfile', '-NoExit', '-Command', '-']);
     powerShell.stdout.setEncoding('utf8');
     powerShell.stderr.setEncoding('utf8');
 
@@ -226,31 +172,35 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         for (const envVar of envVars) {
             this.caps.appWorkingDir = this.caps.appWorkingDir.replaceAll(`%${envVar}%`, process.env[envVar.toUpperCase()] ?? '');
         }
-        // Use raw execution to bypass queue
-        await executeRawCommand(this, `Set-Location -Path '${this.caps.appWorkingDir}'`);
     }
 
-    // Use raw execution to bypass queue
-    await executeRawCommand(this, SET_UTF8_ENCODING);
-    await executeRawCommand(this, ADD_NECESSARY_ASSEMBLIES);
-    await executeRawCommand(this, USE_UI_AUTOMATION_CLIENT);
-    await executeRawCommand(this, INIT_CACHE_REQUEST);
-    await executeRawCommand(this, INIT_ELEMENT_TABLE);
-    await executeRawCommand(this, MSAA_HELPER_CODE);
+    // Combine initialization steps to reduce latency
+    // Note: 'using' directives must be at the very top of the script
+    // Ensure the helper DLL is available before we start the session
+    const compilationResult = await ensureMsaaHelperCompiled(this.log);
 
-    // initialize functions
-    await executeRawCommand(this, PAGE_SOURCE);
-    await executeRawCommand(this, FIND_CHILDREN_RECURSIVELY);
+    let initScript = `${USE_UI_AUTOMATION_CLIENT}\n`;
+    initScript += `${SET_UTF8_ENCODING};\n`;
+    initScript += `${ADD_NECESSARY_ASSEMBLIES};\n`;
+    if (this.caps.appWorkingDir) {
+        initScript += `Set-Location -Path '${this.caps.appWorkingDir}';\n`;
+    }
+    initScript += `${INIT_CACHE_REQUEST};\n`;
+    initScript += `${INIT_ELEMENT_TABLE};\n`;
+    initScript += `${getMsaaHelperCode(compilationResult)};\n`;
+    initScript += `${PAGE_SOURCE};\n`;
+    initScript += `${FIND_CHILDREN_RECURSIVELY};\n`;
+    initScript += `${DISABLE_QUICK_EDIT};\n`;
 
     if ((!this.caps.app && !this.caps.appTopLevelWindow) || (!this.caps.app || this.caps.app.toLowerCase() === 'none')) {
         this.log.info(`No app or top-level window specified in capabilities. Setting root element to null.`);
-        await executeRawCommand(this, NULL_ROOT_ELEMENT);
+        initScript += `${NULL_ROOT_ELEMENT};\n`;
+    } else if (this.caps.app && this.caps.app.toLowerCase() === 'root') {
+        this.log.info(`'root' specified as app in capabilities. Setting root element to desktop root.`);
+        initScript += `${INIT_ROOT_ELEMENT};\n`;
     }
 
-    if (this.caps.app && this.caps.app.toLowerCase() === 'root') {
-        this.log.info(`'root' specified as app in capabilities. Setting root element to desktop root.`);
-        await executeRawCommand(this, INIT_ROOT_ELEMENT);
-    }
+    await executeRawCommand(this, initScript);
 
     if (this.caps.app && this.caps.app.toLowerCase() !== 'none' && this.caps.app.toLowerCase() !== 'root') {
         this.log.info(`Application path specified in capabilities: ${this.caps.app}`);
@@ -280,10 +230,11 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
 
         await this.changeRootElement(nativeWindowHandle);
     }
+    this.log.debug(`PowerShell session initialization completed`);
 }
 
 export async function sendIsolatedPowerShellCommand(this: NovaWindows2Driver, command: string): Promise<string> {
-    const powerShell = spawn('powershell.exe', ['-NoExit', '-Command', '-']);
+    const powerShell = spawn('powershell.exe', ['-NoProfile', '-NoExit', '-Command', '-']);
     try {
         powerShell.stdout.setEncoding('utf8');
         powerShell.stderr.setEncoding('utf8');
@@ -341,38 +292,46 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
     // This prevents re-running this command if it fails (no infinite loop).
     this.commandQueue = this.commandQueue
         .catch(() => { /* ignore previous error */ })
-        .then(nextCommand);
+        .then(nextCommand)
+        .catch((err) => {
+            this.log.debug(`PowerShell command failed: ${command}\nError: ${err.message}`);
+            throw err;
+        });
 
     return this.commandQueue;
 }
 
 export async function terminatePowerShellSession(this: NovaWindows2Driver): Promise<void> {
-    if (!this.powerShell) {
-        return;
-    }
-
-    if (this.powerShell.exitCode !== null) {
-        this.log.debug(`PowerShell session already terminated.`);
-        return;
-    }
-
-    this.log.debug(`Terminating PowerShell session...`);
-    const waitForClose = new Promise<void>((resolve, reject) => {
+    const terminateAction = async () => {
         if (!this.powerShell) {
-            resolve();
+            return;
         }
 
-        this.powerShell?.once('close', () => {
-            resolve();
+        if (this.powerShell.exitCode !== null) {
+            this.log.debug(`PowerShell session already terminated.`);
+            this.powerShell = undefined;
+            return;
+        }
+
+        this.log.debug(`Terminating PowerShell session...`);
+        const waitForClose = new Promise<void>((resolve) => {
+            this.powerShell?.once('close', () => {
+                resolve();
+            });
+            setTimeout(resolve, 5000); // Safety timeout
         });
 
-        this.powerShell?.once('error', (err: Error) => {
-            reject(err);
-        });
-    });
+        const pid = this.powerShell?.pid;
+        this.powerShell.kill();
+        await waitForClose;
+        this.powerShell = undefined;
 
+        this.log.debug(`PowerShell session terminated successfully.`);
+    };
 
-    this.powerShell.kill();
-    await waitForClose;
-    this.log.debug(`PowerShell session terminated successfully.`);
+    this.commandQueue = this.commandQueue
+        .catch(() => { /* ignore */ })
+        .then(terminateAction);
+
+    return await this.commandQueue;
 }
