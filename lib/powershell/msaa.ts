@@ -7,26 +7,67 @@ const MSAA_HELPER_CODE = /* csharp */ `
 using System;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Collections;
 
 public static class MSAAHelper {
     [DllImport("oleacc.dll")]
     private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwId, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out object ppvObject);
 
+    [DllImport("oleacc.dll")]
+    private static extern int AccessibleObjectFromPoint(POINT pt, [MarshalAs(UnmanagedType.Interface)] out object ppacc, [MarshalAs(UnmanagedType.Struct)] out object pvarChild);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int x; public int y; }
+
+    [ComImport]
+    [Guid("618736E0-3C3D-11CF-810C-00AA00389B71")]
+    [InterfaceType(ComInterfaceType.InterfaceIsDual)]
+    private interface IAccessible {
+        [DispId(-5000)] string get_accName([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5001)] string get_accValue([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5001)] void set_accValue([In, MarshalAs(UnmanagedType.Struct)] object varChild, [In, MarshalAs(UnmanagedType.BStr)] string pszValue);
+        [DispId(-5002)] string get_accDescription([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5003)] object get_accRole([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5004)] object get_accState([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5005)] string get_accHelp([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5006)] string get_accKeyboardShortcut([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5007)] object get_accFocus();
+        [DispId(-5008)] object get_accSelection();
+        [DispId(-5009)] string get_accDefaultAction([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5010)] void accSelect([In] int flagsSelect, [In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5011)] void accLocation(out int pxLeft, out int pyTop, out int pcxWidth, out int pcyHeight, [In, MarshalAs(UnmanagedType.Struct)] object varChild);
+        [DispId(-5012)] object accNavigate([In] int navDir, [In, MarshalAs(UnmanagedType.Struct)] object varStart);
+        [DispId(-5013)] object accHitTest([In] int xLeft, [In] int yTop);
+        [DispId(-5014)] void accDoDefaultAction([In, MarshalAs(UnmanagedType.Struct)] object varChild);
+    }
+
     public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
        if (hwnd == IntPtr.Zero) return null;
        
        Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-       object acc = null;
+       object accObj = null;
        // OBJID_CLIENT = 0xFFFFFFFC (-4)
-       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out acc);
-       if (res == 0 && acc != null) {
+       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+       if (res == 0 && accObj != null) {
            try {
-               // propertyName maps to: accName, accValue, accDescription, accRole, accState, accHelp, accKeyboardShortcut, accDefaultAction
-               return acc.GetType().InvokeMember(propertyName, 
-                   BindingFlags.GetProperty, 
-                   null, 
-                   acc, 
-                   new object[] { 0 }); // 0 = CHILDID_SELF
+               IAccessible acc = (IAccessible)accObj;
+               // CHILDID_SELF = 0
+               object childId = 0;
+
+               switch (propertyName) {
+                   case "accName": return acc.get_accName(childId);
+                   case "accValue": return acc.get_accValue(childId);
+                   case "accDescription": return acc.get_accDescription(childId);
+                   case "accRole": return acc.get_accRole(childId);
+                   case "accState": return acc.get_accState(childId);
+                   case "accHelp": return acc.get_accHelp(childId);
+                   case "accKeyboardShortcut": return acc.get_accKeyboardShortcut(childId);
+                   case "accDefaultAction": return acc.get_accDefaultAction(childId);
+                   // Some properties don't take childId or behave differently, but for standard element props:
+                   case "accFocus": return acc.get_accFocus();
+                   case "accSelection": return acc.get_accSelection();
+                   default: return null;
+               }
            } catch {
                return null;
            }
@@ -38,21 +79,47 @@ public static class MSAAHelper {
        if (hwnd == IntPtr.Zero) return false;
        
        Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-       object acc = null;
-       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out acc);
-       if (res == 0 && acc != null) {
+       object accObj = null;
+       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+       if (res == 0 && accObj != null) {
            try {
-               acc.GetType().InvokeMember("accValue", 
-                   BindingFlags.SetProperty, 
-                   null, 
-                   acc, 
-                   new object[] { 0, value }); // 0 = CHILDID_SELF
+               IAccessible acc = (IAccessible)accObj;
+               acc.set_accValue(0, value); // 0 = CHILDID_SELF
                return true;
            } catch {
                return false;
            }
        }
        return false;
+    }
+
+    public static Hashtable GetAllLegacyProperties(IntPtr hwnd) {
+       if (hwnd == IntPtr.Zero) return null;
+       
+       Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+       object accObj = null;
+       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+       if (res == 0 && accObj != null) {
+           Hashtable props = new Hashtable();
+           try {
+               IAccessible acc = (IAccessible)accObj;
+               object childId = 0; // CHILDID_SELF
+
+               try { props.Add("Name", acc.get_accName(childId)); } catch {}
+               try { props.Add("Value", acc.get_accValue(childId)); } catch {}
+               try { props.Add("Description", acc.get_accDescription(childId)); } catch {}
+               try { props.Add("Role", acc.get_accRole(childId)); } catch {}
+               try { props.Add("State", acc.get_accState(childId)); } catch {}
+               try { props.Add("Help", acc.get_accHelp(childId)); } catch {}
+               try { props.Add("KeyboardShortcut", acc.get_accKeyboardShortcut(childId)); } catch {}
+               try { props.Add("DefaultAction", acc.get_accDefaultAction(childId)); } catch {}
+               
+               return props;
+           } catch {
+               return null;
+           }
+       }
+       return null;
     }
 }
 
@@ -174,6 +241,7 @@ ${csContent}
 export const getMsaaHelperCode = (result: CompilationResult) => {
     if (result.type === 'dll') {
         return /* ps1 */ `
+        Write-Output "DEBUG: Loading MSAAHelper from DLL: ${result.path}";
         if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
             Add-Type -Path '${result.path.replace(/\\/g, '\\\\')}' -ErrorAction Stop
         }
@@ -181,6 +249,7 @@ export const getMsaaHelperCode = (result: CompilationResult) => {
     } else {
         // In-Memory
         return /* ps1 */ `
+        Write-Output "DEBUG: Loading MSAAHelper from In-Memory compilation.";
         if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
             $code = @'
 ${result.code}

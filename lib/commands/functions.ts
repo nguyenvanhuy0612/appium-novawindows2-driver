@@ -1,15 +1,51 @@
 import { pwsh } from '../powershell';
 
 export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
-    function Find-ChildrenRecursively {
+    function Get-LegacyPropertySafe {
         param (
             [Parameter(Mandatory=$true)]
+            [AutomationElement]$element,
+            [string]$propName,
+            [string]$accPropName
+        )
+        $val = $null
+        try {
+            $val = $element.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern).Current.$propName
+        } catch {}
+
+        if ($null -ne $val) { return $val }
+
+        try {
+             $rect = $element.Current.BoundingRectangle
+             if ($null -ne $rect -and $rect.Width -gt 0) {
+                 $cx = [int]($rect.Left + $rect.Width/2)
+                 $cy = [int]($rect.Top + $rect.Height/2)
+                 $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
+                 if ($null -ne $props) { return $props[$propName] }
+             }
+        } catch {}
+
+        try {
+             $hwnd = $element.Current.NativeWindowHandle
+             if ($hwnd -gt 0) {
+                 return [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $accPropName)
+             }
+        } catch {}
+
+        return $null
+    }
+
+    function Find-ChildrenRecursively {
+        param (
+            [Parameter(Mandatory=$false)]
             [AutomationElement]$element,
             [Parameter(Mandatory=$true)]
             [Condition]$condition,
             [Parameter(Mandatory=$false)]
             [bool]$includeSelf = $false
         )
+        
+        if ($null -eq $element) { return $null }
 
         $scope = if ($includeSelf) {
             [TreeScope]::Element -bor [TreeScope]::Children

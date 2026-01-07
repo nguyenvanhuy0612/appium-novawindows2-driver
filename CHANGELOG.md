@@ -1,3 +1,26 @@
+## [0.2.8] (2026-01-07)
+
+### Refactoring
+
+* Unified `LegacyIAccessible` property retrieval using robust fallback logic (UIA -> MSAA Point -> MSAA HWND) via `Get-LegacyPropertySafe` in `elements.ts`.
+* Cleaned up PowerShell syntax in `elements.ts` (fixed spacing around operators, static member access, and cmdlet parameters like `ConvertTo-Json -Compress`).
+* Improved null handling in `Find-ChildrenRecursively`.
+
+## [0.2.7] (2026-01-07)
+
+### Bug Fixes
+
+* fixed `Unsupported Pattern` exception when closing or maximizing windows that do not support WindowPattern by wrapping in try-catch
+
+## [0.2.6] (2026-01-07)
+
+### Bug Fixes
+
+* fixed crash in `findElementFromElement` when using stale elements by validating `ProcessId` access
+* fixed `You cannot call a method on a null-valued expression` in `GET_ELEMENT_RUNTIME_ID` by adding null check filter
+* fixed `FIND_DESCENDANTS` crashing with null command input by adding null checks to recursive search commands
+* implemented `IsReadOnly` fallback for legacy MSAA elements (checking `accState` for `STATE_SYSTEM_READONLY`)
+
 ## [1.1.0](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/compare/v1.0.1...v1.1.0) (2025-08-06)
 
 ### Features
