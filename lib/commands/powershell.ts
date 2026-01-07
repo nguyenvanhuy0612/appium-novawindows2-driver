@@ -103,11 +103,8 @@ async function executeRawCommand(driver: NovaWindows2Driver, command: string): P
     });
 }
 
-async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: string, powerShell: ChildProcessWithoutNullStreams): Promise<string> {
+async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: string, powerShell: ChildProcessWithoutNullStreams, output: { stdout: string, stderr: string }): Promise<string> {
     const magicNumber = 0xF2EE;
-
-    driver.powerShellStdOut = '';
-    driver.powerShellStdErr = '';
 
     powerShell.stdin.write(`${command}\n`);
     powerShell.stdin.write(/* ps1 */ `Write-Output $([char]0x${magicNumber.toString(16)})\n`);
@@ -126,7 +123,13 @@ async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: st
 
         const onClose = (code: number) => {
             clearTimeout(timeout);
-            reject(new errors.UnknownError(`Isolated PowerShell process exited unexpectedly with code ${code}`));
+            if (code === 0) {
+                const result = output.stdout.replace(String.fromCharCode(magicNumber), '').trim();
+                driver.log.debug(`Isolated PowerShell process exited gracefully (0). Result length: ${result.length}`);
+                resolve(result);
+            } else {
+                reject(new errors.UnknownError(`Isolated PowerShell process exited unexpectedly with code ${code}`));
+            }
         };
         powerShell.once('close', onClose);
 
@@ -136,11 +139,11 @@ async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: st
                 clearTimeout(timeout);
                 powerShell.stdout.off('data', onData);
                 powerShell.off('close', onClose);
-                if (driver.powerShellStdErr) {
-                    driver.log.error(`Isolated PowerShell command failed: ${driver.powerShellStdErr}`);
-                    reject(new errors.UnknownError(driver.powerShellStdErr));
+                if (output.stderr) {
+                    driver.log.error(`Isolated PowerShell command failed: ${output.stderr}`);
+                    reject(new errors.UnknownError(output.stderr));
                 } else {
-                    const result = driver.powerShellStdOut.replace(`${magicChar}`, '').trim();
+                    const result = output.stdout.replace(`${magicChar}`, '').trim();
                     driver.log.debug(`Isolated PowerShell command completed. Result length: ${result.length}`);
                     resolve(result);
                 }
@@ -242,16 +245,18 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
 
 export async function sendIsolatedPowerShellCommand(this: NovaWindows2Driver, command: string): Promise<string> {
     const powerShell = spawn('powershell.exe', ['-NoProfile', '-NoExit', '-Command', '-']);
+    const output = { stdout: '', stderr: '' };
+
     try {
         powerShell.stdout.setEncoding('utf8');
         powerShell.stderr.setEncoding('utf8');
 
         powerShell.stdout.on('data', (chunk: any) => {
-            this.powerShellStdOut += chunk.toString();
+            output.stdout += chunk.toString();
         });
 
         powerShell.stderr.on('data', (chunk: any) => {
-            this.powerShellStdErr += chunk.toString();
+            output.stderr += chunk.toString();
         });
 
         let fullCommand = `${SET_UTF8_ENCODING}\n`;
@@ -272,7 +277,7 @@ export async function sendIsolatedPowerShellCommand(this: NovaWindows2Driver, co
 
         fullCommand += command;
 
-        return await executeIsolatedRawCommand(this, fullCommand, powerShell);
+        return await executeIsolatedRawCommand(this, fullCommand, powerShell, output);
     } finally {
         // Ensure the isolated PowerShell process is terminated
         try {
