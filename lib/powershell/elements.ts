@@ -296,8 +296,16 @@ const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `$elementTable['${0}']`;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
 
+const GET_CACHED_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
+    if ($null -ne ${0}) {
+        try {
+            ${0}.GetCachedPropertyValue([AutomationElement]::${1}Property)
+        } catch {
+            ${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property)
+        }
+    }
+`;
 
-const GET_CACHED_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `if ($null -ne ${0}) { ${0}.GetCachedPropertyValue([AutomationElement]::${1}Property) }`;
 const GET_CURRENT_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     if ($null -ne ${0}) { 
         try {

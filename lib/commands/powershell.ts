@@ -68,9 +68,16 @@ async function executeRawCommand(driver: NovaWindows2Driver, command: string): P
 
         const onClose = (code: number) => {
             clearTimeout(timeout);
-            reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
             if (driver.powerShell === powerShell) {
                 driver.powerShell = undefined;
+            }
+
+            if (code === 0) {
+                const result = driver.powerShellStdOut.replace(String.fromCharCode(magicNumber), '').trim();
+                driver.log.debug(`PowerShell process exited gracefully (0). Result length: ${result.length}`);
+                resolve(result);
+            } else {
+                reject(new errors.UnknownError(`PowerShell process exited unexpectedly with code ${code}`));
             }
         };
         powerShell.once('close', onClose);
