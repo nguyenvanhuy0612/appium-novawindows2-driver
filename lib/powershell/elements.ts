@@ -392,20 +392,7 @@ const GET_CURRENT_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     }
 `;
 
-const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
-    try {
-        $prop = [AutomationElement]::${1}Property
-        if ($null -ne $prop) {
-             try {
-                ${0}.GetCachedPropertyValue($prop)
-             } catch {
-                ${0}.GetCurrentPropertyValue($prop)
-             }
-        } else { $null }
-    } catch {
-        $null
-    }
-`;
+const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property)`;
 
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
     ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
@@ -564,23 +551,18 @@ const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
 if ($null -ne ${0}) {
     try { $ct = ${0}.Cached.ControlType } catch { $ct = ${0}.Current.ControlType }
     $ct.ProgrammaticName |
-        ForEach-Object {
-        $type = $_.Split('.')[-1]
-        if ($type -eq 'DataGrid') { 'List' }
-        elseif($type -eq 'DataItem') { 'ListItem' }
-        else { $type }
+    ForEach-Object {
+        $type = $_.Split('.')[-1];
+        if ($type -eq 'DataGrid') {
+            'List'
+        } elseif ($type -eq 'DataItem') {
+            'ListItem'
+        } else {
+            $type
+        }
     }
 }
 `;
-
-// ... (rest of file)
-
-// Inside AutomationElement class (implicit connection via line numbers, I will target the class method efficiently)
-// Actually I need to insert the constant before buildGetPropertyCommand or at the top with others.
-// The replace tool works on line ranges. I will convert this to 2 separate edits or use multi_replace.
-
-// Let's use multi_replace for cleaner insertion.
-
 
 const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
 if ($null -ne ${0}) {
@@ -999,21 +981,10 @@ export class AutomationElement extends PSObject {
         return GET_ELEMENT_TAG_NAME.format(this);
     }
 
-
     buildGetPropertyCommand(property: string): string {
         if (!property || property.toLowerCase() === 'all') {
             return this.buildGetAllPropertiesCommand();
         }
-
-        const cachedProperties = [
-            'name',
-            'automationid',
-            'classname',
-            'controltype',
-            'isoffscreen',
-            'isenabled',
-            'boundingrectangle'
-        ];
 
         if (property.toLowerCase() === 'runtimeid') {
             return GET_ELEMENT_RUNTIME_ID.format(this);
@@ -1126,6 +1097,8 @@ export class AutomationElement extends PSObject {
         if (property.toLowerCase() === 'providerdescription') {
             return '$null'; // UIA3 only
         }
+
+        const cachedProperties = ['name', 'automationid', 'classname', 'controltype', 'isoffscreen', 'isenabled', 'boundingrectangle'];
 
         if (cachedProperties.includes(property.toLowerCase())) {
             return GET_CACHED_ELEMENT_PROPERTY.format(this, property);

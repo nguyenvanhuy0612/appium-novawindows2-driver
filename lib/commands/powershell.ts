@@ -37,15 +37,7 @@ const INIT_CACHE_REQUEST = /* ps1 */ `
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object 'System.Collections.Generic.Dictionary[string,System.Windows.Automation.AutomationElement]'`;
-const DISABLE_QUICK_EDIT = /* ps1 */ `
-    try {
-        if (-not ([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {
-            # Not loaded yet, skip
-        } else {
-            [ConsoleHelper]::DisableConsoleInteractions()
-        }
-    } catch {}
-`;
+const DISABLE_QUICK_EDIT = /* ps1 */ `try {if (([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {[ConsoleHelper]::DisableConsoleInteractions()}} catch {}`;
 
 // Basic execution logic for PowerShell commands within the established session.
 async function executeRawCommand(driver: NovaWindows2Driver, command: string): Promise<string> {
