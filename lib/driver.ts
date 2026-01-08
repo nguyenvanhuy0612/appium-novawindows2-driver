@@ -79,11 +79,6 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         this.locatorStrategies = [...LOCATION_STRATEGIES];
         this.desiredCapConstraints = UI_AUTOMATION_DRIVER_CONSTRAINTS;
 
-        // Start compilation early
-        ensureMsaaHelperCompiled(this.log).catch((e) => {
-            this.log.warn(`Background compilation of MSAA helper failed: ${e.message}`);
-        });
-
         for (const key in commands) {
             (this as any)[key] = commands[key].bind(this);
         }

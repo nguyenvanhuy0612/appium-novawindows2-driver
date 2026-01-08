@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 
 const MSAA_HELPER_CODE = /* csharp */ `
 using System;
@@ -151,15 +150,7 @@ public static class ConsoleHelper {
 }
 `;
 
-const tempDir = path.resolve(__dirname, '..', 'temp');
-
-if (!fs.existsSync(tempDir)) {
-    try {
-        fs.mkdirSync(tempDir, { recursive: true });
-    } catch (e) {
-        // Ignored
-    }
-}
+const dllDir = path.resolve(__dirname, '..', 'dll');
 
 export type CompilationResult =
     | { type: 'dll', path: string }
@@ -167,16 +158,16 @@ export type CompilationResult =
 
 let compilationPromise: Promise<CompilationResult> | null = null;
 
-// Helper to get environment with overridden TEMP variables to a local writable dir
-function getOverriddenEnv(log?: any): NodeJS.ProcessEnv {
-    if (log) {
-        log.info(`Overriding TEMP and TMP to ${tempDir}`);
-    }
-    return { ...process.env, TEMP: tempDir, TMP: tempDir };
-}
-
 export async function ensureMsaaHelperCompiled(log: any): Promise<CompilationResult> {
-    const sharedDllPath = path.resolve(tempDir, 'MSAAHelper.dll');
+    if (!fs.existsSync(dllDir)) {
+        try {
+            fs.mkdirSync(dllDir, { recursive: true });
+        } catch (e) {
+            throw new Error(`Failed to create DLL directory: ${e.message}`);
+        }
+    }
+
+    const sharedDllPath = path.resolve(dllDir, 'MSAAHelper.dll');
 
     if (fs.existsSync(sharedDllPath)) {
         return { type: 'dll', path: sharedDllPath };
@@ -202,7 +193,7 @@ ${csContent}
 
             return new Promise<void>((resolve, reject) => {
                 const child = spawn('powershell.exe', ['-NoProfile', '-Command', '-'], {
-                    env: getOverriddenEnv(log)
+                    env: { ...process.env, TEMP: dllDir, TMP: dllDir }
                 });
                 let stderr = '';
                 child.stderr.on('data', (c) => stderr += c.toString());
@@ -222,16 +213,8 @@ ${csContent}
             await compile(sharedDllPath);
             return { type: 'dll', path: sharedDllPath };
         } catch (err: any) {
-            log.warn(`Failed to compile to shared path (${err.message}). Attempting unique fallback...`);
-            try {
-                const randomId = crypto.randomBytes(4).toString('hex');
-                const uniqueDllPath = path.resolve(tempDir, `MSAAHelper_${Date.now()}_${randomId}.dll`);
-                await compile(uniqueDllPath);
-                return { type: 'dll', path: uniqueDllPath };
-            } catch (err2: any) {
-                log.warn(`All file-based compilation failed (${err2.message}). Falling back to memory.`);
-                return { type: 'memory', code: MSAA_HELPER_CODE };
-            }
+            log.warn(`File compilation failed (${err.message}). Falling back to memory.`);
+            return { type: 'memory', code: MSAA_HELPER_CODE };
         }
     })();
 
@@ -259,3 +242,7 @@ ${result.code}
     `;
     }
 };
+
+ensureMsaaHelperCompiled(console).catch((e: any) => {
+    console.warn(`[NovaWindows2] Background compilation check failed: ${e.message}`);
+});
