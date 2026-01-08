@@ -282,13 +282,17 @@ const ROOT_ELEMENT = /* ps1 */ `[AutomationElement]::RootElement`;
 
 const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
     ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
-        $runtimeId = $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
+        try {
+            $runtimeId = $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
 
-        if (-not $elementTable.ContainsKey($runtimeId)) {
-            $elementTable.Add($runtimeId, $_)
-        };
+            if (-not $elementTable.ContainsKey($runtimeId)) {
+                $elementTable.Add($runtimeId, $_)
+            };
 
-        $runtimeId
+            $runtimeId
+        } catch {
+            # ElementNotAvailableException
+        }
     }
 `;
 
@@ -405,7 +409,11 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
 
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
     ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
-        $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.'
+        try {
+            $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.'
+        } catch {
+            # ElementNotAvailableException
+        }
     }
 `;
 
