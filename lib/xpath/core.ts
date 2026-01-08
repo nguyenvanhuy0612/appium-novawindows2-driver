@@ -153,16 +153,16 @@ export async function xpathToElIdOrIds(selector: string, mult: boolean, context:
     return els[0];
 }
 
-export async function processExprNode<T>(exprNode: ExprNode, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean = false): Promise<T[]> {
+export async function processExprNode<T>(exprNode: ExprNode, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean = false, contextState: [number, number] | undefined = undefined): Promise<T[]> {
     switch (exprNode.type) {
         case NUMBER:
             return [exprNode.number as T];
         case LITERAL:
             return [exprNode.string as T];
         case UNION:
-            return [...await processExprNode<T>(exprNode.lhs, context, sendPowerShellCommand, includeContextElementInSearch), ...await processExprNode<T>(exprNode.rhs, context, sendPowerShellCommand, includeContextElementInSearch)];
+            return [...await processExprNode<T>(exprNode.lhs, context, sendPowerShellCommand, includeContextElementInSearch, contextState), ...await processExprNode<T>(exprNode.rhs, context, sendPowerShellCommand, includeContextElementInSearch, contextState)];
         case FUNCTION_CALL:
-            return await handleFunctionCall(exprNode.name, context, sendPowerShellCommand, includeContextElementInSearch, ...exprNode.args);
+            return await handleFunctionCall(exprNode.name, context, sendPowerShellCommand, includeContextElementInSearch, contextState, ...exprNode.args);
         case ABSOLUTE_LOCATION_PATH:
         case RELATIVE_LOCATION_PATH: {
             const result: T[][] = [];
@@ -173,7 +173,7 @@ export async function processExprNode<T>(exprNode: ExprNode, context: Automation
             return result.flat();
         }
         case PATH: {
-            const filterResult = await processExprNode<T>(exprNode.filter, context, sendPowerShellCommand, includeContextElementInSearch);
+            const filterResult = await processExprNode<T>(exprNode.filter, context, sendPowerShellCommand, includeContextElementInSearch, contextState);
             const result: T[][] = [];
             for (const item of filterResult) {
                 if (item instanceof AutomationElement) {
@@ -189,7 +189,7 @@ export async function processExprNode<T>(exprNode: ExprNode, context: Automation
         }
         case FILTER: {
             const result: T[] = [];
-            const exprResult = await processExprNode<T>(exprNode.primary, context, sendPowerShellCommand, includeContextElementInSearch);
+            const exprResult = await processExprNode<T>(exprNode.primary, context, sendPowerShellCommand, includeContextElementInSearch, contextState);
             for (const item of exprResult) {
                 if (item instanceof AutomationElement) {
                     const filteredItem = await executeStep({
@@ -208,8 +208,8 @@ export async function processExprNode<T>(exprNode: ExprNode, context: Automation
         }
         case OR:
         case AND: {
-            const [lhs] = await handleFunctionCall<T>(BOOLEAN, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.lhs);
-            const [rhs] = await handleFunctionCall<T>(BOOLEAN, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.rhs);
+            const [lhs] = await handleFunctionCall<T>(BOOLEAN, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.lhs);
+            const [rhs] = await handleFunctionCall<T>(BOOLEAN, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.rhs);
 
             if (exprNode.type === AND) {
                 return [lhs && rhs];
@@ -218,11 +218,11 @@ export async function processExprNode<T>(exprNode: ExprNode, context: Automation
             }
         }
         case NEGATION:
-            return [-await handleFunctionCall<T>(NUMBER, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.lhs) as T];
+            return [-await handleFunctionCall<T>(NUMBER, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.lhs) as T];
         case EQUALITY:
         case INEQUALITY: {
-            const [lhs] = await handleFunctionCall<string>(STRING, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.lhs);
-            const [rhs] = await handleFunctionCall<string>(STRING, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.rhs);
+            const [lhs] = await handleFunctionCall<string>(STRING, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.lhs);
+            const [rhs] = await handleFunctionCall<string>(STRING, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.rhs);
             if (isNaN(Number(lhs)) || isNaN(Number(rhs))) {
                 return [exprNode.type === EQUALITY ? (lhs === rhs) as T : (lhs !== rhs) as T];
             }
@@ -239,8 +239,8 @@ export async function processExprNode<T>(exprNode: ExprNode, context: Automation
         case MULTIPLICATIVE:
         case SUBTRACTIVE:
             {
-                const [lhs] = await handleFunctionCall<number>(NUMBER, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.lhs);
-                const [rhs] = await handleFunctionCall<number>(NUMBER, context, sendPowerShellCommand, includeContextElementInSearch, exprNode.rhs);
+                const [lhs] = await handleFunctionCall<number>(NUMBER, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.lhs);
+                const [rhs] = await handleFunctionCall<number>(NUMBER, context, sendPowerShellCommand, includeContextElementInSearch, contextState, exprNode.rhs);
 
                 switch (exprNode.type) {
                     case ADDITIVE:
@@ -307,6 +307,11 @@ async function handleLocationNode(location: LocationNode, context: AutomationEle
 export async function processExprNodeAsPredicate(exprNode: ExprNode, context: AutomationElement, positions: Set<number>, sendPowerShellCommand: (command: string) => Promise<string>, relativeExprNodes?: ExprNode[]): Promise<[Condition, ExprNode[]?]> {
     relativeExprNodes ??= [];
     switch (exprNode.type) {
+        case ADDITIVE:
+        case SUBTRACTIVE:
+        case MULTIPLICATIVE:
+        case DIVISIONAL:
+        case MODULUS:
         case NUMBER:
             return await processExprNodeAsPredicate({
                 type: EQUALITY,
@@ -315,10 +320,7 @@ export async function processExprNodeAsPredicate(exprNode: ExprNode, context: Au
                     name: POSITION,
                     args: [],
                 },
-                rhs: {
-                    type: NUMBER,
-                    number: exprNode.number,
-                }
+                rhs: exprNode
             }, context, positions, sendPowerShellCommand, relativeExprNodes);
         case OR:
             return [new OrCondition(
@@ -331,7 +333,11 @@ export async function processExprNodeAsPredicate(exprNode: ExprNode, context: Au
                 (await processExprNodeAsPredicate(exprNode.rhs, context, positions, sendPowerShellCommand, relativeExprNodes))[0]
             ), relativeExprNodes];
         case EQUALITY:
-        case INEQUALITY: {
+        case INEQUALITY:
+        case GREATER_THAN:
+        case GREATER_THAN_OR_EQUAL:
+        case LESS_THAN:
+        case LESS_THAN_OR_EQUAL: {
             if ((exprNode.lhs.type === RELATIVE_LOCATION_PATH) !== (exprNode.rhs.type === RELATIVE_LOCATION_PATH)) {
                 if (exprNode.lhs.type === RELATIVE_LOCATION_PATH
                     && exprNode.lhs.steps[0].axis === ATTRIBUTE
@@ -389,39 +395,38 @@ export async function processExprNodeAsPredicate(exprNode: ExprNode, context: Au
                     }
                 }
             } else if ((exprNode.lhs.type === FUNCTION_CALL && exprNode.lhs.name === POSITION) !== (exprNode.rhs.type === FUNCTION_CALL && exprNode.rhs.name === POSITION)) {
-                if (exprNode.lhs.type === FUNCTION_CALL && exprNode.lhs.name === POSITION) {
-                    if (exprNode.rhs.type === FUNCTION_CALL && exprNode.rhs.name === LAST) {
+                const positionNode = exprNode.lhs.type === FUNCTION_CALL && exprNode.lhs.name === POSITION ? exprNode.lhs : exprNode.rhs;
+                const otherNode = positionNode === exprNode.lhs ? exprNode.rhs : exprNode.lhs;
+
+                if (otherNode.type === FUNCTION_CALL && otherNode.name === LAST) {
+                    if (exprNode.type === EQUALITY) {
                         positions.add(0x7FFFFFFF);
-                    } else {
-                        const [value] = await processExprNode<number>(exprNode.rhs, context, sendPowerShellCommand, false);
-
-                        if (typeof value !== 'number') {
-                            return [new FalseCondition()];
-                        }
-
-                        positions.add(value);
+                        return [new TrueCondition()];
                     }
-
-                    return [new TrueCondition];
-                }
-
-                if (exprNode.rhs.type === FUNCTION_CALL && exprNode.rhs.name === POSITION) {
-                    if (exprNode.lhs.type === FUNCTION_CALL && exprNode.lhs.name === LAST) {
-                        positions.add(0x7FFFFFFF);
-                    } else {
-                        const [value] = await processExprNode<number>(exprNode.lhs, context, sendPowerShellCommand, false);
-
-                        if (typeof value !== 'number') {
-                            return [new FalseCondition()];
-                        }
-
+                } else if (otherNode.type === NUMBER) {
+                    const [value] = await processExprNode<number>(otherNode, context, sendPowerShellCommand, false);
+                    if (typeof value === 'number' && exprNode.type === EQUALITY) {
                         positions.add(value);
+                        return [new TrueCondition()];
                     }
-
-                    return [new TrueCondition];
                 }
             }
+
+            relativeExprNodes.push(exprNode);
+            return [new TrueCondition(), relativeExprNodes];
         }
+        case FUNCTION_CALL:
+            if (exprNode.name === LAST) {
+                return await processExprNodeAsPredicate({
+                    type: EQUALITY,
+                    lhs: {
+                        type: FUNCTION_CALL,
+                        name: POSITION,
+                        args: [],
+                    },
+                    rhs: exprNode
+                }, context, positions, sendPowerShellCommand, relativeExprNodes);
+            }
         // eslint-disable-next-line no-fallthrough
         default: {
             const result = await processExprNode(exprNode, context, sendPowerShellCommand, false);
@@ -506,10 +511,10 @@ async function executeStep(step: StepNode, context: AutomationElement, sendPower
     const els = result.split('\n').map((id) => id.trim()).filter(Boolean).map((id) => new FoundAutomationElement(id));
     const validEls: FoundAutomationElement[] = [];
 
-    for (const el of els) {
+    for (const [index, el] of els.entries()) {
         let isValid = true;
         for (const exprNode of relativeExprNodes) {
-            const [isTrue] = await handleFunctionCall(BOOLEAN, el, sendPowerShellCommand, false, exprNode);
+            const [isTrue] = await handleFunctionCall(BOOLEAN, el, sendPowerShellCommand, false, [index + 1, els.length], exprNode);
             if (!isTrue) {
                 isValid = false;
                 break;

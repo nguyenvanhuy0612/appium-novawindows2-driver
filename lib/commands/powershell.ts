@@ -17,6 +17,21 @@ const INIT_CACHE_REQUEST = /* ps1 */ `
     $cacheRequest.Add([AutomationElement]::IsOffscreenProperty);
     $cacheRequest.Add([AutomationElement]::IsEnabledProperty);
     $cacheRequest.Add([AutomationElement]::BoundingRectangleProperty);
+    $cacheRequest.Add([AutomationElement]::AcceleratorKeyProperty);
+    $cacheRequest.Add([AutomationElement]::AccessKeyProperty);
+    $cacheRequest.Add([AutomationElement]::FrameworkIdProperty);
+    $cacheRequest.Add([AutomationElement]::HasKeyboardFocusProperty);
+    $cacheRequest.Add([AutomationElement]::HelpTextProperty);
+    $cacheRequest.Add([AutomationElement]::IsContentElementProperty);
+    $cacheRequest.Add([AutomationElement]::IsControlElementProperty);
+    $cacheRequest.Add([AutomationElement]::IsKeyboardFocusableProperty);
+    $cacheRequest.Add([AutomationElement]::IsPasswordProperty);
+    $cacheRequest.Add([AutomationElement]::IsRequiredForFormProperty);
+    $cacheRequest.Add([AutomationElement]::ItemStatusProperty);
+    $cacheRequest.Add([AutomationElement]::ItemTypeProperty);
+    $cacheRequest.Add([AutomationElement]::OrientationProperty);
+    $cacheRequest.Add([AutomationElement]::ProcessIdProperty);
+    $cacheRequest.Add([AutomationElement]::RuntimeIdProperty);
     $cacheRequest.Push()
 `;
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;

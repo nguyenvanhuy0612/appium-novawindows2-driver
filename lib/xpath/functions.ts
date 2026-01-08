@@ -36,11 +36,11 @@ import { processExprNode } from './core';
 
 const FUNCTION_ARGUMENT_ERROR = $`Function ${0}() requires ${1}.`;
 
-export async function handleFunctionCall<T>(name: FunctionName, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean, ...args: ExprNode[]): Promise<T[]> {
+export async function handleFunctionCall<T>(name: FunctionName, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean, contextState: [number, number] | undefined, ...args: ExprNode[]): Promise<T[]> {
     const processArgs = async <T>(...args: ExprNode[]): Promise<T[][]> => {
         const results: T[][] = [];
         for (const arg of args) {
-            results.push(await processExprNode(arg, context, sendPowerShellCommand, includeContextElementInSearch));
+            results.push(await processExprNode(arg, context, sendPowerShellCommand, includeContextElementInSearch, contextState));
         }
 
         return results;
@@ -158,6 +158,14 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
         case LAST: {
             if (args.length > 0) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'to have 0 arguments'));
+            }
+
+            if (name === POSITION && contextState) {
+                return [contextState[0] as T];
+            }
+
+            if (name === LAST && contextState) {
+                return [contextState[1] as T];
             }
 
             const elIds = await sendPowerShellCommand(context.buildCommand());
