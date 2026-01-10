@@ -7,31 +7,26 @@ import { Condition } from './conditions';
 const FIND_ALL_ANCESTOR = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne ($parent = $treeWalker.GetParent($el))) {
             $el = $parent
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 $els.Add($validEl)
             }
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_FIRST_ANCESTOR = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne ($parent = $treeWalker.GetParent($el))) {
             $el = $parent
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 Write-Output $el
                 break
@@ -43,36 +38,29 @@ const FIND_FIRST_ANCESTOR = pwsh$ /* ps1 */ `
 const FIND_ALL_ANCESTOR_OR_SELF = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne $el) {
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 $els.Add($validEl)
             }
-
             $el = $treeWalker.GetParent($el)
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_FIRST_ANCESTOR_OR_SELF = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne $el) {
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 Write-Output $el
                 break
             }
-
             $el = $treeWalker.GetParent($el)
         }
     }
@@ -80,7 +68,6 @@ const FIND_FIRST_ANCESTOR_OR_SELF = pwsh$ /* ps1 */ `
 
 const FIND_PARENT = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-
     ${0} | ForEach-Object {
         $el = $_
         $el = $treeWalker.GetParent($el).FindFirst([TreeScope]::Element, ${1})
@@ -91,7 +78,6 @@ const FIND_PARENT = pwsh$ /* ps1 */ `
 const FIND_FOLLOWING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}))
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne $el) {
@@ -110,7 +96,6 @@ const FIND_FOLLOWING = pwsh$ /* ps1 */ `
 const FIND_ALL_FOLLOWING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne $el) {
@@ -119,23 +104,19 @@ const FIND_ALL_FOLLOWING = pwsh$ /* ps1 */ `
                 $els.Add($el)
                 $els.AddRange($el.FindAll([TreeScope]::Children, ${1}))
             }
-
             $el = $treeWalker.GetParent($el)
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_FOLLOWING_SIBLING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne ($nextSibling = $treeWalker.GetNextSibling($el))) {
             $el = $nextSibling
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 Write-Output $el
                 break
@@ -147,35 +128,29 @@ const FIND_FOLLOWING_SIBLING = pwsh$ /* ps1 */ `
 const FIND_ALL_FOLLOWING_SIBLING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne ($nextSibling = $treeWalker.GetNextSibling($el))) {
             $el = $nextSibling
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 $els.Add($validEl)
             }
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_PRECEDING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}))
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne $el) {
             if ($null -ne ($previousSibling = $treeWalker.GetPreviousSibling($el))) {
                 $el = $previousSibling
-
                 Write-Output $el
                 break
             }
-
             $el = $treeWalker.GetParent($el)
         }
     }
@@ -184,7 +159,6 @@ const FIND_PRECEDING = pwsh$ /* ps1 */ `
 const FIND_ALL_PRECEDING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}))
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne $el) {
@@ -193,23 +167,19 @@ const FIND_ALL_PRECEDING = pwsh$ /* ps1 */ `
                 $els.Add($el)
                 $els.AddRange($el.FindAll([TreeScope]::Children, ${1}))
             }
-
             $el = $treeWalker.GetParent($el)
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_PRECEDING_SIBLING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne ($previousSibling = $treeWalker.GetPreviousSibling($el))) {
             $el = $previousSibling
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 Write-Output $el
                 break
@@ -221,49 +191,40 @@ const FIND_PRECEDING_SIBLING = pwsh$ /* ps1 */ `
 const FIND_ALL_PRECEDING_SIBLING = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         while ($null -ne ($previousSibling = $treeWalker.GetPreviousSibling($el))) {
             $el = $previousSibling
             $validEl = $el.FindFirst([TreeScope]::Element, ${1})
-
             if ($null -ne $validEl) {
                 $els.Add($validEl)
             }
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_CHILDREN_OR_SELF = pwsh$ /* ps1 */ `
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         $validEl = $el.FindFirst([TreeScope]::Element -bor [TreeScope]::Children, ${1});
-
         if ($null -ne $validEl) {
             $els.Add($validEl)
         }
     }
-
     Write-Output $els
 `;
 
 const FIND_ALL_CHILDREN_OR_SELF = pwsh$ /* ps1 */ `
     $els = New-Object System.Collections.Generic.List[AutomationElement]
-
     ${0} | ForEach-Object {
         $el = $_
         $validEl = $el.FindAll([TreeScope]::Element -bor [TreeScope]::Children, ${1});
-
         if ($null -ne $validEl) {
             $els.Add($validEl)
         }
     }
-
     Write-Output $els
 `;
 
@@ -284,11 +245,9 @@ const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
     ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
         try {
             $runtimeId = $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
-
             if (-not $elementTable.ContainsKey($runtimeId)) {
                 $elementTable.Add($runtimeId, $_)
             };
-
             $runtimeId
         } catch {
             # ElementNotAvailableException
@@ -310,6 +269,27 @@ const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `
 `;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
+const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property)`;
+
+const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
+    ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
+        try {
+            $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.'
+        } catch {
+            # ElementNotAvailableException
+        }
+    }
+`;
+
+// TODO: [Huy] - Need to review to use Cached or Current
+const GET_ELEMENT_RECT = pwsh$ /* ps1 */ `
+    ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
+        try { $rect = $_.Cached.BoundingRectangle } catch { $rect = $_.Current.BoundingRectangle }
+        $rect | Select-Object X, Y, Width, Height |
+        ForEach-Object { $_ | ConvertTo-Json -Compress } |
+        ForEach-Object { if ($null -ne $_) { $_.ToLower() } }
+    }
+`;
 
 const GET_CACHED_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     if ($null -ne ${0}) {
@@ -389,28 +369,6 @@ const GET_CURRENT_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
             if ($target -eq "LegacyName") { return ${0}.Current.Name }
 
         } catch { return $null }
-    }
-`;
-
-const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `${0}.GetCurrentPropertyValue([AutomationElement]::${1}Property)`;
-
-const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
-    ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
-        try {
-            $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.'
-        } catch {
-            # ElementNotAvailableException
-        }
-    }
-`;
-
-const GET_ELEMENT_RECT = pwsh$ /* ps1 */ `
-    if ($null -ne ${0}) {
-        try { $rect = ${0}.Cached.BoundingRectangle } catch { $rect = ${0}.Current.BoundingRectangle }
-        $rect |
-        Select-Object X, Y, Width, Height |
-        ForEach-Object { $_ | ConvertTo-Json -Compress } |
-        ForEach-Object { if ($null -ne $_) { $_.ToLower() } }
     }
 `;
 
@@ -667,7 +625,7 @@ if ($null -ne ${0}) {
         if ($null -ne $legacy) {
             $result["IsLegacyIAccessiblePatternAvailable"] = "True"
                 
-                # Standard Aliases(Backward Compatibility)
+            # Standard Aliases(Backward Compatibility)
             $result['LegacyName'] = $legacy.Name
             $result['LegacyDescription'] = $legacy.Description
             $result['LegacyRole'] = $legacy.Role.ToString()
@@ -678,7 +636,7 @@ if ($null -ne ${0}) {
             $result['LegacyDefaultAction'] = $legacy.DefaultAction
             $result['LegacyChildId'] = $legacy.ChildId.ToString()
 
-                # Dotted Names(Inspect.exe matching)
+            # Dotted Names(Inspect.exe matching)
             $result['LegacyIAccessible.Name'] = $legacy.Name
             $result['LegacyIAccessible.Description'] = $legacy.Description
             $result['LegacyIAccessible.Role'] = $legacy.Role.ToString()

@@ -1,6 +1,6 @@
 import { pwsh } from '../powershell';
 
-export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
+export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
     function Get-LegacyPropertySafe {
         param (
             [Parameter(Mandatory=$true)]
@@ -8,6 +8,7 @@ export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
             [string]$propName,
             [string]$accPropName
         )
+
         $val = $null
         try {
             $val = $element.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern).Current.$propName
@@ -34,7 +35,9 @@ export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
 
         return $null
     }
+`;
 
+export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
     function Find-ChildrenRecursively {
         param (
             [Parameter(Mandatory=$false)]
@@ -44,7 +47,7 @@ export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
             [Parameter(Mandatory=$false)]
             [bool]$includeSelf = $false
         )
-        
+
         if ($null -eq $element) { return $null }
 
         $scope = if ($includeSelf) {

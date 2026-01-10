@@ -2,7 +2,7 @@ const { remote } = require('webdriverio');
 
 async function main() {
     const opts = {
-        hostname: 'localhost',
+        hostname: '192.168.1.18',
         port: 4723,
         path: '/',
         capabilities: {
@@ -21,33 +21,19 @@ async function main() {
 
         console.log("--- Method 1: getAttribute('all') ---");
         const allAttributes = await element.getAttribute("all");
-        console.log(allAttributes);
+        const attrs = JSON.parse(allAttributes);
+        console.log(attrs);
 
         console.log("\n--- Method 2: mobile: getAttributes ---");
         const mobileAttributes = await driver.executeScript("windows: getAttributes", [element]);
-        console.log(mobileAttributes);
+        console.log(JSON.parse(mobileAttributes));
 
-        const parsed = JSON.parse(allAttributes);
-        const keyCount = Object.keys(parsed).length;
-        console.log(`\nParsed ${keyCount} keys:`, Object.keys(parsed).join(', '));
-
-        if (keyCount >= 60) {
-            console.log(`SUCCESS: Retrieved ${keyCount} attributes.`);
-        } else {
-            console.log(`WARNING: Only retrieved ${keyCount} attributes. Expected around 67.`);
+        const attKeys = Object.keys(attrs);
+        console.log(`\n\nAttributes Keys: ${attKeys}`);
+        for (const attKey of attKeys) {
+            const attrValue = await element.getAttribute(attKey);
+            console.log(`${attKey}: ${attrValue}`);
         }
-
-        const legacyName = await element.getAttribute("LegacyName");
-        console.log("LegacyName:", legacyName);
-
-        const dottedLegacyName = await element.getAttribute("LegacyIAccessible.Name");
-        console.log("LegacyIAccessible.Name:", dottedLegacyName);
-
-        const canMaximize = await element.getAttribute("CanMaximize");
-        console.log("canMaximize:", canMaximize);
-
-        const dottedCanMaximize = await element.getAttribute("Window.CanMaximize");
-        console.log("Window.CanMaximize:", dottedCanMaximize);
 
     } catch (error) {
         console.error("Error:", error.message);

@@ -1,7 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
-import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
+import { FIND_CHILDREN_RECURSIVELY, GET_LEGACY_PROPERTY_SAFE, PAGE_SOURCE } from './functions';
 import { ensureMsaaHelperCompiled, CompilationResult, getMsaaHelperCode } from '../powershell/msaa';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
@@ -206,6 +206,7 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
     initScript += `${INIT_ELEMENT_TABLE};\n`;
     initScript += `${getMsaaHelperCode(compilationResult)};\n`;
     initScript += `${PAGE_SOURCE};\n`;
+    initScript += `${GET_LEGACY_PROPERTY_SAFE};\n`;
     initScript += `${FIND_CHILDREN_RECURSIVELY};\n`;
     initScript += `${DISABLE_QUICK_EDIT};\n`;
 
