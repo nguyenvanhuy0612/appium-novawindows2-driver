@@ -120,6 +120,37 @@ public static class MSAAHelper {
        }
        return null;
     }
+
+    public static Hashtable GetLegacyPropsFromPoint(int x, int y) {
+        object accObj = null;
+        object childIdObj = null;
+        POINT pt;
+        pt.x = x;
+        pt.y = y;
+
+        int res = AccessibleObjectFromPoint(pt, out accObj, out childIdObj);
+        
+        if (res == 0 && accObj != null) {
+            Hashtable props = new Hashtable();
+            try {
+                IAccessible acc = (IAccessible)accObj;
+                
+                try { props.Add("Name", acc.get_accName(childIdObj)); } catch {}
+                try { props.Add("Value", acc.get_accValue(childIdObj)); } catch {}
+                try { props.Add("Description", acc.get_accDescription(childIdObj)); } catch {}
+                try { props.Add("Role", acc.get_accRole(childIdObj)); } catch {}
+                try { props.Add("State", acc.get_accState(childIdObj)); } catch {}
+                try { props.Add("Help", acc.get_accHelp(childIdObj)); } catch {}
+                try { props.Add("KeyboardShortcut", acc.get_accKeyboardShortcut(childIdObj)); } catch {}
+                try { props.Add("DefaultAction", acc.get_accDefaultAction(childIdObj)); } catch {}
+                
+                return props;
+            } catch {
+                return null;
+            }
+        }
+        return null;
+    }
 }
 
 public static class ConsoleHelper {
