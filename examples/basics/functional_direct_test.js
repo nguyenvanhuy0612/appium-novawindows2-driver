@@ -1,4 +1,4 @@
-const { NovaWindows2Driver } = require('../build/lib/driver');
+const { NovaWindows2Driver } = require('../../build/lib/driver');
 
 async function main() {
     const W3C_ELEMENT_KEY = 'element-6066-11e4-a52e-4f735466cecf';

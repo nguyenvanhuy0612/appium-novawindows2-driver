@@ -3,11 +3,13 @@ import { pwsh } from '../powershell';
 export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
     function Get-LegacyPropertySafe {
         param (
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory=$false)]
             [AutomationElement]$element,
             [string]$propName,
             [string]$accPropName
         )
+
+        if ($null -eq $element) { return $null }
 
         $val = $null
         try {
@@ -40,15 +42,13 @@ export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
 export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
     function Find-ChildrenRecursively {
         param (
-            [Parameter(Mandatory=$false)]
+            [Parameter(Mandatory=$true)]
             [AutomationElement]$element,
             [Parameter(Mandatory=$true)]
             [Condition]$condition,
             [Parameter(Mandatory=$false)]
             [bool]$includeSelf = $false
         )
-
-        if ($null -eq $element) { return $null }
 
         $scope = if ($includeSelf) {
             [TreeScope]::Element -bor [TreeScope]::Children
@@ -126,14 +126,14 @@ export const PAGE_SOURCE = pwsh /* ps1 */ `
             $tagName = ''
             try {
                 $tagName = $controlType.ProgrammaticName.Split('.')[-1]
-                if ($tagName -eq 'DataGrid') { $tagName = 'List' }
-                elseif ($tagName -eq 'DataItem') { $tagName = 'ListItem' }
             } catch {
                 # fallback to LocalizedControlType ControlType is empty
                 $tagName = -join ($localizedControlType -split ' ' | ForEach-Object {
                     $_.Substring(0, 1).ToUpper() + $_.Substring(1).ToLower()
                 })
             }
+            if ($tagName -eq 'DataGrid') { $tagName = 'List' }
+            elseif ($tagName -eq 'DataItem') { $tagName = 'ListItem' }
 
             $acceleratorKey = $element.GetCurrentPropertyValue([AutomationElement]::AcceleratorKeyProperty)
             $accessKey = $element.GetCurrentPropertyValue([AutomationElement]::AccessKeyProperty)

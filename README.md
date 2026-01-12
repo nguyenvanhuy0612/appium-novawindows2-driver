@@ -63,8 +63,6 @@ NovaWindows2 Driver supports the following capabilities:
 | `prerun` | An object containing either `script` or `command` key. The value of each key must be a valid PowerShell script or command to be executed prior to the WinAppDriver session startup. See [Power Shell commands execution](#powershell-execution) for more details. | (None) | `{script: 'Get-Process outlook -ErrorAction SilentlyContinue'}` |
 | `postrun` | An object containing either `script` or `command` key. The value of each key must be a valid PowerShell script or command to be executed after WinAppDriver session is stopped. See [Power Shell commands execution](#powershell-execution) for more details. | (None) | `{command: '...'}` |
 | `isolatedScriptExecution` | Whether PowerShell scripts are executed in an isolated session. | `false` | `true` |
-| `appWaitForLaunchRetries` | Number of retries when waiting for the app to launch. | `20` | `5` |
-| `appWaitForLaunchRetryIntervalMs` | Interval (ms) between app launch check retries. | `500` | `500` |
 | `powerShellCommandTimeout` | Timeout (ms) for PowerShell script execution. | `60000` | `30000` |
 | `convertAbsoluteXPathToRelativeFromElement` | Convert absolute XPath to relative when searching from an element. | `true` | `true` |
 | `includeContextElementInSearch` | Include the context element itself in the search. | `true` | `true` |

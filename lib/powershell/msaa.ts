@@ -183,6 +183,14 @@ public static class ConsoleHelper {
 
 const dllDir = path.resolve(__dirname, '..', 'dll');
 
+if (!fs.existsSync(dllDir)) {
+    try {
+        fs.mkdirSync(dllDir, { recursive: true });
+    } catch (e) {
+        throw new Error(`Failed to create DLL directory: ${e.message}`);
+    }
+}
+
 export type CompilationResult =
     | { type: 'dll', path: string }
     | { type: 'memory', code: string };
@@ -190,14 +198,6 @@ export type CompilationResult =
 let compilationPromise: Promise<CompilationResult> | null = null;
 
 export async function ensureMsaaHelperCompiled(log: any): Promise<CompilationResult> {
-    if (!fs.existsSync(dllDir)) {
-        try {
-            fs.mkdirSync(dllDir, { recursive: true });
-        } catch (e) {
-            throw new Error(`Failed to create DLL directory: ${e.message}`);
-        }
-    }
-
     const sharedDllPath = path.resolve(dllDir, 'MSAAHelper.dll');
 
     if (fs.existsSync(sharedDllPath)) {

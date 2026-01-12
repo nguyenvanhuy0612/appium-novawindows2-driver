@@ -175,15 +175,9 @@ const easingFunctions = Object.freeze({
 const UINT32_MAX = 0xFFFFFFFF;
 const UINT16_MAX = 0xFFFF;
 
-const isWindows = process.platform === 'win32';
-
-const dummyLibrary = {
-    func: () => () => { throw new Error('Not implemented on this platform'); }
-};
-
-const user32 = isWindows ? load('user32.dll') : dummyLibrary;
-const kernel32 = isWindows ? load('kernel32.dll') : dummyLibrary;
-const psapi = isWindows ? load('psapi.dll') : dummyLibrary;
+const user32 = load('user32.dll');
+const kernel32 = load('kernel32.dll');
+const psapi = load('psapi.dll');
 
 const POINT = struct('POINT', {
     x: 'long',

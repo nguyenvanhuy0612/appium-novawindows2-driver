@@ -22,7 +22,6 @@ import {
     PSControlType,
     PSInt32Array,
 } from './powershell';
-import { ensureMsaaHelperCompiled } from './powershell/msaa';
 import { xpathToElIdOrIds } from './xpath';
 import { setDpiAwareness } from './winapi/user32';
 

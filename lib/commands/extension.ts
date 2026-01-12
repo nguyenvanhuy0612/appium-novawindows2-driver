@@ -75,10 +75,10 @@ const TREE_FILTER_COMMAND = $ /* ps1 */ `$cacheRequest.Pop(); $cacheRequest.Tree
 const TREE_SCOPE_COMMAND = $ /* ps1 */ `$cacheRequest.Pop(); $cacheRequest.TreeScope = ${0}; $cacheRequest.Push()`;
 const AUTOMATION_ELEMENT_MODE = $ /* ps1 */ `$cacheRequest.Pop(); $cacheRequest.AutomationElementMode = ${0}; $cacheRequest.Push()`;
 
-const SET_PLAINTEXT_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `$bytes = [Convert]::FromBase64String('${0}'); $str = [System.Text.Encoding]::UTF8.GetString($bytes); Set-Clipboard -Value $str`;
-const GET_PLAINTEXT_CLIPBOARD_BASE64 = /* ps1 */ `$str = Get-Clipboard | Out-String; if ($null -eq $str) { $str = '' }; [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($str))`;
+const SET_PLAINTEXT_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `Set-Clipboard -Value [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(${0}))`;
+const GET_PLAINTEXT_CLIPBOARD_BASE64 = /* ps1 */ `[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Clipboard)))`;
 
-const SET_IMAGE_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `$b = [Convert]::FromBase64String('${0}'); $s = New-Object IO.MemoryStream; $s.Write($b, 0, $b.Length); $s.Position = 0; $i = [System.Windows.Media.Imaging.BitmapFrame]::Create($s); [Windows.Clipboard]::SetImage($i); $s.Close()`;
+const SET_IMAGE_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `$b = [Convert]::FromBase64String(${0}); $s = New-Object IO.MemoryStream; $s.Write($b, 0, $b.Length); $s.Position = 0; $i = [System.Windows.Media.Imaging.BitmapFrame]::Create($s); [Windows.Clipboard]::SetImage($i); $s.Close()`;
 const GET_IMAGE_CLIPBOARD_BASE64 = pwsh /* ps1 */ `
     [Windows.Clipboard]::GetImage() | ForEach-Object {
             if ($_ -ne $null) {
@@ -121,9 +121,7 @@ export async function execute(this: NovaWindows2Driver, script: string, args: an
     }
 
     if (script === 'return window.name') {
-        const command = AutomationElement.automationRoot.buildGetPropertyCommand(Property.NAME);
-        // this.log.info(`Executing command: \n${command}`);
-        return await this.sendPowerShellCommand(command);
+        return await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetPropertyCommand(Property.NAME));
     }
 
     if (script === 'pullFile') {

@@ -23,9 +23,7 @@ export async function getProperty(this: NovaWindows2Driver, propertyName: string
 }
 
 export async function getAttribute(this: NovaWindows2Driver, propertyName: string, elementId: string) {
-    if (propertyName) {
-        this.log.warn('Warning: Use getProperty instead of getAttribute for retrieving element properties.');
-    }
+    this.log.warn('Warning: Use getProperty instead of getAttribute for retrieving element properties.');
     return await this.getProperty(propertyName, elementId);
 }
 

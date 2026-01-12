@@ -104,10 +104,7 @@ export async function getWindowHandles(this: NovaWindows2Driver): Promise<string
 
 export async function setWindow(this: NovaWindows2Driver, nameOrHandle: string): Promise<void> {
     const handle = Number(nameOrHandle);
-    const retries = this.caps.appWaitForLaunchRetries ?? 20;
-    const intervalMs = this.caps.appWaitForLaunchRetryIntervalMs ?? 500;
-
-    for (let i = 1; i <= retries; i++) {
+    for (let i = 1; i <= 20; i++) { // TODO: make a setting for the number of retries or timeout
         if (!isNaN(handle)) {
             const condition = new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle));
             const elementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN_OR_SELF, condition).buildCommand());
@@ -130,8 +127,8 @@ export async function setWindow(this: NovaWindows2Driver, nameOrHandle: string):
             return;
         }
 
-        this.log.info(`Failed to locate window with name '${name}'. Sleeping for ${intervalMs} milliseconds and retrying... (${i}/${retries})`);
-        await sleep(intervalMs);
+        this.log.info(`Failed to locate window with name '${name}'. Sleeping for 500 milliseconds and retrying... (${i}/20)`); // TODO: make a setting for the number of retries or timeout
+        await sleep(500); // TODO: make a setting for the sleep timeout
     }
 
     throw new errors.NoSuchWindowError(`No window was found with name or handle '${nameOrHandle}'.`);
@@ -159,11 +156,8 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
     if (path.includes('!') && path.includes('_') && !(path.includes('/') || path.includes('\\'))) {
         this.log.debug('Detected app path to be in the UWP format.');
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process 'explorer.exe' 'shell:AppsFolder\\${path}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
-        const retries = this.caps.appWaitForLaunchRetries ?? 20;
-        const intervalMs = this.caps.appWaitForLaunchRetryIntervalMs ?? 500;
-        await sleep(intervalMs);
-
-        for (let i = 1; i <= retries; i++) {
+        await sleep(500); // TODO: make a setting for the initial wait time
+        for (let i = 1; i <= 20; i++) {
             const result = await this.sendPowerShellCommand(/* ps1 */ `(Get-Process -Name 'ApplicationFrameHost').Id`);
             const processIds = result.split('\n').map((pid) => pid.trim()).filter(Boolean).map(Number);
 
@@ -175,18 +169,15 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
                 // noop
             }
 
-            this.log.info(`Failed to locate window of the app. Sleeping for ${intervalMs} milliseconds and retrying... (${i}/${retries})`);
-            await sleep(intervalMs);
+            this.log.info(`Failed to locate window of the app. Sleeping for 500 milliseconds and retrying... (${i}/20)`); // TODO: make a setting for the number of retries or timeout
+            await sleep(500); // TODO: make a setting for the sleep timeout
         }
     } else {
         this.log.debug('Detected app path to be in the classic format.');
         const normalizedPath = normalize(path);
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process '${normalizedPath}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
-        const retries = this.caps.appWaitForLaunchRetries ?? 20;
-        const intervalMs = this.caps.appWaitForLaunchRetryIntervalMs ?? 500;
-        await sleep(intervalMs);
-
-        for (let i = 1; i <= retries; i++) {
+        await sleep(500); // TODO: make a setting for the initial wait time
+        for (let i = 1; i <= 20; i++) {
             try {
                 const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
                 const executable = breadcrumbs[breadcrumbs.length - 1];
@@ -203,8 +194,8 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
                 }
             }
 
-            this.log.info(`Failed to locate window of the app. Sleeping for ${intervalMs} milliseconds and retrying... (${i}/${retries})`);
-            await sleep(intervalMs);
+            this.log.info(`Failed to locate window of the app. Sleeping for 500 milliseconds and retrying... (${i}/20)`); // TODO: make a setting for the number of retries or timeout
+            await sleep(500); // TODO: make a setting for the sleep timeout
         }
     }
 
@@ -217,16 +208,13 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
 
     if (nativeWindowHandles.length !== 0) {
         let elementId = '';
-        const retries = this.caps.appWaitForLaunchRetries ?? 20;
-        const intervalMs = this.caps.appWaitForLaunchRetryIntervalMs ?? 500;
-
-        for (let i = 1; i <= retries; i++) {
+        for (let i = 1; i <= 20; i++) {
             elementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(nativeWindowHandles[0]))).buildCommand());
             if (elementId) {
                 break;
             }
-            this.log.info(`The window with handle 0x${nativeWindowHandles[0].toString(16).padStart(8, '0')} is not yet available in the UI Automation tree. Sleeping for ${intervalMs} milliseconds and retrying... (${i}/${retries})`);
-            await sleep(intervalMs);
+            this.log.info(`The window with handle 0x${nativeWindowHandles[0].toString(16).padStart(8, '0')} is not yet available in the UI Automation tree. Sleeping for 500 milliseconds and retrying... (${i}/20)`); // TODO: make a setting for the number of retries or timeout
+            await sleep(500); // TODO: make a setting for the sleep timeout
         }
 
         await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);

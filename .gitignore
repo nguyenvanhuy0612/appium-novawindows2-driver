@@ -3,6 +3,8 @@
 .vscode
 .npmrc
 temp
+*.code-workspace
+ref_repo
 
 # Logs
 screenshot.png

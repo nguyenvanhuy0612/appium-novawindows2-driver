@@ -27,12 +27,6 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     appWorkingDir: {
         isString: true,
     },
-    appWaitForLaunchRetries: {
-        isNumber: true,
-    },
-    appWaitForLaunchRetryIntervalMs: {
-        isNumber: true,
-    },
     prerun: {
         isObject: true,
     },
