@@ -19,7 +19,7 @@ const INIT_CACHE_REQUEST = /* ps1 */ `($cacheRequest = New-Object System.Windows
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
-const DISABLE_QUICK_EDIT = /* ps1 */ `try {if (([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {[ConsoleHelper]::DisableConsoleInteractions()}} catch {}`;
+//const DISABLE_QUICK_EDIT = /* ps1 */ `try {if (([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {[ConsoleHelper]::DisableConsoleInteractions()}} catch {}`;
 
 export async function startPowerShellSession(this: NovaWindows2Driver): Promise<void> {
     this.log.debug(`Starting new PowerShell session...`);
@@ -65,7 +65,7 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
     initScript += `${PAGE_SOURCE};\n`;
     initScript += `${GET_LEGACY_PROPERTY_SAFE};\n`;
     initScript += `${FIND_CHILDREN_RECURSIVELY};\n`;
-    initScript += `${DISABLE_QUICK_EDIT};\n`;
+    // initScript += `${DISABLE_QUICK_EDIT};\n`;
 
     if ((!this.caps.app && !this.caps.appTopLevelWindow) || (!this.caps.app || this.caps.app.toLowerCase() === 'none')) {
         this.log.info(`No app or top-level window specified in capabilities. Setting root element to null.`);
@@ -273,7 +273,7 @@ async function executeRawCommand(driver: NovaWindows2Driver, command: string): P
                     reject(new errors.UnknownError(driver.powerShellStdErr));
                 } else {
                     const result = driver.powerShellStdOut.replace(`${magicChar}`, '').trim();
-                    driver.log.debug(`PowerShell command completed. Result length: ${result.length}`);
+                    // driver.log.debug(`PowerShell command completed. Result length: ${result.length}`);
                     resolve(result);
                 }
             }
@@ -324,7 +324,7 @@ async function executeIsolatedRawCommand(driver: NovaWindows2Driver, command: st
                     reject(new errors.UnknownError(output.stderr));
                 } else {
                     const result = output.stdout.replace(`${magicChar}`, '').trim();
-                    driver.log.debug(`Isolated PowerShell command completed. Result length: ${result.length}`);
+                    // driver.log.debug(`Isolated PowerShell command completed. Result length: ${result.length}`);
                     resolve(result);
                 }
             }

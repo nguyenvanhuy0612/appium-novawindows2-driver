@@ -6,7 +6,7 @@ async function sleep(ms) {
 
 async function main() {
     const opts = {
-        hostname: '192.168.1.19',
+        hostname: '192.168.8.245',
         port: 4723,
         path: '/',
         capabilities: {
@@ -127,19 +127,18 @@ async function main() {
             'IsReadOnly',              // -> Value.IsReadOnly
 
             // --- 16. MSAA (Explicit Fallback) ---
-            'msaa.accName', 'msaa.accRole', 'msaa.accState', 'msaa.accValue'
+            //'msaa.accName', 'msaa.accRole', 'msaa.accState', 'msaa.accValue'
         ]
 
         const elements = await client.$$('//Pane/Button[@Name="Start"]')
+        // const elements = await client.$$('/Pane/Window[2]/Tab/TabItem[1]/ComboBox')
         console.log(`Number of elements: ${elements.length}`);
         for (let i = 0; i < elements.length; i++) {
             for (const property of properties) {
                 const value = await elements[i].getAttribute(property)
                 console.log(`Element ${i}: ${property}: ${value}`)
             }
-            if (i === 5) {
-                break;
-            }
+            break;
         }
 
     } catch (e) {

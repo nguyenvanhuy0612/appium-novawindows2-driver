@@ -312,6 +312,7 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     if ($null -ne ${0}) {
         try {
             $target = "${1}"
+            $supportedProps = ${0}.GetSupportedProperties()
 
             # 1. Handle dotted Pattern.Property format (e.g. Window.CanMaximize or LegacyIAccessible.Name)
             if ($target.Contains(".")) {
@@ -321,7 +322,7 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
                     $propName = $parts[1]
 
                     # Sweep supported properties for a match on the programmatic name (pattern + property)
-                    foreach ($prop in ${0}.GetSupportedProperties()) {
+                    foreach ($prop in $supportedProps) {
                         # ProgrammaticName is usually something like "WindowPatternIdentifiers.CanMaximizeProperty"
                         if ($prop.ProgrammaticName -like "*$pKey*$propName*") {
                             $val = ${0}.GetCurrentPropertyValue($prop)
@@ -334,8 +335,14 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
                         if ($propName -eq "Name") { return ${0}.Current.Name }
                         if ($propName -eq "Description") { return ${0}.Current.HelpText }
                         if ($propName -eq "Role") { return ${0}.Current.LocalizedControlType }
-                        if ($propName -eq "State") { return "" }
-                        if ($propName -eq "Value") { return "" }
+                        
+                        # Use MSAAHelper for Value if available
+                        # if ($propName -eq "Value") {
+                        #     $hwnd = ${0}.Current.NativeWindowHandle
+                        #     if ($hwnd -gt 0) {
+                        #         return [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, "accValue")
+                        #     }
+                        # }
                     }
                 }
             }
@@ -350,7 +357,7 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
             } catch {}
 
             # 3. Fallback search through all supported properties for short names (e.g. "CanMaximize")
-            foreach ($prop in ${0}.GetSupportedProperties()) {
+            foreach ($prop in $supportedProps) {
                 if ($prop.ProgrammaticName.EndsWith(".$($target)Property") -or $prop.ProgrammaticName.Contains(".$($target)")) {
                     $val = ${0}.GetCurrentPropertyValue($prop)
                     if ($null -ne $val) { return $val.ToString() }
