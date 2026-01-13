@@ -5,6 +5,7 @@
 temp
 *.code-workspace
 ref_repo
+lib_*
 
 # Logs
 screenshot.png

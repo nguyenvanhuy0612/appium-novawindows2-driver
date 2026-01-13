@@ -1,31 +1,8 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
-const dllPath = path.resolve(__dirname, '..', 'dll', 'MSAAHelper.dll').replace(/\\/g, '\\\\');
-const dllDir = path.resolve(__dirname, '..', 'dll').replace(/\\/g, '\\\\');
-
-export const MSAA_HELPER_SCRIPT = /* ps1 */ `
-# MSAA Helper - Self-contained script that compiles and loads the helper
-
-$dllPath = '${dllPath}'
-$dllDir = '${dllDir}'
-
-# Check if MSAAHelper is already loaded
-if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
-    
-    # Check if DLL exists
-    if (Test-Path $dllPath) {
-        Write-Output "Loading MSAAHelper from existing DLL: $dllPath"
-        Add-Type -Path $dllPath -ErrorAction Stop
-    } else {
-        Write-Output "Compiling MSAAHelper.dll..."
-        
-        # Create DLL directory if it doesn't exist
-        if (-not (Test-Path $dllDir)) {
-            New-Item -ItemType Directory -Path $dllDir -Force | Out-Null
-        }
-        
-        # C# source code
-        $code = @'
+const MSAA_HELPER_CODE = /* csharp */ `
 using System;
 using System.Runtime.InteropServices;
 using System.Collections;
@@ -86,53 +63,56 @@ public static class MSAAHelper {
     }
 
     public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
-        try {
-            if (hwnd == IntPtr.Zero) return null;
+        if (hwnd == IntPtr.Zero) return null;
 
-            Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-            object accObj = null;
-            int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
-
-            if (res == 0 && accObj != null) {
+        Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+        object accObj = null;
+        // OBJID_CLIENT = 0xFFFFFFFC (-4)
+        int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+        
+        if (res == 0 && accObj != null) {
+            try {
                 return GetPropertyFromIAccessible(accObj, propertyName, 0);
-            }
-        } catch { }
+            } catch { }
+        }
+
         return null;
     }
 
     public static bool SetLegacyValue(IntPtr hwnd, string value) {
-        try {
-            if (hwnd == IntPtr.Zero) return false;
+       if (hwnd == IntPtr.Zero) return false;
 
-            Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-            object accObj = null;
-            int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
-            if (res == 0 && accObj != null) {
-                IAccessible acc = (IAccessible)accObj;
-                acc.set_accValue(0, value);
-                return true;
-            }
-        } catch { }
-        return false;
+       Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+       object accObj = null;
+       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+       if (res == 0 && accObj != null) {
+           try {
+               IAccessible acc = (IAccessible)accObj;
+               acc.set_accValue(0, value);
+               return true;
+           } catch {
+               return false;
+           }
+       }
+       return false;
     }
 
     public static Hashtable GetAllLegacyProperties(IntPtr hwnd) {
-        Hashtable props = new Hashtable();
-        try {
-            if (hwnd == IntPtr.Zero) return null;
-            string[] propertyNames = { "Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction" };
+       if (hwnd == IntPtr.Zero) return null;
+       
+       Hashtable props = new Hashtable();
+       string[] propertyNames = { "Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction" };
 
-            foreach (string propName in propertyNames) {
-                try {
-                    object value = GetLegacyProperty(hwnd, propName);
-                    if (value != null) {
-                        props.Add(propName, value);
-                    }
-                } catch { }
-            }
+       foreach (string propName in propertyNames) {
+           try {
+               object value = GetLegacyProperty(hwnd, propName);
+               if (value != null) {
+                   props.Add(propName, value);
+               }
+           } catch { }
+       }
 
-        } catch { }
-        return props;
+       return props.Count > 0 ? props : null;
     }
 
     public static Hashtable GetLegacyPropsFromPoint(int x, int y) {
@@ -193,33 +173,110 @@ public static class ConsoleHelper {
         }
     }
 }
-'@
+`;
 
-        # Set TEMP and TMP to DLL directory to avoid permission issues
-        $originalTemp = $env:TEMP
-        $originalTmp = $env:TMP
-        $env:TEMP = $dllDir
-        $env:TMP = $dllDir
-        
-        try {
-            # Compile the C# code to DLL
-            Add-Type -TypeDefinition $code -Language CSharp -ReferencedAssemblies @('System') -OutputAssembly $dllPath -ErrorAction Stop
-            Write-Output "MSAAHelper.dll compiled successfully"
-            
-            # Load the newly compiled DLL
-            Add-Type -Path $dllPath -ErrorAction Stop
-            Write-Output "MSAAHelper.dll loaded successfully"
-        } catch {
-            Write-Output "Compilation failed, falling back to in-memory loading"
-            # Fallback: load in-memory if compilation fails
-            Add-Type -TypeDefinition $code -Language CSharp -ReferencedAssemblies @('System') -ErrorAction Stop
-        } finally {
-            # Restore original TEMP/TMP
-            $env:TEMP = $originalTemp
-            $env:TMP = $originalTmp
-        }
+const dllDir = path.resolve(__dirname, '..', 'dll');
+
+if (!fs.existsSync(dllDir)) {
+    try {
+        fs.mkdirSync(dllDir, { recursive: true });
+    } catch (e: any) {
+        throw new Error(`Failed to create DLL directory: ${e.message}`);
     }
 }
 
-Write-Output "MSAAHelper ready"
-`;
+// Only reference System assemblies - no UI Automation needed
+const ASSEMBLY_NAMES = [
+    'System'
+];
+
+function generateDllLoadScript(dllPath: string): string {
+    return /* ps1 */ `
+        Write-Output "DEBUG: Loading MSAAHelper from DLL: ${dllPath}";
+        if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
+            Add-Type -Path '${dllPath.replace(/\\/g, '\\\\')}' -ErrorAction Stop
+        }
+    `;
+}
+
+function generateInMemoryLoadScript(csCode: string): string {
+    const assemblyList = ASSEMBLY_NAMES.map(a => `'${a}'`).join(',\n                ');
+    return /* ps1 */ `
+        Write-Output "DEBUG: Loading MSAAHelper from In-Memory compilation.";
+        if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
+            $code = @'
+${csCode}
+'@
+            $assemblies = @(
+                ${assemblyList}
+            )
+            Add-Type -TypeDefinition $code -Language CSharp -ReferencedAssemblies $assemblies -ErrorAction Stop
+        }
+    `;
+}
+
+async function compileToDll(targetPath: string, csCode: string): Promise<boolean> {
+    const assemblyList = ASSEMBLY_NAMES.map(a => `'${a}'`).join(',\n                    ');
+    const compileScript = `
+        $dllPath = '${targetPath.replace(/\\/g, '\\\\')}';
+        $code = @'
+${csCode}
+'@;
+        $assemblies = @(
+            ${assemblyList}
+        )
+        Add-Type -TypeDefinition $code -Language CSharp -ReferencedAssemblies $assemblies -OutputAssembly $dllPath -ErrorAction Stop
+    `;
+
+    return new Promise<boolean>((resolve) => {
+        const child = spawn('powershell.exe', ['-NoProfile', '-Command', '-'], {
+            env: { ...process.env, TEMP: dllDir, TMP: dllDir }
+        });
+
+        let stderr = '';
+        child.stderr.on('data', (chunk) => stderr += chunk.toString());
+        child.on('close', (code) => {
+            if (code === 0 && fs.existsSync(targetPath)) {
+                resolve(true);
+            } else {
+                resolve(false);
+            }
+        });
+
+        child.stdin.write(compileScript);
+        child.stdin.end();
+    });
+}
+
+let compilationPromise: Promise<string> | null = null;
+
+export async function getMsaaHelperScript(log: any): Promise<string> {
+    const dllPath = path.resolve(dllDir, 'MSAAHelper.dll');
+
+    // If DLL already exists, use it
+    if (fs.existsSync(dllPath)) {
+        return generateDllLoadScript(dllPath);
+    }
+
+    // If compilation is in progress, wait for it
+    if (compilationPromise) {
+        return compilationPromise;
+    }
+
+    // Start compilation
+    compilationPromise = (async () => {
+        log.info('Compiling MSAAHelper.dll...');
+
+        const success = await compileToDll(dllPath, MSAA_HELPER_CODE);
+
+        if (success) {
+            log.info('MSAAHelper.dll compiled successfully');
+            return generateDllLoadScript(dllPath);
+        } else {
+            log.warn('DLL compilation failed. Falling back to in-memory compilation.');
+            return generateInMemoryLoadScript(MSAA_HELPER_CODE);
+        }
+    })();
+
+    return await compilationPromise;
+}

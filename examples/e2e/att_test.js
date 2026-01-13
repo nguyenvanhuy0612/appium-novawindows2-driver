@@ -6,7 +6,8 @@ async function sleep(ms) {
 
 async function main() {
     const opts = {
-        hostname: '192.168.8.245',
+        // hostname: '192.168.8.245',
+        hostname: '192.168.1.19',
         port: 4723,
         path: '/',
         capabilities: {

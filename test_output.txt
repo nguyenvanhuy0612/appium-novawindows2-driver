@@ -1,0 +1,68 @@
+dbug NovaWindows2Driver@b6f9 Starting new PowerShell session...
+info NovaWindows2Driver@b6f9 Compiling MSAAHelper.dll...
+WARN NovaWindows2Driver@b6f9 DLL compilation failed. Falling back to in-memory compilation.
+ERR! NovaWindows2Driver@b6f9 PowerShell command failed: Add-Type : c:\Users\HUYNGUYEN\AppData\Local\Temp\yk
+ERR! NovaWindows2Driver@b6f9 o1xtx3.0.cs(79) : The name 
+ERR! NovaWindows2Driver@b6f9 'LegacyIAccessiblePattern' does not exist in the 
+ERR! NovaWindows2Driver@b6f9 current context
+ERR! NovaWindows2Driver@b6f9 c:\Users\HUYNGUYEN\AppData\Local\Temp\yko1xtx3.0.cs
+ERR! NovaWindows2Driver@b6f9 (78) :             object patternObj;
+ERR! NovaWindows2Driver@b6f9 c:\Users\HUYNGUYEN\AppData\Local\Temp\yko1xtx3.0.cs
+ERR! NovaWindows2Driver@b6f9 (79) : >>>             if (element.TryGetCurrentPat
+ERR! NovaWindows2Driver@b6f9 tern(LegacyIAccessiblePattern.Pattern, out 
+ERR! NovaWindows2Driver@b6f9 patternObj)) {
+ERR! NovaWindows2Driver@b6f9 c:\Users\HUYNGUYEN\AppData\Local\Temp\yko1xtx3.0.cs
+ERR! NovaWindows2Driver@b6f9 (80) :                 var legacyPattern = 
+ERR! NovaWindows2Driver@b6f9 patternObj as LegacyIAccessiblePattern;
+ERR! NovaWindows2Driver@b6f9 At line:269 char:13
+ERR! NovaWindows2Driver@b6f9 +             Add-Type -TypeDefinition $code 
+ERR! NovaWindows2Driver@b6f9 -Language CSharp -Referenc ...
+ERR! NovaWindows2Driver@b6f9 +             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ERR! NovaWindows2Driver@b6f9 ~~~~~~~~~~~~~~~~~~~~
+ERR! NovaWindows2Driver@b6f9     + CategoryInfo          : InvalidData: (Micros 
+ERR! NovaWindows2Driver@b6f9    oft.Power...peCompilerError:AddTypeCompilerErr  
+ERR! NovaWindows2Driver@b6f9   or) [Add-Type], Exception
+ERR! NovaWindows2Driver@b6f9     + FullyQualifiedErrorId : SOURCE_CODE_ERROR,Mi 
+ERR! NovaWindows2Driver@b6f9    crosoft.PowerShell.Commands.AddTypeCommand
+ERR! NovaWindows2Driver@b6f9  
+ERR! NovaWindows2Driver@b6f9 
+ERROR during verification: UnknownError: Add-Type : c:\Users\HUYNGUYEN\AppData\Local\Temp\yk
+o1xtx3.0.cs(79) : The name 
+'LegacyIAccessiblePattern' does not exist in the 
+current context
+c:\Users\HUYNGUYEN\AppData\Local\Temp\yko1xtx3.0.cs
+(78) :             object patternObj;
+c:\Users\HUYNGUYEN\AppData\Local\Temp\yko1xtx3.0.cs
+(79) : >>>             if (element.TryGetCurrentPat
+tern(LegacyIAccessiblePattern.Pattern, out 
+patternObj)) {
+c:\Users\HUYNGUYEN\AppData\Local\Temp\yko1xtx3.0.cs
+(80) :                 var legacyPattern = 
+patternObj as LegacyIAccessiblePattern;
+At line:269 char:13
++             Add-Type -TypeDefinition $code 
+-Language CSharp -Referenc ...
++             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidData: (Micros 
+   oft.Power...peCompilerError:AddTypeCompilerErr  
+  or) [Add-Type], Exception
+    + FullyQualifiedErrorId : SOURCE_CODE_ERROR,Mi 
+   crosoft.PowerShell.Commands.AddTypeCommand
+ 
+
+    at Socket.onData (D:\SecureAge\appium-novawindows2-driver\lib\commands\powershell.ts:284:28)
+    at Socket.emit (node:events:536:35)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Socket.Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23) {
+  cause: undefined,
+  _stacktrace: undefined,
+  jsonwpCode: 13,
+  error: 'unknown error',
+  w3cStatus: 500
+}
+dbug NovaWindows2Driver@b6f9 Deleting NovaWindows driver session...
+dbug NovaWindows2Driver@b6f9 Terminating PowerShell session...
+dbug NovaWindows2Driver@b6f9 PowerShell session terminated successfully.
