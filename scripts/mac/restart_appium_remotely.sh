@@ -4,8 +4,8 @@ set ip "192.168.8.245"
 set user "admin"
 set password "welcome"
 set port 22
-set local_script "scripts/Start_Appium_Remote_Fixed.ps1"
-set remote_script "Start_Appium_TS_Remote.ps1"
+set local_script "scripts/local/Start_Appium.ps1"
+set remote_script "Start_Appium.ps1"
 
 # Set timeout
 set timeout 60
