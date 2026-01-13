@@ -7,8 +7,21 @@ using System;
 using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Collections;
+using System.Windows.Automation;
 
 public static class MSAAHelper {
+    // UIA Property IDs for LegacyIAccessible properties
+    private const int UIA_LegacyIAccessibleValuePropertyId = 30086;
+    private const int UIA_LegacyIAccessibleNamePropertyId = 30092;
+    private const int UIA_LegacyIAccessibleDescriptionPropertyId = 30091;
+    private const int UIA_LegacyIAccessibleRolePropertyId = 30095;
+    private const int UIA_LegacyIAccessibleStatePropertyId = 30094;
+    private const int UIA_LegacyIAccessibleHelpPropertyId = 30097;
+    private const int UIA_LegacyIAccessibleKeyboardShortcutPropertyId = 30093;
+    private const int UIA_LegacyIAccessibleDefaultActionPropertyId = 30090;
+    private const int UIA_LegacyIAccessibleChildIdPropertyId = 30091;
+    private const int UIA_IsLegacyIAccessiblePatternAvailablePropertyId = 30090;
+
     [DllImport("oleacc.dll")]
     private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint dwId, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out object ppvObject);
 
@@ -40,50 +53,168 @@ public static class MSAAHelper {
         [DispId(-5014)] void accDoDefaultAction([In, MarshalAs(UnmanagedType.Struct)] object varChild);
     }
 
-    public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
-       if (hwnd == IntPtr.Zero) return null;
-       
-       Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-       object accObj = null;
-       // OBJID_CLIENT = 0xFFFFFFFC (-4)
-       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
-       if (res == 0 && accObj != null) {
-           try {
-               IAccessible acc = (IAccessible)accObj;
-               // CHILDID_SELF = 0
-               object childId = 0;
+    // ============================================
+    // CASCADING APPROACH: UIA → GetIAccessible → P/Invoke
+    // ============================================
 
-               switch (propertyName) {
-                   case "accName": return acc.get_accName(childId);
-                   case "accValue": return acc.get_accValue(childId);
-                   case "accDescription": return acc.get_accDescription(childId);
-                   case "accRole": return acc.get_accRole(childId);
-                   case "accState": return acc.get_accState(childId);
-                   case "accHelp": return acc.get_accHelp(childId);
-                   case "accKeyboardShortcut": return acc.get_accKeyboardShortcut(childId);
-                   case "accDefaultAction": return acc.get_accDefaultAction(childId);
-                   // Some properties don't take childId or behave differently, but for standard element props:
-                   case "accFocus": return acc.get_accFocus();
-                   case "accSelection": return acc.get_accSelection();
-                   default: return null;
-               }
-           } catch {
-               return null;
-           }
-       }
-       return null;
+    /// <summary>
+    /// Attempt 1: Direct UIA property access (fastest, works if element exposes LegacyIAccessiblePattern)
+    /// </summary>
+    private static object TryGetViaUiaProperty(AutomationElement element, string propertyName) {
+        if (element == null) return null;
+
+        try {
+            int propertyId = 0;
+            switch (propertyName) {
+                case "Value": propertyId = UIA_LegacyIAccessibleValuePropertyId; break;
+                case "Name": propertyId = UIA_LegacyIAccessibleNamePropertyId; break;
+                case "Description": propertyId = UIA_LegacyIAccessibleDescriptionPropertyId; break;
+                case "Role": propertyId = UIA_LegacyIAccessibleRolePropertyId; break;
+                case "State": propertyId = UIA_LegacyIAccessibleStatePropertyId; break;
+                case "Help": propertyId = UIA_LegacyIAccessibleHelpPropertyId; break;
+                case "KeyboardShortcut": propertyId = UIA_LegacyIAccessibleKeyboardShortcutPropertyId; break;
+                case "DefaultAction": propertyId = UIA_LegacyIAccessibleDefaultActionPropertyId; break;
+                default: return null;
+            }
+
+            var value = element.GetCurrentPropertyValue(AutomationProperty.LookupById(propertyId));
+            if (value != null && value != AutomationElement.NotSupported) {
+                return value;
+            }
+        } catch { }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Attempt 2: GetIAccessible() from LegacyIAccessiblePattern (more reliable than direct property access)
+    /// </summary>
+    private static object TryGetViaGetIAccessible(AutomationElement element, string propertyName) {
+        if (element == null) return null;
+
+        try {
+            object patternObj;
+            if (element.TryGetCurrentPattern(LegacyIAccessiblePattern.Pattern, out patternObj)) {
+                var legacyPattern = patternObj as LegacyIAccessiblePattern;
+                if (legacyPattern != null) {
+                    // Call GetIAccessible() to get native IAccessible interface
+                    var accessible = legacyPattern.GetIAccessible();
+                    if (accessible != null) {
+                        return GetPropertyFromIAccessible(accessible, propertyName, 0);
+                    }
+                }
+            }
+        } catch { }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Attempt 3: P/Invoke to AccessibleObjectFromWindow (most reliable, works with HWND)
+    /// </summary>
+    private static object TryGetViaPInvoke(IntPtr hwnd, string propertyName) {
+        if (hwnd == IntPtr.Zero) return null;
+
+        Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+        object accObj = null;
+        // OBJID_CLIENT = 0xFFFFFFFC (-4)
+        int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+        
+        if (res == 0 && accObj != null) {
+            try {
+                IAccessible acc = (IAccessible)accObj;
+                return GetPropertyFromIAccessible(acc, propertyName, 0);
+            } catch { }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Helper to extract property from IAccessible interface
+    /// </summary>
+    private static object GetPropertyFromIAccessible(object accessible, string propertyName, object childId) {
+        try {
+            IAccessible acc = accessible as IAccessible;
+            if (acc == null) return null;
+
+            switch (propertyName) {
+                case "Name": return acc.get_accName(childId);
+                case "Value": return acc.get_accValue(childId);
+                case "Description": return acc.get_accDescription(childId);
+                case "Role": return acc.get_accRole(childId);
+                case "State": return acc.get_accState(childId);
+                case "Help": return acc.get_accHelp(childId);
+                case "KeyboardShortcut": return acc.get_accKeyboardShortcut(childId);
+                case "DefaultAction": return acc.get_accDefaultAction(childId);
+                case "Focus": return acc.get_accFocus();
+                case "Selection": return acc.get_accSelection();
+                default: return null;
+            }
+        } catch {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Main method: Cascading approach to get LegacyIAccessible property
+    /// Tries: UIA Property → GetIAccessible → P/Invoke
+    /// </summary>
+    public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
+        object result = null;
+
+        // Attempt 1: Direct UIA property access (if we can get AutomationElement)
+        if (hwnd != IntPtr.Zero) {
+            try {
+                var element = AutomationElement.FromHandle(hwnd);
+                if (element != null) {
+                    result = TryGetViaUiaProperty(element, propertyName);
+                    if (result != null) return result;
+
+                    // Attempt 2: GetIAccessible() method
+                    result = TryGetViaGetIAccessible(element, propertyName);
+                    if (result != null) return result;
+                }
+            } catch { }
+        }
+
+        // Attempt 3: P/Invoke fallback
+        result = TryGetViaPInvoke(hwnd, propertyName);
+        return result;
     }
 
     public static bool SetLegacyValue(IntPtr hwnd, string value) {
        if (hwnd == IntPtr.Zero) return false;
        
+       // Try UIA approach first
+       try {
+           var element = AutomationElement.FromHandle(hwnd);
+           if (element != null) {
+               object patternObj;
+               if (element.TryGetCurrentPattern(LegacyIAccessiblePattern.Pattern, out patternObj)) {
+                   var legacyPattern = patternObj as LegacyIAccessiblePattern;
+                   if (legacyPattern != null) {
+                       var accessible = legacyPattern.GetIAccessible();
+                       if (accessible != null) {
+                           IAccessible acc = accessible as IAccessible;
+                           if (acc != null) {
+                               acc.set_accValue(0, value);
+                               return true;
+                           }
+                       }
+                   }
+               }
+           }
+       } catch { }
+
+       // Fallback to P/Invoke
        Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
        object accObj = null;
        int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
        if (res == 0 && accObj != null) {
            try {
                IAccessible acc = (IAccessible)accObj;
-               acc.set_accValue(0, value); // 0 = CHILDID_SELF
+               acc.set_accValue(0, value);
                return true;
            } catch {
                return false;
@@ -95,30 +226,19 @@ public static class MSAAHelper {
     public static Hashtable GetAllLegacyProperties(IntPtr hwnd) {
        if (hwnd == IntPtr.Zero) return null;
        
-       Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-       object accObj = null;
-       int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
-       if (res == 0 && accObj != null) {
-           Hashtable props = new Hashtable();
-           try {
-               IAccessible acc = (IAccessible)accObj;
-               object childId = 0; // CHILDID_SELF
+       Hashtable props = new Hashtable();
+       string[] propertyNames = { "Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction" };
 
-               try { props.Add("Name", acc.get_accName(childId)); } catch {}
-               try { props.Add("Value", acc.get_accValue(childId)); } catch {}
-               try { props.Add("Description", acc.get_accDescription(childId)); } catch {}
-               try { props.Add("Role", acc.get_accRole(childId)); } catch {}
-               try { props.Add("State", acc.get_accState(childId)); } catch {}
-               try { props.Add("Help", acc.get_accHelp(childId)); } catch {}
-               try { props.Add("KeyboardShortcut", acc.get_accKeyboardShortcut(childId)); } catch {}
-               try { props.Add("DefaultAction", acc.get_accDefaultAction(childId)); } catch {}
-               
-               return props;
-           } catch {
-               return null;
-           }
+       foreach (string propName in propertyNames) {
+           try {
+               object value = GetLegacyProperty(hwnd, propName);
+               if (value != null) {
+                   props.Add(propName, value);
+               }
+           } catch { }
        }
-       return null;
+
+       return props.Count > 0 ? props : null;
     }
 
     public static Hashtable GetLegacyPropsFromPoint(int x, int y) {

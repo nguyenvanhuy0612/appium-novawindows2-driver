@@ -130,13 +130,15 @@ async function main() {
             //'msaa.accName', 'msaa.accRole', 'msaa.accState', 'msaa.accValue'
         ]
 
-        const elements = await client.$$('//Pane/Button[@Name="Start"]')
-        // const elements = await client.$$('/Pane/Window[2]/Tab/TabItem[1]/ComboBox')
+        // const elements = await client.$$('//Pane/Button[@Name="Start"]')
+        const elements = await client.$$("//Window[contains(@Name,'Secure')]//ComboBox")
         console.log(`Number of elements: ${elements.length}`);
         for (let i = 0; i < elements.length; i++) {
             for (const property of properties) {
-                const value = await elements[i].getAttribute(property)
-                console.log(`Element ${i}: ${property}: ${value}`)
+                if (property.startsWith("LegacyIAccessible.") || property.startsWith("Value.")) {
+                    const value = await elements[i].getAttribute(property)
+                    console.log(`Element ${i}: ${property}: ${value}`)
+                }
             }
             break;
         }

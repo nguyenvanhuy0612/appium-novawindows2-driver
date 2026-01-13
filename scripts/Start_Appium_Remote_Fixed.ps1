@@ -1,4 +1,4 @@
-$u = (Get-Process explorer -IncludeUserName | Select-Object -First 1).UserName.Split('\')[-1]
+$u = "admin"
 $title = "AppiumServer"
 taskkill /f /fi "windowtitle eq $title" /t 2>$null
 taskkill /f /im node.exe /t 2>$null
