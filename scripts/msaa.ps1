@@ -1,13 +1,6 @@
-import path from 'node:path';
-
-const dllPath = path.resolve(__dirname, '..', 'dll', 'MSAAHelper.dll').replace(/\\/g, '\\\\');
-const dllDir = path.resolve(__dirname, '..', 'dll').replace(/\\/g, '\\\\');
-
-export const MSAA_HELPER_SCRIPT = /* ps1 */ `
 # MSAA Helper - Self-contained script that compiles and loads the helper
-
-$dllPath = '${dllPath}'
-$dllDir = '${dllDir}'
+$dllPath = '{{DLL_PATH}}'
+$dllDir = '{{DLL_DIR}}'
 
 # Check if MSAAHelper is already loaded
 if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
@@ -16,7 +9,8 @@ if (-not ([System.Management.Automation.PSTypeName]'MSAAHelper').Type) {
     if (Test-Path $dllPath) {
         Write-Output "Loading MSAAHelper from existing DLL: $dllPath"
         Add-Type -Path $dllPath -ErrorAction Stop
-    } else {
+    }
+    else {
         Write-Output "Compiling MSAAHelper.dll..."
 
         # Create DLL directory if it doesn't exist
@@ -52,7 +46,7 @@ public static class MSAAHelper {
             if (res == 0 && accObj != null) {
                 // childId = 0 (Self)
                 object[] args = new object[] { (int)0 };
-
+                
                 string memberName = "";
                 switch(propertyName) {
                     case "Name": memberName = "accName"; break;
@@ -88,11 +82,11 @@ public static class MSAAHelper {
             if (res == 0 && accObj != null) {
                 // set_accValue(childId, value)
                 object[] args = new object[] { (int)0, value };
-
+                
                 accObj.GetType().InvokeMember("accValue", 
                     BindingFlags.SetProperty, 
                     null, accObj, args);
-
+                
                 return true;
             }
         } catch { }
@@ -129,7 +123,7 @@ public static class MSAAHelper {
         pt.y = y;
 
         int res = AccessibleObjectFromPoint(pt, out accObj, out childIdObj);
-
+        
         if (res == 0 && accObj != null) {
              Hashtable props = new Hashtable();
              try {
@@ -144,7 +138,7 @@ public static class MSAAHelper {
                 try { props.Add("Help", t.InvokeMember("accHelp", BindingFlags.GetProperty, null, accObj, args)); } catch {}
                 try { props.Add("KeyboardShortcut", t.InvokeMember("accKeyboardShortcut", BindingFlags.GetProperty, null, accObj, args)); } catch {}
                 try { props.Add("DefaultAction", t.InvokeMember("accDefaultAction", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-
+                
                 return props;
              } catch { return null; }
         }
@@ -185,20 +179,22 @@ public static class ConsoleHelper {
         $originalTmp = $env:TMP
         $env:TEMP = $dllDir
         $env:TMP = $dllDir
-
+        
         try {
             # Compile the C# code to DLL
             Add-Type -TypeDefinition $code -Language CSharp -ReferencedAssemblies @('System') -OutputAssembly $dllPath -ErrorAction Stop
             Write-Output "MSAAHelper.dll compiled successfully"
-
+            
             # Load the newly compiled DLL
             Add-Type -Path $dllPath -ErrorAction Stop
             Write-Output "MSAAHelper.dll loaded successfully"
-        } catch {
+        }
+        catch {
             Write-Output "Compilation failed, falling back to in-memory loading"
             # Fallback: load in-memory if compilation fails
             Add-Type -TypeDefinition $code -Language CSharp -ReferencedAssemblies @('System') -ErrorAction Stop
-        } finally {
+        }
+        finally {
             # Restore original TEMP/TMP
             $env:TEMP = $originalTemp
             $env:TMP = $originalTmp
@@ -207,4 +203,3 @@ public static class ConsoleHelper {
 }
 
 Write-Output "MSAAHelper ready"
-`;

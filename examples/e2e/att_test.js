@@ -6,8 +6,8 @@ async function sleep(ms) {
 
 async function main() {
     const opts = {
-        // hostname: '192.168.8.245',
-        hostname: '192.168.1.19',
+        hostname: '192.168.8.245',
+        // hostname: '192.168.1.19',
         port: 4723,
         path: '/',
         capabilities: {
@@ -133,13 +133,16 @@ async function main() {
 
         // const elements = await client.$$('//Pane/Button[@Name="Start"]')
         const elements = await client.$$("//Window[contains(@Name,'Secure')]//ComboBox")
+        // const elements = await client.$$("//Window//Button[@Name='Restart']")
         console.log(`Number of elements: ${elements.length}`);
         for (let i = 0; i < elements.length; i++) {
             for (const property of properties) {
-                if (property.startsWith("LegacyIAccessible.") || property.startsWith("Value.")) {
-                    const value = await elements[i].getAttribute(property)
-                    console.log(`Element ${i}: ${property}: ${value}`)
-                }
+                const value = await elements[i].getAttribute(property)
+                console.log(`Element ${i}: ${property}: ${value}`)
+                // if (property.startsWith("LegacyIAccessible.") || property.startsWith("Value.")) {
+                //     const value = await elements[i].getAttribute(property)
+                //     console.log(`Element ${i}: ${property}: ${value}`)
+                // }
             }
             break;
         }

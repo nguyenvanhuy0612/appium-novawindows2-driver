@@ -318,6 +318,47 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
                 } else { $null }
             } catch { $null }
         }
+
+        # Generic Pattern Property Handler
+        $patObj = $null
+        switch ($pKey) {
+            "Value"          { $patObj = [System.Windows.Automation.ValuePattern]::Pattern }
+            "Window"         { $patObj = [System.Windows.Automation.WindowPattern]::Pattern }
+            "Transform"      { $patObj = [System.Windows.Automation.TransformPattern]::Pattern }
+            "Scroll"         { $patObj = [System.Windows.Automation.ScrollPattern]::Pattern }
+            "Selection"      { $patObj = [System.Windows.Automation.SelectionPattern]::Pattern }
+            "SelectionItem"  { $patObj = [System.Windows.Automation.SelectionItemPattern]::Pattern }
+            "RangeValue"     { $patObj = [System.Windows.Automation.RangeValuePattern]::Pattern }
+            "ExpandCollapse" { $patObj = [System.Windows.Automation.ExpandCollapsePattern]::Pattern }
+            "Toggle"         { $patObj = [System.Windows.Automation.TogglePattern]::Pattern }
+            "Grid"           { $patObj = [System.Windows.Automation.GridPattern]::Pattern }
+            "GridItem"       { $patObj = [System.Windows.Automation.GridItemPattern]::Pattern }
+            "Dock"           { $patObj = [System.Windows.Automation.DockPattern]::Pattern }
+            "Table"          { $patObj = [System.Windows.Automation.TablePattern]::Pattern }
+            "TableItem"      { $patObj = [System.Windows.Automation.TableItemPattern]::Pattern }
+            "MultipleView"   { $patObj = [System.Windows.Automation.MultipleViewPattern]::Pattern }
+        }
+
+        if ($null -ne $patObj) {
+            try {
+                $currPat = $el.GetCurrentPattern($patObj)
+                if ($null -ne $currPat) {
+                    # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
+                    $val = $currPat.Current.$propName
+                    if ($null -ne $val) { return $val.ToString() }
+                }
+            } catch {}
+        }
+
+        if ($pKey -eq "Invoke") {
+            try {
+                $valPattern = $el.GetCurrentPattern([InvokePattern]::Pattern)
+                if ($null -ne $valPattern) {
+                    $val = $valPattern.Current.Value
+                    if ($null -ne $val) { return $val.ToString() }
+                }
+            } catch {}
+        }
     }
 
     # 3. Supported Properties Category (Fuzzy / programmatic name match)
@@ -326,8 +367,8 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
         $supportedProps = $el.GetSupportedProperties()
         foreach ($prop in $supportedProps) {
             if ($prop.ProgrammaticName -like "*$target*") {
-                 $val = $el.GetCurrentPropertyValue($prop)
-                 if ($null -ne $val) { return $val.ToString() }
+                $val = $el.GetCurrentPropertyValue($prop)
+                if ($null -ne $val) { return $val.ToString() }
             }
         }
     } catch {}
