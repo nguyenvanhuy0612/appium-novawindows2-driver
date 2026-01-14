@@ -200,80 +200,54 @@ export async function patternCollapse(this: NovaWindows2Driver, element: Element
 }
 
 export async function patternScrollIntoView(this: NovaWindows2Driver, element: Element): Promise<void> {
-    const elementId = element[W3C_ELEMENT_KEY];
+    const elementId = element?.[W3C_ELEMENT_KEY];
+    if (!elementId) {
+        throw new errors.InvalidArgumentError('Element ID is required for scrollIntoView.');
+    }
+
     const automationElement = new FoundAutomationElement(elementId);
 
     try {
         await this.sendPowerShellCommand(automationElement.buildScrollIntoViewCommand());
     } catch (e: any) {
-        let repaired = false;
-        // Attempt Cache Repair if error suggests missing element
-        if (e.message.includes('null-valued expression') || e.message.includes('ArgumentNullException')) {
-            this.log.info(`Element ${elementId} appears missing from cache. Attempting to repair...`);
-            try {
-                // Manual repair using FindFirst with strict PS types to avoid marshalling issues
-                const idParts = elementId.split('.').join(',');
-                const repairScript = `
-                    $targetIdArray = [int32[]]@(${idParts});
-                    $cond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::RuntimeIdProperty, $targetIdArray);
-                    $found = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond);
-                    
-                    if ($null -ne $found) {
-                        $runtimeId = $found.GetRuntimeId() -join '.';
-                        if (-not $elementTable.ContainsKey($runtimeId)) {
-                            $elementTable.Add($runtimeId, $found)
-                        };
-                        $runtimeId
-                    }
-                `;
-                const repairedId = await this.sendPowerShellCommand(repairScript);
-
-                if (repairedId && repairedId.trim() === elementId) {
-                    this.log.info(`Element repaired. Retry scroll.`);
-                    await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildScrollIntoViewCommand());
-                    repaired = true;
-                }
-            } catch (repairError: any) {
-                this.log.warn(`Cache repair failed: ${repairError.message}`);
-            }
-        }
-
-        if (repaired) return;
-
         this.log.warn(`Standard scrollIntoView failed: ${e.message}. Attempting keyboard fallback for element ${elementId}.`);
-        try {
-            // Fallback: Focus parent and arrow down
-            const parentId = await this.sendPowerShellCommand(automationElement.findFirst(TreeScope.PARENT, new TrueCondition()).buildCommand());
-            if (parentId) {
-                await this.sendPowerShellCommand(new FoundAutomationElement(parentId.trim()).buildSetFocusCommand());
+        await this.scrollWithKeyboard(automationElement);
+    }
+}
 
-                const maxRetries = 20;
-                for (let i = 0; i < maxRetries; i++) {
-                    const isOffscreen = await this.sendPowerShellCommand(automationElement.buildGetPropertyCommand(Property.IS_OFFSCREEN));
-                    if (isOffscreen.toLowerCase() === 'false') {
-                        return;
-                    }
+export async function scrollWithKeyboard(this: NovaWindows2Driver, automationElement: AutomationElement): Promise<void> {
+    try {
+        // Fallback: Focus parent and arrow down
+        const parentId = await this.sendPowerShellCommand(automationElement.findFirst(TreeScope.PARENT, new TrueCondition()).buildCommand());
+        if (parentId) {
+            await this.sendPowerShellCommand(new FoundAutomationElement(parentId.trim()).buildSetFocusCommand());
 
-                    await this.handleKeyActionSequence({
-                        type: 'key',
-                        id: 'default keyboard',
-                        actions: [{ type: 'keyDown', value: Key.DOWN }, { type: 'keyUp', value: Key.DOWN }]
-                    });
-
-                    await sleep(200);
-                }
-
-                // Final check
+            const maxRetries = 20;
+            for (let i = 0; i < maxRetries; i++) {
                 const isOffscreen = await this.sendPowerShellCommand(automationElement.buildGetPropertyCommand(Property.IS_OFFSCREEN));
-                if (isOffscreen.toLowerCase() === 'true') {
-                    throw new Error(`Element still offscreen after ${maxRetries} ArrowDown presses.`);
+                if (isOffscreen.toLowerCase() === 'false') {
+                    return;
                 }
-            } else {
-                throw new Error('Could not find parent element to focus.');
+
+                await this.handleKeyActionSequence({
+                    type: 'key',
+                    id: 'default keyboard',
+                    actions: [{ type: 'keyDown', value: Key.DOWN }, { type: 'keyUp', value: Key.DOWN }]
+                });
+
+                await sleep(200);
             }
-        } catch (fallbackError: any) {
-            throw new Error(`ScrollIntoView failed. Standard: ${e.message}. Fallback: ${fallbackError.message}`);
+
+            // Final check
+            const isOffscreen = await this.sendPowerShellCommand(automationElement.buildGetPropertyCommand(Property.IS_OFFSCREEN));
+            if (isOffscreen.toLowerCase() === 'true') {
+                throw new Error(`Element still offscreen after ${maxRetries} ArrowDown presses.`);
+            }
+        } else {
+            throw new Error('Could not find parent element to focus.');
         }
+    } catch (fallbackError: any) {
+        throw new Error(`ScrollIntoView failed. Fallback: ${fallbackError.message}`);
     }
 }
 

@@ -288,7 +288,7 @@ const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
 const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0}
-    $target = "${1}"
+    $target = ${1}
 
     if ($null -eq $el -or $null -eq $target) { 
         return $null
@@ -454,56 +454,72 @@ const INVOKE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([InvokePattern]::
 const EXPAND_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Expand()`;
 const COLLAPSE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Collapse()`;
 const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
-${0} | Where-Object { $null -ne $_ } | ForEach-Object {
-    $pattern = $_.GetCurrentPattern([ScrollItemPattern]::Pattern);
-    if ($null -ne $pattern) {
-        $pattern.ScrollIntoView()
-        return
+    $el = ${0}
+    $runtimeIdStr = "${1}"
+
+    if ($null -eq $el -and $runtimeIdStr) {
+        # Attempt repair
+        $targetIdArray = [int32[]]@($runtimeIdStr.Split('.'))
+        $cond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::RuntimeIdProperty, $targetIdArray)
+        $found = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+        
+        if ($null -ne $found) {
+            $foundRuntimeId = $found.GetRuntimeId() -join '.'
+            if (-not $elementTable.ContainsKey($foundRuntimeId)) {
+                $elementTable.Add($foundRuntimeId, $found)
+            }
+            $el = $found
+        }
     }
 
+    $el | Where-Object { $null -ne $_ } | ForEach-Object {
+    # 1. Try ScrollItem Pattern (Standard UIA)
+    try {
+        $pattern = $_.GetCurrentPattern([ScrollItemPattern]::Pattern);
+        if ($null -ne $pattern) {
+            $pattern.ScrollIntoView()
+            return
+        }
+    } catch { }
+
+    # 2. Try SetFocus (Often scrolls element into view)
     try {
         $_.SetFocus()
         return
     } catch { }
 
+    # 3. Try LegacyIAccessible Select (TakeFocus)
     try {
         $legacy = $_.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
         if ($null -ne $legacy) {
-            $legacy.Select(3);
+            $legacy.Select(3); # 3 = TakeFocus
             return
         }
     } catch { }
 
-    # Try ItemContainerPattern on parent
+    # 4. Try ItemContainerPattern on Parent (For virtualized lists)
     try {
         $parent = [TreeWalker]::ControlViewWalker.GetParent($_);
         if ($null -ne $parent) {
             $containerPattern = $parent.GetCurrentPattern([ItemContainerPattern]::Pattern);
             if ($null -ne $containerPattern) {
+                # Re-find the item using the container pattern which can trigger virtualization
                 $found = $containerPattern.FindItemByProperty($null, [AutomationElement]::RuntimeIdProperty, $_.GetRuntimeId());
                 if ($null -ne $found) {
-                    try {
-                        $foundPattern = $found.GetCurrentPattern([ScrollItemPattern]::Pattern);
-                        if ($null -ne $foundPattern) {
-                            $foundPattern.ScrollIntoView()
-                            return
-                        }
-                    } catch {
-                    }
-
-                    try {
-                        $found.SetFocus()
+                    # Try scrolling the fresh reference
+                    $foundPattern = $found.GetCurrentPattern([ScrollItemPattern]::Pattern);
+                    if ($null -ne $foundPattern) {
+                        $foundPattern.ScrollIntoView()
                         return
-                    } catch {
                     }
-
+                    $found.SetFocus()
                     return
                 }
             }
         }
     } catch { }
 
-    throw "Failed to scroll into view: ScrollItemPattern not supported, and SetFocus/LegacySelect/ItemContainerPattern failed."
+    throw "Failed to scroll into view: ScrollItemPattern not supported, and SetFocus/LegacySelect/ItemContainerPattern fallbacks failed."
 }
 `;
 const IS_MULTIPLE_SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.CanSelectMultiple`;
@@ -567,14 +583,14 @@ export const TreeScope = Object.freeze({
     ELEMENT: 'element',
     SUBTREE: 'subtree',
     PARENT: 'parent',
-} as const);
+});
 
 export type TreeScope = Enum<typeof TreeScope>;
 
 export const AutomationElementMode = Object.freeze({
     NONE: 'none',
     FULL: 'full',
-} as const);
+});
 
 export type AutomationElementMode = Enum<typeof AutomationElementMode>;
 
@@ -683,7 +699,7 @@ export class AutomationElement extends PSObject {
             property = legacyPropsAlias[property];
         }
 
-        return GET_ELEMENT_PROPERTY.format(this, property);
+        return GET_ELEMENT_PROPERTY.format(this, new PSString(property).toString());
     }
 
     buildGetAllPropertiesCommand(): string {
@@ -745,7 +761,7 @@ export class FoundAutomationElement extends AutomationElement {
     }
 
     buildScrollIntoViewCommand(): string {
-        return SCROLL_ELEMENT_INTO_VIEW.format(this);
+        return SCROLL_ELEMENT_INTO_VIEW.format(this, this.runtimeId);
     }
 
     buildIsMultipleSelectCommand(): string {
