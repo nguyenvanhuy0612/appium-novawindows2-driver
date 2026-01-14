@@ -5,7 +5,14 @@ import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
 import { MSAA_HELPER_SCRIPT } from '../powershell/msaa';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
-const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; Add-Type -AssemblyName UIAutomationClientsideProviders; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
+// const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; Add-Type -AssemblyName UIAutomationClientsideProviders; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
+const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `
+Add-Type -AssemblyName UIAutomationClient
+#Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName System.Windows.Forms
+`;
 const USE_UI_AUTOMATION_CLIENT = /* ps1 */ `using namespace System.Windows.Automation`;
 const INIT_CACHE_REQUEST = /* ps1 */ `($cacheRequest = New-Object System.Windows.Automation.CacheRequest).TreeFilter = [AndCondition]::new([Automation]::ControlViewCondition, [NotCondition]::new([PropertyCondition]::new([AutomationElement]::FrameworkIdProperty, 'Chrome'))); $cacheRequest.Push()`;
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
@@ -207,10 +214,10 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
     const initScripts = [
         SET_UTF8_ENCODING,
         ADD_NECESSARY_ASSEMBLIES,
+        MSAA_HELPER_SCRIPT,
         USE_UI_AUTOMATION_CLIENT,
         INIT_CACHE_REQUEST,
         INIT_ELEMENT_TABLE,
-        MSAA_HELPER_SCRIPT,
         PAGE_SOURCE,
         FIND_CHILDREN_RECURSIVELY
     ];

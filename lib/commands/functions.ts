@@ -19,20 +19,20 @@ export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
         if ($null -ne $val) { return $val }
 
         try {
-             $rect = $element.Current.BoundingRectangle
-             if ($null -ne $rect -and $rect.Width -gt 0) {
-                 $cx = [int]($rect.Left + $rect.Width/2)
-                 $cy = [int]($rect.Top + $rect.Height/2)
-                 $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
-                 if ($null -ne $props) { return $props[$propName] }
-             }
+            $rect = $element.Current.BoundingRectangle
+            if ($null -ne $rect -and $rect.Width -gt 0) {
+                $cx = [int]($rect.Left + $rect.Width/2)
+                $cy = [int]($rect.Top + $rect.Height/2)
+                $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
+                if ($null -ne $props) { return $props[$propName] }
+            }
         } catch {}
 
         try {
-             $hwnd = $element.Current.NativeWindowHandle
-             if ($hwnd -gt 0) {
-                 return [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $accPropName)
-             }
+            $hwnd = $element.Current.NativeWindowHandle
+            if ($hwnd -gt 0) {
+                return [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $accPropName)
+            }
         } catch {}
 
         return $null
