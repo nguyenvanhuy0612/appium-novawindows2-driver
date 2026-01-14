@@ -42,13 +42,15 @@ export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
 export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
     function Find-ChildrenRecursively {
         param (
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory=$false)]
             [AutomationElement]$element,
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory=$false)]
             [Condition]$condition,
             [Parameter(Mandatory=$false)]
             [bool]$includeSelf = $false
         )
+
+        if ($null -eq $element -or $null -eq $condition) { return $null }
 
         $scope = if ($includeSelf) {
             [TreeScope]::Element -bor [TreeScope]::Children
@@ -75,14 +77,16 @@ export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
 
     function Find-AllChildrenRecursively {
         param (
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory=$false)]
             [AutomationElement]$element,
-            [Parameter(Mandatory=$true)]
+            [Parameter(Mandatory=$false)]
             [Condition]$condition,
             [bool]$returnFirstResult = $false,
             [Parameter(Mandatory=$false)]
             [bool]$includeSelf = $false
         )
+
+        if ($null -eq $element -or $null -eq $condition) { return @() }
 
         $children = $element.FindAll([TreeScope]::Children, [Condition]::TrueCondition)
         $validChildren = @($children | Where-Object { $_.FindFirst([TreeScope]::Element, $condition) -ne $null })
