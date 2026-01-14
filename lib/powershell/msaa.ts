@@ -30,6 +30,8 @@ using System;
 using System.Runtime.InteropServices;
 using System.Collections;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Security;
 
 public static class MSAAHelper {
     [DllImport("oleacc.dll")]
@@ -41,6 +43,8 @@ public static class MSAAHelper {
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT { public int x; public int y; }
 
+    [HandleProcessCorruptedStateExceptions]
+    [SecurityCritical]
     public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
         try {
             if (hwnd == IntPtr.Zero) return null;
@@ -78,6 +82,8 @@ public static class MSAAHelper {
         return null;
     }
 
+    [HandleProcessCorruptedStateExceptions]
+    [SecurityCritical]
     public static bool SetLegacyValue(IntPtr hwnd, string value) {
         try {
             if (hwnd == IntPtr.Zero) return false;
@@ -99,6 +105,8 @@ public static class MSAAHelper {
         return false;
     }
 
+    [HandleProcessCorruptedStateExceptions]
+    [SecurityCritical]
     public static Hashtable GetAllLegacyProperties(IntPtr hwnd) {
         Hashtable props = new Hashtable();
         try {
@@ -118,6 +126,8 @@ public static class MSAAHelper {
         return props;
     }
 
+    [HandleProcessCorruptedStateExceptions]
+    [SecurityCritical]
     public static Hashtable GetLegacyPropsFromPoint(int x, int y) {
         // Not implemented with Reflection yet, keeping simple return null for now or reusing logic if critical. 
         // User primary focus is Window-based. Keeping it null safe.

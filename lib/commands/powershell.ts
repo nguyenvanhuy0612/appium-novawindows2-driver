@@ -19,8 +19,8 @@ const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootEle
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
 
-const COMMAND_END_MARKER = 0xF2EE;
-const COMMAND_END_CHAR = String.fromCharCode(COMMAND_END_MARKER);
+const COMMAND_END_MARKER = '___NOVA_WIN2_DRIVER_END___';
+const COMMAND_END_CHAR = COMMAND_END_MARKER;
 
 // ============================================================================
 // Helper Functions
@@ -65,6 +65,12 @@ function waitForCommandCompletion(
     return new Promise((resolve, reject) => {
         let timedOut = false;
 
+        const cleanup = () => {
+            clearTimeout(timeout);
+            powerShell.stdout.off('data', onData);
+            powerShell.off('close', onClose);
+        };
+
         const timeout = setTimeout(() => {
             timedOut = true;
             cleanup();
@@ -81,6 +87,7 @@ function waitForCommandCompletion(
         }, timeoutMs);
 
         const onData = (chunk: any) => {
+            // driver.log.debug(`[PS Output] ${chunk.toString().trim()}`);
             if (chunk.toString().includes(COMMAND_END_CHAR)) {
                 cleanup();
                 if (driver.powerShellStdErr) {
@@ -93,7 +100,7 @@ function waitForCommandCompletion(
             }
         };
 
-        const onClose = (code: number) => {
+        const onClose = (code: number | null) => {
             if (timedOut) return;
             cleanup();
             if (driver.powerShell === powerShell) {
@@ -104,17 +111,13 @@ function waitForCommandCompletion(
                 const result = driver.powerShellStdOut.replace(COMMAND_END_CHAR, '').trim();
                 resolve(result);
             } else {
-                const hexCode = '0x' + code.toString(16).toUpperCase();
+                const codeStr = code !== null ? code : 'Unknown';
+                const hexCode = code !== null ? '0x' + code.toString(16).toUpperCase() : 'Signal';
                 const errorMsg = driver.powerShellStdErr || 'No error details';
-                driver.log.error(`PowerShell exited with code ${code} (${hexCode}). stderr: ${errorMsg}`);
-                reject(new errors.UnknownError(`PowerShell exited with code ${code} (${hexCode})`));
+                const msg = `PowerShell exited with code ${codeStr} (${hexCode}). stderr: \n${errorMsg}`;
+                driver.log.error(msg);
+                reject(new errors.UnknownError(msg));
             }
-        };
-
-        const cleanup = () => {
-            clearTimeout(timeout);
-            powerShell.stdout.off('data', onData);
-            powerShell.off('close', onClose);
         };
 
         powerShell.stdout.on('data', onData);
@@ -142,7 +145,7 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
 
         try {
             this.powerShell!.stdin.write(`${command}\n`);
-            this.powerShell!.stdin.write(`Write-Output $([char]0x${COMMAND_END_MARKER.toString(16)})\n`);
+            this.powerShell!.stdin.write(`Write-Output "${COMMAND_END_MARKER}"\n`);
         } catch (e: any) {
             throw new errors.UnknownError(`Failed to write to PowerShell: ${e.message}`);
         }
@@ -222,8 +225,23 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         FIND_CHILDREN_RECURSIVELY
     ];
 
-    for (const script of initScripts) {
+    const scriptNames = [
+        'SET_UTF8_ENCODING',
+        'ADD_NECESSARY_ASSEMBLIES',
+        'MSAA_HELPER_SCRIPT',
+        'USE_UI_AUTOMATION_CLIENT',
+        'INIT_CACHE_REQUEST',
+        'INIT_ELEMENT_TABLE',
+        'PAGE_SOURCE',
+        'FIND_CHILDREN_RECURSIVELY'
+    ];
+
+    for (const [index, script] of initScripts.entries()) {
+        const scriptName = scriptNames[index] || `Script_${index}`;
+        this.log.debug(`[Init] Executing ${scriptName}...`);
+        const start = Date.now();
         await sendPowerShellCommand.call(this, script);
+        this.log.debug(`[Init] ${scriptName} completed in ${Date.now() - start}ms`);
     }
 
     // Setup root element based on capabilities

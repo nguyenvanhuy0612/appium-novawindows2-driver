@@ -3,7 +3,7 @@ $title = "AppiumServer"
 taskkill /f /fi "windowtitle eq $title" /t 2>$null
 taskkill /f /im node.exe /t 2>$null
 Get-Process -Name powershell, pwsh -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | Stop-Process -Force
-$c = "`$host.UI.RawUI.WindowTitle = '$title'; appium --relaxed-security"
+$c = "`$host.UI.RawUI.WindowTitle = '$title'; Set-Location '$env:USERPROFILE\Desktop'; appium --relaxed-security --log-level debug:debug --log appium_server.log"
 $a = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoExit -Command ""$c"""
 $p = New-ScheduledTaskPrincipal -UserId $u -LogonType Interactive -RunLevel Highest
 Register-ScheduledTask -TaskName "AppiumVisible" -Action $a -Principal $p -Force

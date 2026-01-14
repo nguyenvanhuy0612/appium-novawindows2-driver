@@ -286,9 +286,31 @@ const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `
 `;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
+const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
+    $el = ${0}
+    $target = ${1}
+    $propName = $target.Split(".")[1]
+
+    try {
+        Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
+        $hwnd = $el.Current.NativeWindowHandle
+        if ($hwnd -gt 0) {
+            $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName)
+            if ($null -ne $msaaVal) { return $msaaVal.ToString() }
+        } else {
+            Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
+        }
+    } catch {
+        Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
+    }
+
+    return $null
+`;
+
 const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0}
     $target = ${1}
+    # Write-Host "============[DEBUG] Getting property $target ================"
 
     if ($null -eq $el -or $null -eq $target) { 
         return $null
@@ -299,12 +321,15 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     # Only try this for simple property names (no dots)
     if (-not $target.Contains(".")) {
         try {
+            # Write-Host "[DEBUG] Phase 1 Normal Property"
             $prop = [System.Windows.Automation.AutomationElement]::($target + "Property")
             if ($null -ne $prop) {
                 $val = $el.GetCurrentPropertyValue($prop)
                 if ($null -ne $val) { return $val.ToString() }
             }
-        } catch {}
+        } catch {
+            # Write-Host "[DEBUG] Phase 1 Normal Property failed"
+        }
     }
 
     # 2. Pattern Properties (Pattern.Property)
@@ -337,51 +362,69 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
 
         if ($null -ne $patObj) {
             try {
+                # Write-Host "[DEBUG] Phase 2a Pattern Property"
                 $currPat = $el.GetCurrentPattern($patObj)
                 if ($null -ne $currPat) {
                     # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
                     $val = $currPat.Current.$propName
                     if ($null -ne $val) { return $val.ToString() }
                 }
-            } catch {}
+            } catch {
+                # Write-Host "[DEBUG] Phase 2a Pattern Property failed"
+            }
         }
 
-        # 2b. MSAA Fallback (LegacyIAccessible or Value)
+        # 2b. MSAA Fallback (LegacyIAccessible or Value) via Window Handle
         if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
             try {
+                # Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
                 $hwnd = $el.Current.NativeWindowHandle
                 if ($hwnd -gt 0) {
                     $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName)
                     if ($null -ne $msaaVal) { return $msaaVal.ToString() }
+                } else {
+                    # Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
                 }
-            } catch {}
+            } catch {
+                # Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
+            }
         }
 
-        # 2c. MSAA Fallback (Point-based)
-        if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
-            try {
-                $rect = $el.Current.BoundingRectangle
-                if ($null -ne $rect -and $rect.Width -gt 0) {
-                    $cx = [int]($rect.Left + $rect.Width/2)
-                    $cy = [int]($rect.Top + $rect.Height/2)
-                    $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
-                    if ($null -ne $props) { 
-                        $val = $props[$propName]
-                        if ($null -ne $val) { return $val.ToString() }
-                    }
-                }
-            } catch {}
-        }
+        # # 2c. MSAA Fallback (Point-based) - Useful for controls without their own HWND
+        # # [TODO: need to fix] Use Point-based is not work for now
+        # if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
+        #     try {
+        #         Write-Host "[DEBUG] Phase 2c MSAA Fallback (Point-based)"
+        #         $rect = $el.Current.BoundingRectangle
+        #         if ($null -ne $rect -and $rect.Width -gt 0) {
+        #             $cx = [int]($rect.Left + $rect.Width/2)
+        #             $cy = [int]($rect.Top + $rect.Height/2)
+        #             $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
+        #             if ($null -ne $props) { 
+        #                 $val = $props[$propName]
+        #                 if ($null -ne $val) { return $val.ToString() }
+        #             } else {
+        #                  Write-Host "[DEBUG] Phase 2c: No properties found at point ($cx, $cy)"
+        #             }
+        #         } else {
+        #              Write-Host "[DEBUG] Phase 2c Skipped: Invalid BoundingRectangle"
+        #         }
+        #     } catch {
+        #         Write-Host "[DEBUG] Phase 2c MSAA Fallback failed"
+        #     }
+        # }
     }
 
     # If specifically looking for LegacyIAccessible and fallback failed, do NOT try fuzzy match to avoid ArgumentNullException
-    if ($target -like "LegacyIAccessible*") { 
+    if ($target -like "LegacyIAccessible*") {
+        # Write-Host "[DEBUG] Phase 2d Supported Properties Category will ignore LegacyIAccessible"
         return $null 
     }
 
     # 3. Supported Properties Category (Fuzzy / programmatic name match)
     # This searches all properties supported by the element (Pattern properties included)
     try {
+        # Write-Host "[DEBUG] Phase 3 Supported Properties Category"
         $supportedProps = $el.GetSupportedProperties()
         foreach ($prop in $supportedProps) {
             if ($prop.ProgrammaticName -like "*$target*") {
@@ -389,7 +432,11 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
                 if ($null -ne $val) { return $val.ToString() }
             }
         }
-    } catch {}
+    } catch {
+        # Write-Host "[DEBUG] Phase 3 Supported Properties Category failed"
+    }
+
+    # Write-Host "[DEBUG] Last Phase return null"
 
     return $null
 `;
@@ -698,6 +745,10 @@ export class AutomationElement extends PSObject {
         if (legacyPropsAlias[property]) {
             property = legacyPropsAlias[property];
         }
+
+        // if (property.toLowerCase().startsWith('legacyiaccessible.')) {
+        //     return GET_ELEMENT_LEGACY_PROPERTY.format(this, new PSString(property).toString());
+        // }
 
         return GET_ELEMENT_PROPERTY.format(this, new PSString(property).toString());
     }

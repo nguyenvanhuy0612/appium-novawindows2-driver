@@ -25,4 +25,7 @@ npm run build
 # 3. Run Robocopy without the /ZB flag to avoid the privilege error
 # We use /E /IS to force overwrite without deleting extra files, OR /MIR to exact mirror.
 Write-Host "Syncing files and overwriting destination..." -ForegroundColor Cyan
-robocopy $source $destination /E /IS /XD node_modules .git .agent .github .vscode /R:5 /W:5 /MT:8
+# robocopy $source $destination /E /IS /XD node_modules .git .agent .github .vscode /R:5 /W:5 /MT:8
+# robocopy $source $destination *.json /IS /R:5 /W:5 /MT:8
+# robocopy $source $destination build lib scripts package.json /E /IS /R:5 /W:5 /MT:8
+robocopy $source $destination /MIR /XD node_modules .git .agent .github .vscode /R:5 /W:5 /MT:8

@@ -1,8 +1,9 @@
 const { remote } = require('webdriverio');
 
-const HOST = process.env.APPIUM_HOST || '192.168.8.245';
-const PORT = parseInt(process.env.APPIUM_PORT || '4723', 10);
-const APP = process.env.APP_PATH || 'Root'; // 'Root' attaches to the desktop
+// const HOST = '192.168.8.245';
+const HOST = '192.168.1.19';
+const PORT = 4723;
+const APP = 'Root'; // 'Root' attaches to the desktop
 
 const defaultCaps = {
     "platformName": "Windows",

@@ -7,7 +7,8 @@ async function main() {
         driver = await createDriver();
 
         // Use XPath instead of Accessibility ID (~Start)
-        const element = await driver.$('//*[@Name="Start"]');
+        // const element = await driver.$('//Button[@Name="Start"]');
+        const element = await driver.$('//Window[contains(@Name,"SecureAge 8.0.34")]');
         console.log('Inspecting "Start" button...');
 
         // Full list of properties from legacy `att_test.js`
@@ -81,11 +82,9 @@ async function main() {
         for (const prop of properties) {
             try {
                 const val = await element.getAttribute(prop);
-                if (val !== null && val !== '') {
-                    console.log(`  ${prop}: ${val}`);
-                }
+                console.log(`${prop}: ${val}`);
             } catch (e) {
-                // Suppress errors for missing patterns
+                console.error(`Error getting ${prop}:`, e);
             }
         }
 
