@@ -18,7 +18,7 @@
     "build": "tsc -b",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha -r ts-node/register test/unit/**/*.spec.ts"
   },
   "author": "nguyenvanhuy0612",
   "license": "Apache-2.0",
@@ -53,10 +53,16 @@
     "@eslint/js": "^9.38.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^24.8.1",
+    "axios": "^1.13.2",
+    "chai": "^6.2.2",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "^9.38.0",
+    "mocha": "^11.7.5",
     "semantic-release": "^25.0.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.1",
     "webdriverio": "^9.23.0"

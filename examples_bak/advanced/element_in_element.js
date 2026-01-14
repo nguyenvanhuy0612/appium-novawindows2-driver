@@ -2,7 +2,7 @@ const { remote } = require('webdriverio');
 
 async function main() {
     const opts = {
-        hostname: '172.16.1.52',
+        hostname: '192.168.8.245',
         port: 4723,
         path: '/',
         capabilities: {
@@ -11,7 +11,7 @@ async function main() {
             "appium:app": "Root",
             "appium:newCommandTimeout": 120
         },
-        logLevel: 'error'
+        logLevel: 'info'
     };
 
     let client;

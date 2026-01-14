@@ -1,7 +1,7 @@
 const wdio = require('webdriverio');
 
 const opts = {
-    hostname: '172.16.1.52',
+    hostname: '192.168.8.245',
     port: 4723,
     path: '/',
     capabilities: {
@@ -14,7 +14,7 @@ const opts = {
 async function main() {
     const driver = await wdio.remote(opts);
     try {
-        const listItem = await driver.$("//Window[contains(@Name,'Migration Tool')]/List/ListItem[@Name='a']");
+        const listItem = await driver.$("//Window[contains(@Name,'Migration Tool')]/List/ListItem[contains(@Name,'87')]");
 
         console.log('Found element, executing scrollIntoView...');
         await driver.execute('windows: scrollIntoView', listItem);
