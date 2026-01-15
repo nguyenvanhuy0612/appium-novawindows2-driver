@@ -1,7 +1,3 @@
-//Window[@Name='SecureAge']/Button[@Name='OK' or @Name='Ok']
-//Window[@Name='SecureAge' and ./Text[contains(@Name,'cancel the certificate creation')]]/Button[@Name='Yes']
-//Window[@Name='SecureAge']/Button[@Name='NO' or @Name='No']
-//Window/Window//Button[@Name='Close']
 const { remote } = require('webdriverio');
 
 async function click_until_not_found(driver, locators) {
@@ -51,9 +47,9 @@ async function main() {
     try {
         driver = await remote(wdioOpts);
         const all_locator = [
-            "/Window[@Name='SecureAge']/Button[@Name='OK' or @Name='Ok']",
-            "/Window[@Name='SecureAge' and ./Text[contains(@Name,'cancel the certificate creation')]]/Button[@Name='Yes']",
-            "/Window[@Name='SecureAge']/Button[@Name='NO' or @Name='No']",
+            "/Window[contains(@Name,'Secure')]/Button[@Name='OK' or @Name='Ok']",
+            "/Window[contains(@Name,'Secure') and ./Text[contains(@Name,'cancel the certificate creation')]]/Button[@Name='Yes']",
+            "/Window[contains(@Name,'Secure')]/Button[@Name='NO' or @Name='No']",
             "/Window/Window//Button[@Name='Close']",
         ];
         await click_until_not_found(driver, all_locator);

@@ -8,7 +8,7 @@ async function main() {
 
         // Use XPath instead of Accessibility ID (~Start)
         // const element = await driver.$('//Button[@Name="Start"]');
-        const element = await driver.$('//Window[contains(@Name,"SecureAge 8.0.34")]');
+        const element = await driver.$('//Window[contains(@Name,"Secure")]');
         console.log('Inspecting "Start" button...');
 
         // Full list of properties from legacy `att_test.js`

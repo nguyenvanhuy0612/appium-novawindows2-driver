@@ -32,15 +32,15 @@ import {
 
 import { AutomationElement, PropertyCondition, Property, PSInt32Array, TreeScope, FoundAutomationElement } from '../powershell';
 import { $ } from '../util';
-import { processExprNode } from './core';
+import { XPathExecutor } from './core';
 
 const FUNCTION_ARGUMENT_ERROR = $`Function ${0}() requires ${1}.`;
 
-export async function handleFunctionCall<T>(name: FunctionName, context: AutomationElement, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean, contextState: [number, number] | undefined, ...args: ExprNode[]): Promise<T[]> {
+export async function handleFunctionCall<T>(name: FunctionName, context: AutomationElement, executor: XPathExecutor, contextState: [number, number] | undefined, ...args: ExprNode[]): Promise<T[]> {
     const processArgs = async <T>(...args: ExprNode[]): Promise<T[][]> => {
         const results: T[][] = [];
         for (const arg of args) {
-            results.push(await processExprNode(arg, context, sendPowerShellCommand, includeContextElementInSearch, contextState));
+            results.push(await executor.processExprNode(arg, context, contextState));
         }
 
         return results;
@@ -149,7 +149,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
             const conditions = ids.map((id) => new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(id.split('.').map(Number))));
             const results: string[] = [];
             for (const condition of conditions) {
-                results.push(await sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.SUBTREE, condition).buildCommand()));
+                results.push(await executor.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.SUBTREE, condition).buildCommand()));
             }
 
             return results.map((result) => new FoundAutomationElement(result.trim()) as T);
@@ -168,7 +168,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 return [contextState[1] as T];
             }
 
-            const elIds = await sendPowerShellCommand(context.buildCommand());
+            const elIds = await executor.sendPowerShellCommand(context.buildCommand());
             const lastElementIndex = elIds.split('\n').map((id) => id.trim()).filter(Boolean).length;
             return name === LAST ? [lastElementIndex as T] : Array.from({ length: lastElementIndex }, () => 0 as T);
         }
@@ -190,7 +190,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be element'));
             }
 
-            const result = await sendPowerShellCommand(element.buildGetTagNameCommand());
+            const result = await executor.sendPowerShellCommand(element.buildGetTagNameCommand());
             return result.split('\n').map((x) => x.trim() as T);
         }
         case NORMALIZE_SPACE: {

@@ -186,9 +186,9 @@ foreach ($tb in $allTitleBars) {
     
     Write-Output " - TitleBar found in Parent: '$parentName' | Class: $($tb.Current.ClassName)"
     
-    if ($parentName -eq "SecureAge Data Migration Tool") {
-        Write-Output "   -> MATCH! Found TitleBar in SecureAge."
-        Test-Element $tb "SecureAge TitleBar"
+    if ($parentName -like "*Migration Tool") {
+        Write-Output "   -> MATCH! Found TitleBar in Secure."
+        Test-Element $tb "Secure TitleBar"
     }
 }
 

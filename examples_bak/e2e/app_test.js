@@ -12,7 +12,7 @@ async function main() {
         capabilities: {
             "appium:automationName": "NovaWindows2",
             "platformName": "Windows",
-            "appium:app": "C:\\Program Files\\SecureAge\\bin\\SecureAge.exe",
+            "appium:app": "C:\\Windows\\System32\\notepad.exe",
             "appium:newCommandTimeout": 300
         },
         logLevel: 'error'

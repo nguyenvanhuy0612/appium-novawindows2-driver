@@ -24,7 +24,7 @@ async function main() {
         client = await remote(opts);
         console.log('Session created.');
 
-        const window = await client.$("//Window[contains(@Name,'SecureAge - Directory Search')]");
+        const window = await client.$("//Window[contains(@Name,'Directory Search')]");
         console.log(window);
 
         const all = await window.$$("//*")
