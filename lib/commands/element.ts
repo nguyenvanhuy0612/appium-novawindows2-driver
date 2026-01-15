@@ -56,18 +56,6 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         meta: undefined,
         alt: undefined,
     };
-
-    let delayOverride: number | undefined;
-
-    if (!Array.isArray(value)) {
-        const match = value.match(/^\[delay:(\d+)\]/);
-        if (match) {
-            delayOverride = parseInt(match[1], 10);
-            value = value.substring(match[0].length);
-        }
-        value = value.split('');
-    }
-
     let keysToSend: string[] = [];
 
     const sendKeysAndResetArray = async () => {
@@ -75,7 +63,29 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         keysToSend = [];
     };
 
-    const typeDelay = delayOverride ?? this._typeDelay ?? this.caps.typeDelay;
+    const parseDelay = (defaultDelay: number, text: string): { delay: number; textWithoutDelay: string } => {
+        const match = text.match(/^\[delay:\s*(\d+)\]/i);
+        if (match) {
+            const delay = parseInt(match[1], 10);
+            const textWithoutDelay = text.substring(match[0].length);
+            return { delay, textWithoutDelay };
+        }
+        return { delay: defaultDelay, textWithoutDelay: text };
+    };
+
+    let typeDelay = this.caps.typeDelay ?? 0;
+
+    if (typeDelay > 0) {
+        if (!Array.isArray(value)) {
+            const { delay, textWithoutDelay } = parseDelay(typeDelay, value as string);
+            typeDelay = delay;
+            value = textWithoutDelay;
+        } else {
+            const { delay, textWithoutDelay } = parseDelay(typeDelay, value.join(''));
+            typeDelay = delay;
+            value = textWithoutDelay.split('');
+        }
+    }
 
     for (const char of value) {
         switch (char) {

@@ -745,5 +745,5 @@ export async function typeDelay(this: NovaWindows2Driver, args: { delay: number 
         throw new errors.InvalidArgumentError('Delay must be a non-negative number.');
     }
 
-    this._typeDelay = delay;
+    this.caps.typeDelay = delay;
 }

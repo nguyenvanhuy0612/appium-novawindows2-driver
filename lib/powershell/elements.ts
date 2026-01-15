@@ -286,10 +286,53 @@ const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `
 `;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
-const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
+const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0}
     $target = ${1}
-    $propName = $target.Split(".")[1]
+
+    if ($null -eq $el -or $null -eq $target -or -not $target.Contains(".")) { 
+        return $null
+    }
+
+    $parts = $target.Split(".")
+    $pKey = $parts[0]
+    $propName = $parts[1]
+
+    # 2a. Generic Pattern Property Handler (UIA)
+    $patObj = $null
+    switch ($pKey) {
+        # "LegacyIAccessible" { $patObj = [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern }
+        "Value"             { $patObj = [System.Windows.Automation.ValuePattern]::Pattern }
+        "Window"            { $patObj = [System.Windows.Automation.WindowPattern]::Pattern }
+        "Transform"         { $patObj = [System.Windows.Automation.TransformPattern]::Pattern }
+        "Scroll"            { $patObj = [System.Windows.Automation.ScrollPattern]::Pattern }
+        "Selection"         { $patObj = [System.Windows.Automation.SelectionPattern]::Pattern }
+        "SelectionItem"     { $patObj = [System.Windows.Automation.SelectionItemPattern]::Pattern }
+        "RangeValue"        { $patObj = [System.Windows.Automation.RangeValuePattern]::Pattern }
+        "ExpandCollapse"    { $patObj = [System.Windows.Automation.ExpandCollapsePattern]::Pattern }
+        "Toggle"            { $patObj = [System.Windows.Automation.TogglePattern]::Pattern }
+        "Grid"              { $patObj = [System.Windows.Automation.GridPattern]::Pattern }
+        "GridItem"          { $patObj = [System.Windows.Automation.GridItemPattern]::Pattern }
+        "Dock"              { $patObj = [System.Windows.Automation.DockPattern]::Pattern }
+        "Table"             { $patObj = [System.Windows.Automation.TablePattern]::Pattern }
+        "TableItem"         { $patObj = [System.Windows.Automation.TableItemPattern]::Pattern }
+        "MultipleView"      { $patObj = [System.Windows.Automation.MultipleViewPattern]::Pattern }
+        "Invoke"            { $patObj = [System.Windows.Automation.InvokePattern]::Pattern }
+    }
+
+    if ($null -ne $patObj) {
+        try {
+            # Write-Host "[DEBUG] Phase 2a Pattern Property"
+            $currPat = $el.GetCurrentPattern($patObj)
+            if ($null -ne $currPat) {
+                # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
+                $val = $currPat.Current.$propName
+                if ($null -ne $val) { return $val.ToString() }
+            }
+        } catch {
+            # Write-Host "[DEBUG] Phase 2a Pattern Property failed"
+        }
+    }
 
     try {
         Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
@@ -339,6 +382,7 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
         $propName = $parts[1]
 
         # 2a. Generic Pattern Property Handler (UIA)
+        # Write-Host "[DEBUG] Phase 2a Generic Pattern Property Handler (UIA)"
         $patObj = $null
         switch ($pKey) {
             # "LegacyIAccessible" { $patObj = [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern }
@@ -390,55 +434,121 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
             }
         }
 
-        # # 2c. MSAA Fallback (Point-based) - Useful for controls without their own HWND
-        # # [TODO: need to fix] Use Point-based is not work for now
-        # if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
-        #     try {
-        #         Write-Host "[DEBUG] Phase 2c MSAA Fallback (Point-based)"
-        #         $rect = $el.Current.BoundingRectangle
-        #         if ($null -ne $rect -and $rect.Width -gt 0) {
-        #             $cx = [int]($rect.Left + $rect.Width/2)
-        #             $cy = [int]($rect.Top + $rect.Height/2)
-        #             $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
-        #             if ($null -ne $props) { 
-        #                 $val = $props[$propName]
-        #                 if ($null -ne $val) { return $val.ToString() }
-        #             } else {
-        #                  Write-Host "[DEBUG] Phase 2c: No properties found at point ($cx, $cy)"
-        #             }
-        #         } else {
-        #              Write-Host "[DEBUG] Phase 2c Skipped: Invalid BoundingRectangle"
-        #         }
-        #     } catch {
-        #         Write-Host "[DEBUG] Phase 2c MSAA Fallback failed"
-        #     }
-        # }
+        ## 2c. MSAA Fallback (Point-based) - Useful for controls without their own HWND
+        ## [TODO: need to fix] Use Point-based is not work for now
+        #if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
+        #    try {
+        #        Write-Host "[DEBUG] Phase 2c MSAA Fallback (Point-based)"
+        #        $rect = $el.Current.BoundingRectangle
+        #        if ($null -ne $rect -and $rect.Width -gt 0) {
+        #            $cx = [int]($rect.Left + $rect.Width/2)
+        #            $cy = [int]($rect.Top + $rect.Height/2)
+        #            $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
+        #            if ($null -ne $props) { 
+        #                $val = $props[$propName]
+        #                if ($null -ne $val) { return $val.ToString() }
+        #            } else {
+        #                Write-Host "[DEBUG] Phase 2c: No properties found at point ($cx, $cy)"
+        #            }
+        #        } else {
+        #            Write-Host "[DEBUG] Phase 2c Skipped: Invalid BoundingRectangle"
+        #        }
+        #    } catch {
+        #        Write-Host "[DEBUG] Phase 2c MSAA Fallback failed"
+        #    }
+        #}
     }
-
+    
     # If specifically looking for LegacyIAccessible and fallback failed, do NOT try fuzzy match to avoid ArgumentNullException
-    if ($target -like "LegacyIAccessible*") {
-        # Write-Host "[DEBUG] Phase 2d Supported Properties Category will ignore LegacyIAccessible"
-        return $null 
-    }
+    #if ($target -like "LegacyIAccessible*") {
+    #    # Write-Host "[DEBUG] Phase 2d Supported Properties Category will ignore LegacyIAccessible"
+    #    return $null 
+    #}
 
-    # 3. Supported Properties Category (Fuzzy / programmatic name match)
-    # This searches all properties supported by the element (Pattern properties included)
-    try {
-        # Write-Host "[DEBUG] Phase 3 Supported Properties Category"
-        $supportedProps = $el.GetSupportedProperties()
-        foreach ($prop in $supportedProps) {
-            if ($prop.ProgrammaticName -like "*$target*") {
-                $val = $el.GetCurrentPropertyValue($prop)
-                if ($null -ne $val) { return $val.ToString() }
-            }
-        }
-    } catch {
-        # Write-Host "[DEBUG] Phase 3 Supported Properties Category failed"
-    }
+    ## 3. Supported Properties Category (Fuzzy / programmatic name match)
+    ## This searches all properties supported by the element (Pattern properties included)
+    #try {
+    #    # Write-Host "[DEBUG] Phase 3 Supported Properties Category"
+    #    $supportedProps = $el.GetSupportedProperties()
+    #    foreach ($prop in $supportedProps) {
+    #        # Write-Host "[DEBUG] Checking property: $($prop.ProgrammaticName)"
+    #        if ($prop.ProgrammaticName -like "*$target*") {
+    #            $val = $el.GetCurrentPropertyValue($prop)
+    #            if ($null -ne $val) { return $val.ToString() }
+    #        }
+    #    }
+    #} catch {
+    #    # Write-Host "[DEBUG] Phase 3 Supported Properties Category failed"
+    #}
 
     # Write-Host "[DEBUG] Last Phase return null"
 
     return $null
+`;
+
+const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
+    $el = ${0}
+    if ($null -eq $el) { return }
+
+    $out = [ordered]@{}
+
+    # 1. Standard Supported Properties
+    try {
+        $props = $el.GetSupportedProperties()
+        foreach ($p in $props) {
+            try {
+                $val = $el.GetCurrentPropertyValue($p)
+                if ($null -ne $val) {
+                    $name = $p.ProgrammaticName.Split('.')[-1]
+                    $name = $name -replace "Property$", ""
+                    
+                    if ($val -is [Array]) {
+                         $out[$name] = $val -join "," 
+                    } else {
+                         $out[$name] = $val.ToString()
+                    }
+                }
+            } catch { }
+        }
+    } catch { }
+
+    # 2. MSAA Fallback for LegacyIAccessible
+    try {
+        $hwnd = $el.Current.NativeWindowHandle
+        if ($hwnd -gt 0) {
+            $msaaProps = @("Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction") 
+            foreach ($mp in $msaaProps) {
+                $key = "LegacyIAccessible." + $mp
+                # Prefer UIA result if available
+                if (-not $out.Contains($key)) {
+                    try {
+                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp)
+                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() }
+                    } catch {}
+                }
+            }
+        }
+    } catch { }
+
+    # 3. MSAA Fallback for Value
+    try {
+        $hwnd = $el.Current.NativeWindowHandle
+        if ($hwnd -gt 0) {
+            $msaaProps = @("Value", "IsReadOnly") 
+            foreach ($mp in $msaaProps) {
+                $key = "Value." + $mp
+                # Prefer UIA result if available
+                if (-not $out.Contains($key)) {
+                    try {
+                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp)
+                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() }
+                    } catch {}
+                }
+            }
+        }
+    } catch { }
+
+    return $out | ConvertTo-Json -Depth 2 -Compress
 `;
 
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
@@ -478,8 +588,6 @@ const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
         return $type
     }
 `;
-
-const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ ``;
 
 const SET_FOCUS_TO_ELEMENT = pwsh$ /* ps1 */ `${0}.SetFocus() `;
 

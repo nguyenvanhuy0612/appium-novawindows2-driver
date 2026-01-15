@@ -1,4 +1,4 @@
-const { createDriver, properties } = require('../util/setup');
+const { createDriver } = require('../util/setup');
 
 async function main() {
     console.log('--- 05_attributes.js (Comprehensive) ---');
@@ -10,17 +10,19 @@ async function main() {
 
         // Use XPath instead of Accessibility ID (~Start)
         // const element = await driver.$('//Button[@Name="Start"]');
-        const element = await driver.$('//Window[contains(@Name,"Secure")]//ComboBox');
-        console.log('Inspecting "ComboBox" button...');
+        const element = await driver.$('//Window[contains(@Name,"Secure")]');
+        console.log('Inspecting "Start" button...');
 
-        for (const prop of properties) {
-            try {
-                const val = await element.getAttribute(prop);
-                console.log(`${prop}: ${val}`);
-            } catch (e) {
-                console.error(`Error getting ${prop}:`, e);
+        const val = await element.getAttribute('all');
+        let parsedVal = val;
+        try {
+            if (typeof val === 'string') {
+                parsedVal = JSON.parse(val);
             }
+        } catch (e) {
+            // keep as string if parse fails
         }
+        console.log(`All: \n${JSON.stringify(parsedVal, null, 2)}`);
 
     } catch (err) {
         console.error('Error:', err);
