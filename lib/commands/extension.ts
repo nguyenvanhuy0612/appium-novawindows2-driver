@@ -81,16 +81,16 @@ const GET_PLAINTEXT_CLIPBOARD_BASE64 = /* ps1 */ `[Convert]::ToBase64String([Sys
 const SET_IMAGE_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `$b = [Convert]::FromBase64String('${0}'); $s = New-Object IO.MemoryStream; $s.Write($b, 0, $b.Length); $s.Position = 0; $i = [System.Windows.Media.Imaging.BitmapFrame]::Create($s); [Windows.Clipboard]::SetImage($i); $s.Close()`;
 const GET_IMAGE_CLIPBOARD_BASE64 = pwsh /* ps1 */ `
     [Windows.Clipboard]::GetImage() | ForEach-Object {
-            if ($_ -ne $null) {
-                $stream = New-Object IO.MemoryStream
-            $encoder = New-Object Windows.Media.Imaging.PngBitmapEncoder
-            $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($_))
-            $encoder.Save($stream)
-            $stream.Position = 0
-            $bytes = $stream.ToArray()
-            $base64String = [Convert]::ToBase64String($bytes)
-            $stream.Close()
-            Write-Output $base64String
+        if ($_ -ne $null) {
+            $stream = New-Object IO.MemoryStream;
+            $encoder = New-Object Windows.Media.Imaging.PngBitmapEncoder;
+            $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($_));
+            $encoder.Save($stream);
+            $stream.Position = 0;
+            $bytes = $stream.ToArray();
+            $base64String = [Convert]::ToBase64String($bytes);
+            $stream.Close();
+            Write-Output $base64String;
         }
     }
 `;

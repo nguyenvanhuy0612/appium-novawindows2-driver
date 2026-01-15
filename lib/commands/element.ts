@@ -302,3 +302,7 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
         await sleep(this.caps.delayAfterClick ?? 0);
     }
 }
+
+export async function getElementScreenshot(this: NovaWindows2Driver, elementId: string): Promise<string> {
+    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementScreenshotCommand());
+}

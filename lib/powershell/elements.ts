@@ -5,242 +5,242 @@ import { Condition } from './conditions';
 
 // TODO: Move the methods to a separate file, some of them are too complicated and are not easy to maintain
 const FIND_ALL_ANCESTOR = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         while ($null -ne ($parent = $treeWalker.GetParent($el))) {
-            $el = $parent
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $el = $parent;
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
-            if ($null -eq $validEl) { continue }
-            $els.Add($validEl)
+            if ($null -eq $validEl) { continue };
+            $els.Add($validEl);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_FIRST_ANCESTOR = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
 
     foreach ($el in ${0}) {
         while ($null -ne ($parent = $treeWalker.GetParent($el))) {
-            $el = $parent
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $el = $parent;
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
             if ($null -ne $validEl) {
-                return $el
+                return $el;
             }
         }
     }
 `;
 
 const FIND_ALL_ANCESTOR_OR_SELF = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         while ($null -ne $el) {
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
             if ($null -ne $validEl) {
-                $els.Add($validEl)
+                $els.Add($validEl);
             }
 
-            $el = $treeWalker.GetParent($el)
+            $el = $treeWalker.GetParent($el);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_FIRST_ANCESTOR_OR_SELF = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
 
     foreach ($el in ${0}) {
         while ($null -ne $el) {
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
             if ($null -ne $validEl) {
-                return $el
+                return $el;
             }
 
-            $el = $treeWalker.GetParent($el)
+            $el = $treeWalker.GetParent($el);
         }
     }
 `;
 
 const FIND_PARENT = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
 
     foreach ($el in ${0}) {
-        return $treeWalker.GetParent($el).FindFirst([TreeScope]::Element, ${1})
+        return $treeWalker.GetParent($el).FindFirst([TreeScope]::Element, ${1});
     }
 `;
 
 const FIND_FOLLOWING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}))
+    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}));
 
     foreach ($el in ${0}) {
         while ($null -ne $el) {
-            $nextSibling = $treeWalker.GetNextSibling($el)
+            $nextSibling = $treeWalker.GetNextSibling($el);
 
             if ($null -ne $nextSibling) {
-                return $nextSibling
+                return $nextSibling;
             }
 
-            $el = $treeWalker.GetParent($el)
+            $el = $treeWalker.GetParent($el);
         }
     }
 `;
 
 const FIND_ALL_FOLLOWING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         while ($null -ne $el) {
-            $nextSibling = $treeWalker.GetNextSibling($el)
+            $nextSibling = $treeWalker.GetNextSibling($el);
 
             if ($null -ne $nextSibling) {
-                $el = $nextSibling
-                $els.Add($el)
-                $els.AddRange($el.FindAll([TreeScope]::Children, ${1}))
+                $el = $nextSibling;
+                $els.Add($el);
+                $els.AddRange($el.FindAll([TreeScope]::Children, ${1}));
             }
 
-            $el = $treeWalker.GetParent($el)
+            $el = $treeWalker.GetParent($el);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_FOLLOWING_SIBLING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
 
     foreach ($el in ${0}) {
         while ($null -ne ($nextSibling = $treeWalker.GetNextSibling($el))) {
-            $el = $nextSibling
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $el = $nextSibling;
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
             if ($null -ne $validEl) {
-                return $el
+                return $el;
             }
         }
     }
 `;
 
 const FIND_ALL_FOLLOWING_SIBLING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         while ($null -ne ($nextSibling = $treeWalker.GetNextSibling($el))) {
-            $el = $nextSibling
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $el = $nextSibling;
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
-            if ($null -eq $validEl) { continue }
-            $els.Add($validEl)
+            if ($null -eq $validEl) { continue };
+            $els.Add($validEl);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_PRECEDING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}))
+    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}));
 
     foreach ($el in ${0}) {
         while ($null -ne $el) {
-            $previousSibling = $treeWalker.GetPreviousSibling($el)
+            $previousSibling = $treeWalker.GetPreviousSibling($el);
 
             if ($null -ne $previousSibling) {
-                return $previousSibling
+                return $previousSibling;
             }
 
-            $el = $treeWalker.GetParent($el)
+            $el = $treeWalker.GetParent($el);
         }
     }
 `;
 
 const FIND_ALL_PRECEDING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}))
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}));
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         while ($null -ne $el) {
-            $previousSibling = $treeWalker.GetPreviousSibling($el)
+            $previousSibling = $treeWalker.GetPreviousSibling($el);
 
             if ($null -ne $previousSibling) {
-                $el = $previousSibling
-                $els.Add($el)
-                $els.AddRange($el.FindAll([TreeScope]::Children, ${1}))
+                $el = $previousSibling;
+                $els.Add($el);
+                $els.AddRange($el.FindAll([TreeScope]::Children, ${1}));
             }
 
-            $el = $treeWalker.GetParent($el)
+            $el = $treeWalker.GetParent($el);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_PRECEDING_SIBLING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
 
     foreach ($el in ${0}) {
         while ($null -ne ($previousSibling = $treeWalker.GetPreviousSibling($el))) {
-            $el = $previousSibling
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $el = $previousSibling;
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
             if ($null -ne $validEl) {
-                return $el
+                return $el;
             }
         }
     }
 `;
 
 const FIND_ALL_PRECEDING_SIBLING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         while ($null -ne ($previousSibling = $treeWalker.GetPreviousSibling($el))) {
-            $el = $previousSibling
-            $validEl = $el.FindFirst([TreeScope]::Element, ${1})
+            $el = $previousSibling;
+            $validEl = $el.FindFirst([TreeScope]::Element, ${1});
 
-            if ($null -eq $validEl) { continue }
-            $els.Add($validEl)
+            if ($null -eq $validEl) { continue };
+            $els.Add($validEl);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_CHILDREN_OR_SELF = pwsh$ /* ps1 */ `
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         $validEl = $el.FindFirst([TreeScope]::Element -bor [TreeScope]::Children, ${1});
         if ($null -ne $validEl) {
-            $els.Add($validEl)
+            $els.Add($validEl);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_ALL_CHILDREN_OR_SELF = pwsh$ /* ps1 */ `
-    $els = New-Object System.Collections.Generic.List[AutomationElement]
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
         $validEl = $el.FindAll([TreeScope]::Element -bor [TreeScope]::Children, ${1});
         if ($null -ne $validEl) {
-            $els.Add($validEl)
+            $els.Add($validEl);
         }
     }
 
-    return $els
+    return $els;
 `;
 
 const FIND_DESCENDANTS = pwsh$ /* ps1 */ `Find-ChildrenRecursively -element (${0}) -condition (${1})`;
@@ -257,49 +257,34 @@ const FOCUSED_ELEMENT = /* ps1 */ `[AutomationElement]::FocusedElement`;
 const ROOT_ELEMENT = /* ps1 */ `[AutomationElement]::RootElement`;
 
 const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
-    ${0} | ForEach-Object {
-        if ($null -eq $_) { return }
+    ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
+        $runtimeId = $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
 
-        try {
-            $runtimeId = $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
-            if (-not $elementTable.ContainsKey($runtimeId)) {
-                $elementTable.Add($runtimeId, $_)
-            };
-            $runtimeId
-        } catch {
-            # ElementNotAvailableException
-        }
+        if (-not $elementTable.ContainsKey($runtimeId)) {
+            $elementTable.Add($runtimeId, $_)
+        };
+
+        $runtimeId
     }
 `;
 
-const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `
-    $el = $elementTable['${0}'];
-    if ($null -eq $el) { return $null }
-
-    try {
-        $null = $el.Current.ProcessId;
-        return $el
-    } catch {
-        # $elementTable.Remove('${0}');
-        return $el
-    }
-`;
+const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `$elementTable['${0}']`;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
 const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
-    $el = ${0}
-    $target = ${1}
+    $el = ${0};
+    $target = ${1};
 
     if ($null -eq $el -or $null -eq $target -or -not $target.Contains(".")) { 
-        return $null
+        return $null;
     }
 
-    $parts = $target.Split(".")
-    $pKey = $parts[0]
-    $propName = $parts[1]
+    $parts = $target.Split(".");
+    $pKey = $parts[0];
+    $propName = $parts[1];
 
     # 2a. Generic Pattern Property Handler (UIA)
-    $patObj = $null
+    $patObj = $null;
     switch ($pKey) {
         # "LegacyIAccessible" { $patObj = [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern }
         "Value"             { $patObj = [System.Windows.Automation.ValuePattern]::Pattern }
@@ -323,11 +308,11 @@ const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
     if ($null -ne $patObj) {
         try {
             # Write-Host "[DEBUG] Phase 2a Pattern Property"
-            $currPat = $el.GetCurrentPattern($patObj)
+            $currPat = $el.GetCurrentPattern($patObj);
             if ($null -ne $currPat) {
                 # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
-                $val = $currPat.Current.$propName
-                if ($null -ne $val) { return $val.ToString() }
+                $val = $currPat.Current.$propName;
+                if ($null -ne $val) { return $val.ToString() };
             }
         } catch {
             # Write-Host "[DEBUG] Phase 2a Pattern Property failed"
@@ -335,28 +320,28 @@ const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
     }
 
     try {
-        Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
-        $hwnd = $el.Current.NativeWindowHandle
+        # Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
+        $hwnd = $el.Current.NativeWindowHandle;
         if ($hwnd -gt 0) {
-            $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName)
-            if ($null -ne $msaaVal) { return $msaaVal.ToString() }
+            $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName);
+            if ($null -ne $msaaVal) { return $msaaVal.ToString() };
         } else {
-            Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
+            # Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
         }
     } catch {
-        Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
+        # Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
     }
 
-    return $null
+    return $null;
 `;
 
 const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
-    $el = ${0}
-    $target = ${1}
+    $el = ${0};
+    $target = ${1};
     # Write-Host "============[DEBUG] Getting property $target ================"
 
     if ($null -eq $el -or $null -eq $target) { 
-        return $null
+        return $null;
     }
 
     # 1. Normal Properties (Standard AutomationElement direct properties)
@@ -365,10 +350,10 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     if (-not $target.Contains(".")) {
         try {
             # Write-Host "[DEBUG] Phase 1 Normal Property"
-            $prop = [System.Windows.Automation.AutomationElement]::($target + "Property")
+            $prop = [System.Windows.Automation.AutomationElement]::($target + "Property");
             if ($null -ne $prop) {
-                $val = $el.GetCurrentPropertyValue($prop)
-                if ($null -ne $val) { return $val.ToString() }
+                $val = $el.GetCurrentPropertyValue($prop);
+                if ($null -ne $val) { return $val.ToString() };
             }
         } catch {
             # Write-Host "[DEBUG] Phase 1 Normal Property failed"
@@ -377,13 +362,13 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
 
     # 2. Pattern Properties (Pattern.Property)
     if ($target.Contains(".")) {
-        $parts = $target.Split(".")
-        $pKey = $parts[0]
-        $propName = $parts[1]
+        $parts = $target.Split(".");
+        $pKey = $parts[0];
+        $propName = $parts[1];
 
         # 2a. Generic Pattern Property Handler (UIA)
         # Write-Host "[DEBUG] Phase 2a Generic Pattern Property Handler (UIA)"
-        $patObj = $null
+        $patObj = $null;
         switch ($pKey) {
             # "LegacyIAccessible" { $patObj = [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern }
             "Value"             { $patObj = [System.Windows.Automation.ValuePattern]::Pattern }
@@ -407,11 +392,11 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
         if ($null -ne $patObj) {
             try {
                 # Write-Host "[DEBUG] Phase 2a Pattern Property"
-                $currPat = $el.GetCurrentPattern($patObj)
+                $currPat = $el.GetCurrentPattern($patObj);
                 if ($null -ne $currPat) {
                     # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
-                    $val = $currPat.Current.$propName
-                    if ($null -ne $val) { return $val.ToString() }
+                    $val = $currPat.Current.$propName;
+                    if ($null -ne $val) { return $val.ToString() };
                 }
             } catch {
                 # Write-Host "[DEBUG] Phase 2a Pattern Property failed"
@@ -422,10 +407,10 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
         if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
             try {
                 # Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
-                $hwnd = $el.Current.NativeWindowHandle
+                $hwnd = $el.Current.NativeWindowHandle;
                 if ($hwnd -gt 0) {
-                    $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName)
-                    if ($null -ne $msaaVal) { return $msaaVal.ToString() }
+                    $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName);
+                    if ($null -ne $msaaVal) { return $msaaVal.ToString() };
                 } else {
                     # Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
                 }
@@ -483,29 +468,29 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
 
     # Write-Host "[DEBUG] Last Phase return null"
 
-    return $null
+    return $null;
 `;
 
 const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
-    $el = ${0}
-    if ($null -eq $el) { return }
+    $el = ${0};
+    if ($null -eq $el) { return };
 
-    $out = [ordered]@{}
+    $out = [ordered]@{};
 
     # 1. Standard Supported Properties
     try {
-        $props = $el.GetSupportedProperties()
+        $props = $el.GetSupportedProperties();
         foreach ($p in $props) {
             try {
-                $val = $el.GetCurrentPropertyValue($p)
+                $val = $el.GetCurrentPropertyValue($p);
                 if ($null -ne $val) {
-                    $name = $p.ProgrammaticName.Split('.')[-1]
-                    $name = $name -replace "Property$", ""
+                    $name = $p.ProgrammaticName.Split('.')[-1];
+                    $name = $name -replace "Property$", "";
                     
                     if ($val -is [Array]) {
-                         $out[$name] = $val -join "," 
+                         $out[$name] = $val -join "," ;
                     } else {
-                         $out[$name] = $val.ToString()
+                         $out[$name] = $val.ToString();
                     }
                 }
             } catch { }
@@ -514,16 +499,16 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
 
     # 2. MSAA Fallback for LegacyIAccessible
     try {
-        $hwnd = $el.Current.NativeWindowHandle
+        $hwnd = $el.Current.NativeWindowHandle;
         if ($hwnd -gt 0) {
-            $msaaProps = @("Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction") 
+            $msaaProps = @("Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction"); 
             foreach ($mp in $msaaProps) {
-                $key = "LegacyIAccessible." + $mp
+                $key = "LegacyIAccessible." + $mp;
                 # Prefer UIA result if available
                 if (-not $out.Contains($key)) {
                     try {
-                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp)
-                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() }
+                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp);
+                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() };
                     } catch {}
                 }
             }
@@ -532,28 +517,28 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
 
     # 3. MSAA Fallback for Value
     try {
-        $hwnd = $el.Current.NativeWindowHandle
+        $hwnd = $el.Current.NativeWindowHandle;
         if ($hwnd -gt 0) {
-            $msaaProps = @("Value", "IsReadOnly") 
+            $msaaProps = @("Value", "IsReadOnly"); 
             foreach ($mp in $msaaProps) {
-                $key = "Value." + $mp
+                $key = "Value." + $mp;
                 # Prefer UIA result if available
                 if (-not $out.Contains($key)) {
                     try {
-                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp)
-                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() }
+                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp);
+                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() };
                     } catch {}
                 }
             }
         }
     } catch { }
 
-    return $out | ConvertTo-Json -Depth 2 -Compress
+    return $out | ConvertTo-Json -Depth 2 -Compress;
 `;
 
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
     try {
-        ${0}.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.'
+        ${0}.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
     } catch {
         # ElementNotAvailableException
     }
@@ -561,47 +546,43 @@ const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
 
 // TODO: [Huy] - Need to review to use Cached or Current
 const GET_ELEMENT_RECT = pwsh$ /* ps1 */ `
-    if ($null -eq ${0}) { return }
-
-    $rect = ${0}.Current.BoundingRectangle
+    $rect = ${0}.Current.BoundingRectangle;
     $rect | Select-Object X, Y, Width, Height |
     ForEach-Object { $_ | ConvertTo-Json -Compress } |
     ForEach-Object { 
-        if ($null -eq $_) { return }
-        $_.ToLower() 
+        if ($null -eq $_) { return };
+        $_.ToLower();
     }
 `;
 
 const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
-    if ($null -eq ${0}) { return }
-
     # try { $ct = $_.Cached.ControlType } catch { $ct = $_.Current.ControlType }
-    $ct = ${0}.Current.ControlType
+    $ct = ${0}.Current.ControlType;
     $ct.ProgrammaticName |
     ForEach-Object {
         $type = $_.Split('.')[-1];
         if ($type -eq 'DataGrid') {
-            return 'List'
+            return 'List';
         } elseif ($type -eq 'DataItem') {
-            return 'ListItem'
+            return 'ListItem';
         }
-        return $type
+        return $type;
     }
 `;
 
-const SET_FOCUS_TO_ELEMENT = pwsh$ /* ps1 */ `${0}.SetFocus() `;
+const SET_FOCUS_TO_ELEMENT = pwsh$ /* ps1 */ `${0}.SetFocus()`;
 
 const GET_ELEMENT_TEXT = pwsh$ /* ps1 */ `
     try {
-        return ${0}.GetCurrentPattern([TextPattern]::Pattern).DocumentRange.GetText(-1)
+        return ${0}.GetCurrentPattern([TextPattern]::Pattern).DocumentRange.GetText(-1);
     } catch { }
 
     try {
-        return ${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.GetSelection().Current.Name
+        return ${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.GetSelection().Current.Name;
     } catch { }
 
     try {
-        return ${0}.Current.Name
+        return ${0}.Current.Name;
     } catch { }
 `;
 
@@ -609,73 +590,73 @@ const INVOKE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([InvokePattern]::
 const EXPAND_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Expand()`;
 const COLLAPSE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Collapse()`;
 const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
-    $el = ${0}
-    $runtimeIdStr = "${1}"
+    $el = ${0};
+    $runtimeIdStr = "${1}";
 
     if ($null -eq $el -and $runtimeIdStr) {
         # Attempt repair
-        $targetIdArray = [int32[]]@($runtimeIdStr.Split('.'))
-        $cond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::RuntimeIdProperty, $targetIdArray)
-        $found = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+        $targetIdArray = [int32[]]@($runtimeIdStr.Split('.'));
+        $cond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::RuntimeIdProperty, $targetIdArray);
+        $found = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond);
         
         if ($null -ne $found) {
-            $foundRuntimeId = $found.GetRuntimeId() -join '.'
+            $foundRuntimeId = $found.GetRuntimeId() -join '.';
             if (-not $elementTable.ContainsKey($foundRuntimeId)) {
-                $elementTable.Add($foundRuntimeId, $found)
+                $elementTable.Add($foundRuntimeId, $found);
             }
-            $el = $found
+            $el = $found;
         }
     }
 
     $el | Where-Object { $null -ne $_ } | ForEach-Object {
-    # 1. Try ScrollItem Pattern (Standard UIA)
-    try {
-        $pattern = $_.GetCurrentPattern([ScrollItemPattern]::Pattern);
-        if ($null -ne $pattern) {
-            $pattern.ScrollIntoView()
-            return
-        }
-    } catch { }
+        # 1. Try ScrollItem Pattern (Standard UIA)
+        try {
+            $pattern = $_.GetCurrentPattern([ScrollItemPattern]::Pattern);
+            if ($null -ne $pattern) {
+                $pattern.ScrollIntoView();
+                return;
+            }
+        } catch { }
 
-    # 2. Try SetFocus (Often scrolls element into view)
-    try {
-        $_.SetFocus()
-        return
-    } catch { }
+        # 2. Try SetFocus (Often scrolls element into view)
+        try {
+            $_.SetFocus();
+            return;
+        } catch { }
 
-    # 3. Try LegacyIAccessible Select (TakeFocus)
-    try {
-        $legacy = $_.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
-        if ($null -ne $legacy) {
-            $legacy.Select(3); # 3 = TakeFocus
-            return
-        }
-    } catch { }
+        # 3. Try LegacyIAccessible Select (TakeFocus)
+        try {
+            $legacy = $_.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
+            if ($null -ne $legacy) {
+                $legacy.Select(3); # 3 = TakeFocus
+                return;
+            }
+        } catch { }
 
-    # 4. Try ItemContainerPattern on Parent (For virtualized lists)
-    try {
-        $parent = [TreeWalker]::ControlViewWalker.GetParent($_);
-        if ($null -ne $parent) {
-            $containerPattern = $parent.GetCurrentPattern([ItemContainerPattern]::Pattern);
-            if ($null -ne $containerPattern) {
-                # Re-find the item using the container pattern which can trigger virtualization
-                $found = $containerPattern.FindItemByProperty($null, [AutomationElement]::RuntimeIdProperty, $_.GetRuntimeId());
-                if ($null -ne $found) {
-                    # Try scrolling the fresh reference
-                    $foundPattern = $found.GetCurrentPattern([ScrollItemPattern]::Pattern);
-                    if ($null -ne $foundPattern) {
-                        $foundPattern.ScrollIntoView()
-                        return
+        # 4. Try ItemContainerPattern on Parent (For virtualized lists)
+        try {
+            $parent = [TreeWalker]::ControlViewWalker.GetParent($_);
+            if ($null -ne $parent) {
+                $containerPattern = $parent.GetCurrentPattern([ItemContainerPattern]::Pattern);
+                if ($null -ne $containerPattern) {
+                    # Re-find the item using the container pattern which can trigger virtualization
+                    $found = $containerPattern.FindItemByProperty($null, [AutomationElement]::RuntimeIdProperty, $_.GetRuntimeId());
+                    if ($null -ne $found) {
+                        # Try scrolling the fresh reference
+                        $foundPattern = $found.GetCurrentPattern([ScrollItemPattern]::Pattern);
+                        if ($null -ne $foundPattern) {
+                            $foundPattern.ScrollIntoView();
+                            return;
+                        }
+                        $found.SetFocus();
+                        return;
                     }
-                    $found.SetFocus()
-                    return
                 }
             }
-        }
-    } catch { }
+        } catch { }
 
-    throw "Failed to scroll into view: ScrollItemPattern not supported, and SetFocus/LegacySelect/ItemContainerPattern fallbacks failed."
-}
+        throw "Failed to scroll into view: ScrollItemPattern not supported, and SetFocus/LegacySelect/ItemContainerPattern fallbacks failed.";
+    }
 `;
 const IS_MULTIPLE_SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.CanSelectMultiple`;
 const GET_SELECTED_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.GetSelection()`;
@@ -685,11 +666,8 @@ const REMOVE_ELEMENT_FROM_SELECTION = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([S
 const SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionItemPattern]::Pattern).Select()`;
 const TOGGLE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TogglePattern]::Pattern).Toggle()`;
 const SET_ELEMENT_VALUE = pwsh$ /* ps1 */ `
-${0} | ForEach-Object {
-    if ($null -eq $_) { return }
-
     try {
-        return $_.GetCurrentPattern([ValuePattern]::Pattern).SetValue(${1})
+        ${0}.GetCurrentPattern([ValuePattern]::Pattern).SetValue(${1});
     } catch { } 
     
     # try {
@@ -698,15 +676,11 @@ ${0} | ForEach-Object {
     #         [MSAAHelper]::SetLegacyValue([IntPtr]$hwnd, ${1})
     #     }
     # } catch { }
-}
 `;
 const SET_ELEMENT_RANGE_VALUE = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([RangeValuePattern]::Pattern).SetValue(${1})`;
 const GET_ELEMENT_VALUE = pwsh$ /* ps1 */ `
-${0} | ForEach-Object {
-    if ($null -eq $_) { return }
-
     try {
-        return $_.GetCurrentPattern([ValuePattern]::Pattern).Current.Value
+        return ${0}.GetCurrentPattern([ValuePattern]::Pattern).Current.Value;
     } catch { }
 
     # try {
@@ -716,14 +690,57 @@ ${0} | ForEach-Object {
     #     } 
     #     
     #     return $null
-    # } catch { return $null }
-}
+    # } catch { return $null; }
 `;
 const GET_ELEMENT_TOGGLE_STATE = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TogglePattern]::Pattern).Current.ToggleState`;
 const MAXIMIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Maximized)`;
 const MINIMIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Minimized)`;
 const RESTORE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Normal)`;
-const CLOSE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).Close()`;
+const CLOSE_WINDOW = pwsh$ /* ps1 */ `try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Close(); } catch { }`;
+
+const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
+    try {
+        $el = ${0};
+        $rect = $el.Current.BoundingRectangle;
+
+        if ($el -eq $null -or $rect.Width -le 0 -or $rect.Height -le 0) {
+            # Return 1x1 placeholder
+            $bitmap = New-Object Drawing.Bitmap 1,1;
+            $stream = New-Object IO.MemoryStream;
+            $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
+            $bitmap.Dispose();
+            return [Convert]::ToBase64String($stream.ToArray());
+        }
+
+        $bitmap = New-Object Drawing.Bitmap([int32]$rect.Width, [int32]$rect.Height);
+        $graphics = [Drawing.Graphics]::FromImage($bitmap);
+
+        try {
+            # 0,0 is destination X,Y in the bitmap
+            $graphics.CopyFromScreen([int32]$rect.Left, [int32]$rect.Top, 0, 0, $bitmap.Size);
+        } catch {
+            # UAC or other failure
+            $graphics.Clear([Drawing.Color]::Red);
+        }
+
+        $graphics.Dispose();
+
+        $stream = New-Object IO.MemoryStream;
+        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
+        $bitmap.Dispose();
+        [Convert]::ToBase64String($stream.ToArray());
+    } catch {
+        # Global fallback
+        $bitmap = New-Object Drawing.Bitmap 1,1;
+        $stream = New-Object IO.MemoryStream;
+        $graphics = [Drawing.Graphics]::FromImage($bitmap);
+        $graphics.Clear([Drawing.Color]::Red);
+        $graphics.Dispose();
+        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
+        $bitmap.Dispose();
+        [Convert]::ToBase64String($stream.ToArray());
+    }
+`;
 
 export const TreeScope = Object.freeze({
     ANCESTORS_OR_SELF: 'ancestors-or-self',
@@ -867,6 +884,10 @@ export class AutomationElement extends PSObject {
 
     buildGetElementRectCommand(): string {
         return GET_ELEMENT_RECT.format(this);
+    }
+
+    buildGetElementScreenshotCommand(): string {
+        return GET_ELEMENT_SCREENSHOT.format(this);
     }
 
     buildSetFocusCommand(): string {

@@ -6,7 +6,9 @@ async function main() {
     console.log('--- 02_page_source_screenshot.js (Enhanced) ---');
     let driver;
     try {
-        driver = await createDriver();
+        driver = await createDriver({
+            hostname: '192.168.8.245'
+        });
 
         // 1. Get Page Source (XML)
         console.log('1. Getting page source...');
@@ -29,10 +31,8 @@ async function main() {
         console.log('3. Taking element screenshot (Start button)...');
         try {
             const startBtn = await driver.$('//*[@Name="Start"]');
-            const btnScreenshot = await startBtn.takeScreenshot();
-            const btnPath = path.resolve(__dirname, 'screenshot_element.png');
-            fs.writeFileSync(btnPath, btnScreenshot, 'base64');
-            console.log(`   Saved element screenshot to: ${btnPath}`);
+            await startBtn.saveScreenshot('screenshot_element2.png');
+            console.log(`   Saved element screenshot to: screenshot_element2.png`);
         } catch (e) {
             console.log('   Failed to take element screenshot: ' + e.message);
         }

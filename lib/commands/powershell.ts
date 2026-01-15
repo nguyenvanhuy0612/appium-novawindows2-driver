@@ -3,9 +3,17 @@ import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
 import { MSAA_HELPER_SCRIPT } from '../powershell/msaa';
+import { decodePwsh } from '../powershell/core';
 
-const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8`;
-// const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; Add-Type -AssemblyName UIAutomationClientsideProviders; Add-Type -AssemblyName System.Drawing; Add-Type -AssemblyName PresentationCore; Add-Type -AssemblyName System.Windows.Forms`;
+const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8`;
+// const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `
+// Add-Type -AssemblyName UIAutomationClient
+// Add-Type -AssemblyName UIAutomationTypes
+// Add-Type -AssemblyName UIAutomationClientsideProviders
+// Add-Type -AssemblyName System.Drawing
+// Add-Type -AssemblyName PresentationCore
+// Add-Type -AssemblyName System.Windows.Forms
+// `;
 const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `
 Add-Type -AssemblyName UIAutomationClient
 #Add-Type -AssemblyName UIAutomationTypes
@@ -14,13 +22,16 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName System.Windows.Forms
 `;
 const USE_UI_AUTOMATION_CLIENT = /* ps1 */ `using namespace System.Windows.Automation`;
-const INIT_CACHE_REQUEST = /* ps1 */ `($cacheRequest = New-Object System.Windows.Automation.CacheRequest).TreeFilter = [AndCondition]::new([Automation]::ControlViewCondition, [NotCondition]::new([PropertyCondition]::new([AutomationElement]::FrameworkIdProperty, 'Chrome'))); $cacheRequest.Push()`;
+const INIT_CACHE_REQUEST = /* ps1 */ `
+$cacheRequest = New-Object System.Windows.Automation.CacheRequest
+$cacheRequest.TreeFilter = [AndCondition]::new([Automation]::ControlViewCondition, [NotCondition]::new([PropertyCondition]::new([AutomationElement]::FrameworkIdProperty, 'Chrome')));
+$cacheRequest.Push()
+`;
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
 const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
 
 const COMMAND_END_MARKER = '___NOVA_WIN2_DRIVER_END___';
-const COMMAND_END_CHAR = COMMAND_END_MARKER;
 
 // ============================================================================
 // Helper Functions
@@ -60,7 +71,8 @@ function ensureSessionReady(driver: NovaWindows2Driver): void {
 function waitForCommandCompletion(
     driver: NovaWindows2Driver,
     powerShell: ChildProcessWithoutNullStreams,
-    timeoutMs: number
+    timeoutMs: number,
+    command?: string
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         let timedOut = false;
@@ -88,13 +100,18 @@ function waitForCommandCompletion(
 
         const onData = (chunk: any) => {
             // driver.log.debug(`[PS Output] ${chunk.toString().trim()}`);
-            if (chunk.toString().includes(COMMAND_END_CHAR)) {
+            if (chunk.toString().includes(COMMAND_END_MARKER)) {
                 cleanup();
+                // driver.log.debug(`[PS Output] \n${driver.powerShellStdOut}`);
+                // driver.log.debug(`[PS Error] \n${driver.powerShellStdErr}`);
                 if (driver.powerShellStdErr) {
                     driver.log.error(`PowerShell error: ${driver.powerShellStdErr}`);
+                    // driver.log.debug(`PowerShell Decoded Command: \n${command}`);
+                    const decodedCommand = decodePwsh(command || '');
+                    driver.log.debug(`PowerShell Raw Command: \n${decodedCommand}`);
                     reject(new errors.UnknownError(driver.powerShellStdErr));
                 } else {
-                    const result = driver.powerShellStdOut.replace(COMMAND_END_CHAR, '').trim();
+                    const result = driver.powerShellStdOut.replace(COMMAND_END_MARKER, '').trim();
                     resolve(result);
                 }
             }
@@ -108,7 +125,7 @@ function waitForCommandCompletion(
             }
 
             if (code === 0) {
-                const result = driver.powerShellStdOut.replace(COMMAND_END_CHAR, '').trim();
+                const result = driver.powerShellStdOut.replace(COMMAND_END_MARKER, '').trim();
                 resolve(result);
             } else {
                 const codeStr = code !== null ? code : 'Unknown';
@@ -151,7 +168,7 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
         }
 
         const timeoutMs = (this.caps as any).powerShellCommandTimeout || 60000;
-        return await waitForCommandCompletion(this, this.powerShell!, timeoutMs);
+        return await waitForCommandCompletion(this, this.powerShell!, timeoutMs, command);
     });
 
     return await this.commandQueue;

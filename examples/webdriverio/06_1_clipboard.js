@@ -4,7 +4,9 @@ async function main() {
     console.log('--- 06_1_clipboard.js (Clipboard) ---');
     let driver;
     try {
-        driver = await createDriver();
+        driver = await createDriver({
+            hostname: '192.168.8.245'
+        });
 
         const base64Text = Buffer.from('ExtTest').toString('base64');
         const result = await driver.executeScript('windows: setClipboard', [{ b64Content: base64Text, contentType: 'plaintext' }]);

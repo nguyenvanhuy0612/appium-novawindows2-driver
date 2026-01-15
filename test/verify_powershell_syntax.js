@@ -1,6 +1,86 @@
-import { pwsh } from '../powershell';
 
-export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
+const { spawn } = require('child_process');
+
+function normalize(command) {
+    // Mimic the new logic in core.ts
+    // Remove comments
+    command = command.replace(/<#[\s\S]*?#>/g, ''); // Block comments
+    command = command.replace(/(#.*$)/gm, ''); // Line comments
+    // Normalize whitespace
+    return command.replace(/\s+/g, ' ').trim();
+}
+
+async function verifySyntax(name, script) {
+    // Replace valid placeholders that might cause parse errors if not valid variables
+    // ${0}, ${1} -> $null
+    const interpolated = script.replace(/\$\{\d+\}/g, '$null');
+    const minified = normalize(interpolated);
+
+    // We wrap in a scriptblock creation to test parsing. 
+    // We escape single quotes for the PowerShell string literal.
+    const escaped = minified.replace(/'/g, "''");
+    const psCommand = `
+        try {
+            $sb = [ScriptBlock]::Create('${escaped}');
+            Write-Host "OK"
+        } catch {
+            Write-Host "ERROR: $_"
+            Write-Host "DEBUG_CODE: ${escaped}"
+        }
+    `;
+
+    return new Promise((resolve) => {
+        const ps = spawn('pwsh', ['-Command', '-']);
+        let output = '';
+
+        ps.stdin.write(psCommand);
+        ps.stdin.end();
+
+        ps.stdout.on('data', (data) => output += data.toString());
+        ps.stderr.on('data', (data) => output += data.toString());
+
+        ps.on('close', (code) => {
+            if (output.trim().includes('OK')) {
+                console.log(`[PASS] ${name}`);
+                resolve(true);
+            } else {
+                console.error(`[FAIL] ${name}`);
+                console.error(output);
+                resolve(false);
+            }
+        });
+    });
+}
+
+const SET_ELEMENT_VALUE = `
+    try {
+        \${0}.GetCurrentPattern([ValuePattern]::Pattern).SetValue(\${1});
+    } catch { } 
+    
+    # try {
+    #     $hwnd = $_.Current.NativeWindowHandle
+    #     if ($hwnd -gt 0) {
+    #         [MSAAHelper]::SetLegacyValue([IntPtr]$hwnd, \${1})
+    #     }
+    # } catch { }
+`;
+
+const GET_ELEMENT_VALUE = `
+    try {
+        return \${0}.GetCurrentPattern([ValuePattern]::Pattern).Current.Value;
+    } catch { }
+
+    # try {
+    #     $hwnd = $_.Current.NativeWindowHandle
+    #     if ($hwnd -gt 0) {
+    #         return [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, "accValue")
+    #     } 
+    #     
+    #     return $null
+    # } catch { return $null; }
+`;
+
+const GET_LEGACY_PROPERTY_SAFE = `
     function Get-LegacyPropertySafe {
         param (
             [Parameter(Mandatory=$false)]
@@ -39,7 +119,7 @@ export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
     }
 `;
 
-export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
+const FIND_CHILDREN_RECURSIVELY = `
     function Find-ChildrenRecursively {
         param (
             [Parameter(Mandatory=$false)]
@@ -114,7 +194,7 @@ export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
     }
 `;
 
-export const PAGE_SOURCE = pwsh /* ps1 */ `
+const PAGE_SOURCE = `
     function Get-PageSource {
         param (
             [Parameter(Mandatory = $true)]
@@ -235,3 +315,102 @@ export const PAGE_SOURCE = pwsh /* ps1 */ `
         return $xmlElement;
     }
 `;
+
+const GET_PAGE_SOURCE_COMMAND = `
+    $el = \${0};
+
+    if ($el -eq $null) {
+        $el = [AutomationElement]::RootElement;
+    }
+
+    $source = Get-PageSource $el;
+    if ($null -ne $source) {
+        $source.OuterXml;
+    } else {
+        # Final fallback if even Get-PageSource fails for some reason
+        '<DummyRoot />';
+    }
+`;
+
+const GET_ELEMENT_SCREENSHOT = `
+    try {
+        $el = \${0};
+        $rect = $el.Current.BoundingRectangle;
+
+        if ($el -eq $null -or $rect.Width -le 0 -or $rect.Height -le 0) {
+            # Return 1x1 placeholder
+            $bitmap = New-Object Drawing.Bitmap 1,1;
+            $stream = New-Object IO.MemoryStream;
+            $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
+            $bitmap.Dispose();
+            return [Convert]::ToBase64String($stream.ToArray());
+        }
+
+        $bitmap = New-Object Drawing.Bitmap([int32]$rect.Width, [int32]$rect.Height);
+        $graphics = [Drawing.Graphics]::FromImage($bitmap);
+
+        try {
+            # 0,0 is destination X,Y in the bitmap
+            $graphics.CopyFromScreen([int32]$rect.Left, [int32]$rect.Top, 0, 0, $bitmap.Size);
+        } catch {
+            # UAC or other failure
+            $graphics.Clear([Drawing.Color]::Red);
+        }
+
+        $graphics.Dispose();
+
+        $stream = New-Object IO.MemoryStream;
+        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
+        $bitmap.Dispose();
+        [Convert]::ToBase64String($stream.ToArray());
+    } catch {
+        # Global fallback
+        $bitmap = New-Object Drawing.Bitmap 1,1;
+        $stream = New-Object IO.MemoryStream;
+        $graphics = [Drawing.Graphics]::FromImage($bitmap);
+        $graphics.Clear([Drawing.Color]::Red);
+        $graphics.Dispose();
+        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
+        $bitmap.Dispose();
+        [Convert]::ToBase64String($stream.ToArray());
+    }
+`;
+
+const GET_IMAGE_CLIPBOARD_BASE64 = `
+    [Windows.Clipboard]::GetImage() | ForEach-Object {
+            if ($_ -ne $null) {
+            $stream = New-Object IO.MemoryStream;
+            $encoder = New-Object Windows.Media.Imaging.PngBitmapEncoder;
+            $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($_));
+            $encoder.Save($stream);
+            $stream.Position = 0;
+            $bytes = $stream.ToArray();
+            $base64String = [Convert]::ToBase64String($bytes);
+            $stream.Close();
+            Write-Output $base64String;
+        }
+    }
+`;
+
+async function runTests() {
+    let success = true;
+    success &= await verifySyntax('SET_ELEMENT_VALUE', SET_ELEMENT_VALUE);
+    success &= await verifySyntax('GET_ELEMENT_VALUE', GET_ELEMENT_VALUE);
+    success &= await verifySyntax('GET_LEGACY_PROPERTY_SAFE', GET_LEGACY_PROPERTY_SAFE);
+    success &= await verifySyntax('FIND_CHILDREN_RECURSIVELY', FIND_CHILDREN_RECURSIVELY);
+    success &= await verifySyntax('PAGE_SOURCE', PAGE_SOURCE);
+    success &= await verifySyntax('GET_PAGE_SOURCE_COMMAND', GET_PAGE_SOURCE_COMMAND);
+
+    success &= await verifySyntax('GET_ELEMENT_SCREENSHOT', GET_ELEMENT_SCREENSHOT);
+    success &= await verifySyntax('GET_IMAGE_CLIPBOARD_BASE64', GET_IMAGE_CLIPBOARD_BASE64);
+
+    if (success) {
+        console.log('All PowerShell syntax checks PASSED.');
+        process.exit(0);
+    } else {
+        console.error('Some PowerShell syntax checks FAILED.');
+        process.exit(1);
+    }
+}
+
+runTests();

@@ -21,61 +21,22 @@ import {
 } from '../winapi/user32';
 
 const GET_PAGE_SOURCE_COMMAND = pwsh$ /* ps1 */ `
-    $el = ${0}
+    $el = ${0};
 
     if ($el -eq $null) {
-        $el = [AutomationElement]::RootElement
+        $el = [AutomationElement]::RootElement;
     }
 
-    $source = Get-PageSource $el
+    $source = Get-PageSource $el;
     if ($null -ne $source) {
-        $source.OuterXml
+        $source.OuterXml;
     } else {
         # Final fallback if even Get-PageSource fails for some reason
-        "<DummyRoot />"
+        '<DummyRoot />';
     }
 `;
 
-const GET_SCREENSHOT_COMMAND = pwsh /* ps1 */ `
-    try {
-        if ($null -eq $rootElement) {
-            $bitmap = New-Object Drawing.Bitmap 1,1
-            $stream = New-Object IO.MemoryStream
-            $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
-            $bitmap.Dispose()
-            return [Convert]::ToBase64String($stream.ToArray())
-        }
-    
-        $rect = $rootElement.Current.BoundingRectangle
-        $bitmap = New-Object Drawing.Bitmap([int32]$rect.Width, [int32]$rect.Height)
-        $graphics = [Drawing.Graphics]::FromImage($bitmap)
-        
-        try {
-            $graphics.CopyFromScreen([int32]$rect.Left, [int32]$rect.Top, 0, 0, $bitmap.Size)
-        } catch {
-            Write-Host "WARNING: Failed to capture screen (likely due to UAC/Secure Desktop). Returning red placeholder. $_"
-            $graphics.Clear([Drawing.Color]::Red)
-        }
-        
-        $graphics.Dispose()
-    
-        $stream = New-Object IO.MemoryStream
-        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
-        $bitmap.Dispose()
-    
-        [Convert]::ToBase64String($stream.ToArray())
-    } catch {
-        # Final safety net for global failure
-        $bitmap = New-Object Drawing.Bitmap 1,1
-        $stream = New-Object IO.MemoryStream
-        $graphics = [Drawing.Graphics]::FromImage($bitmap)
-        $graphics.Clear([Drawing.Color]::Red)
-        $graphics.Dispose()
-        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
-        $bitmap.Dispose()
-        [Convert]::ToBase64String($stream.ToArray())
-    }
-`;
+
 
 export async function getPageSource(this: NovaWindows2Driver): Promise<string> {
     return await this.sendPowerShellCommand(GET_PAGE_SOURCE_COMMAND.format(AutomationElement.automationRoot));
@@ -94,7 +55,7 @@ export async function getScreenshot(this: NovaWindows2Driver): Promise<string> {
         }
     }
 
-    return await this.sendPowerShellCommand(GET_SCREENSHOT_COMMAND);
+    return await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementScreenshotCommand());
 }
 
 export async function getWindowRect(this: NovaWindows2Driver): Promise<Rect> {
