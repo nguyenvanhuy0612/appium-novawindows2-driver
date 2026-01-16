@@ -104,6 +104,8 @@ const XPathAllowedProperties = Object.freeze([
 
 type XPathAllowedProperties = typeof XPathAllowedProperties[number];
 
+const CHILD_OR_SELF = 'child-or-self';
+
 export async function xpathToElIdOrIds(selector: string, mult: boolean, context: string | undefined, sendPowerShellCommand: (command: string) => Promise<string>, includeContextElementInSearch: boolean = false): Promise<Element | Element[]> {
     let parsedXPath: ExprNode;
 
@@ -136,7 +138,7 @@ export async function xpathToElIdOrIds(selector: string, mult: boolean, context:
     }
 
     if (parsedXPath.type === 'absolute-location-path' && parsedXPath.steps[0].axis === CHILD) {
-        parsedXPath.steps[0].axis = SELF;
+        parsedXPath.steps[0].axis = CHILD_OR_SELF as any;
     }
 
     const executor = new XPathExecutor(context ? new FoundAutomationElement(context) : AutomationElement.automationRoot, sendPowerShellCommand, includeContextElementInSearch);
@@ -486,6 +488,9 @@ export class XPathExecutor {
             case CHILD:
                 find = step[OptimizeLastStep] ? context.findFirst(TreeScope.CHILDREN, condition) : context.findAll(TreeScope.CHILDREN, condition);
                 break;
+            case CHILD_OR_SELF as any:
+                find = step[OptimizeLastStep] ? context.findFirst(TreeScope.CHILDREN_OR_SELF, condition) : context.findAll(TreeScope.CHILDREN_OR_SELF, condition);
+                break;
             case DESCENDANT:
                 find = step[OptimizeLastStep] ? context.findFirst(TreeScope.DESCENDANTS, condition) : context.findAll(TreeScope.DESCENDANTS, condition);
                 break;
@@ -658,7 +663,8 @@ function optimizeDoubleSlash(steps: StepNode[], includeContextElementInSearch: b
     for (let i = 0; i < steps.length - 1; i++) {
         // detect double slash: //element is the same as /descendant-or-self::node()/child::element
         if (steps[i].axis === DESCENDANT_OR_SELF && steps[i].test.type === NODE_TYPE_TEST && steps[i].predicates.length === 0 && steps[i + 1].axis === CHILD) {
-            const optimizedStep: StepNode = { axis: includeContextElementInSearch ? DESCENDANT_OR_SELF : DESCENDANT, test: steps[i + 1].test, predicates: steps[i + 1].predicates };
+            const includeSelf = i === 0 && includeContextElementInSearch;
+            const optimizedStep: StepNode = { axis: includeSelf ? DESCENDANT_OR_SELF : DESCENDANT, test: steps[i + 1].test, predicates: steps[i + 1].predicates };
             if (steps[i + 1][OptimizeLastStep]) {
                 optimizedStep[OptimizeLastStep] = true;
             }

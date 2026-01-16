@@ -1,0 +1,17 @@
+Initializing Driver...
+Creating Session...
+Session Created. Driver attached.
+Attempting to find element with XPath: /Window
+Success! Element found: { 'element-6066-11e4-a52e-4f735466cecf': '42.264306' }
+Attempting to find full path: /Window/Pane[2]/Pane/Pane/Pane/Pane/Button[2]
+Full path failed (expected if UI differs): NoSuchElementError: An element could not be located on the page using the given search parameters.
+    at xpathToElIdOrIds (D:\SecureAge\appium-novawindows2-driver\lib\xpath\core.ts:151:15)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async NovaWindows2Driver.findElOrEls (D:\SecureAge\appium-novawindows2-driver\lib\driver.ts:163:24)
+    at async main (D:\SecureAge\appium-novawindows2-driver\examples\repro_issue_local.ts:42:24) {
+  cause: undefined,
+  _stacktrace: undefined,
+  jsonwpCode: 7,
+  error: 'no such element',
+  w3cStatus: 404
+}

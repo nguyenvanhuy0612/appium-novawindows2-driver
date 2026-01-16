@@ -1,0 +1,11 @@
+--- Connecting to App (explorer.exe) ---
+Connecting to Appium at http://192.168.1.19:4723/
+1. Getting Session Root info...
+   /Window matches:
+   Name: File Explorer
+   RuntimeId: 42.983594
+2. Trying user XPath: /Window/Pane[2]/Pane/Pane/Pane/Pane/Button[2]
+   Found button!
+   Failed to find button: Can't call getAttribute on element with selector "/Window/Pane[2]/Pane/Pane/Pane/Pane/Button[2]" because element wasn't found
+3. Dumping children of Root...
+   Child[1]: Window ("File Explorer") Class="CabinetWClass" RuntimeId="42.983594"

@@ -236,18 +236,35 @@ const FIND_ALL_CHILDREN_OR_SELF = pwsh$ /* ps1 */ `
     foreach ($el in ${0}) {
         $validEl = $el.FindAll([TreeScope]::Element -bor [TreeScope]::Children, ${1});
         if ($null -ne $validEl) {
-            $els.Add($validEl);
+            foreach ($v in $validEl) {
+                $els.Add($v);
+            }
         }
     }
 
     return $els;
 `;
 
-const FIND_DESCENDANTS = pwsh$ /* ps1 */ `Find-ChildrenRecursively -element (${0}) -condition (${1})`;
-const FIND_ALL_DESCENDANTS = pwsh$ /* ps1 */ `Find-AllChildrenRecursively -element (${0}) -condition (${1})`;
+const FIND_DESCENDANTS = pwsh$ /* ps1 */ `${0}.FindFirst([TreeScope]::Descendants, ${1})`;
+const FIND_ALL_DESCENDANTS = pwsh$ /* ps1 */ `${0}.FindAll([TreeScope]::Descendants, ${1})`;
 
-const FIND_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `Find-ChildrenRecursively -element (${0}) -condition (${1}) -includeSelf $true`;
-const FIND_ALL_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `Find-AllChildrenRecursively -element (${0}) -condition (${1}) -includeSelf $true`;
+const FIND_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `
+    $el = ${0};
+    $cond = ${1};
+    $res = $el.FindFirst([TreeScope]::Element, $cond);
+    if ($null -ne $res) { return $res; }
+    return $el.FindFirst([TreeScope]::Descendants, $cond);
+`;
+const FIND_ALL_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `
+    $el = ${0};
+    $cond = ${1};
+    $els = New-Object System.Collections.Generic.List[AutomationElement];
+    $self = $el.FindFirst([TreeScope]::Element, $cond);
+    if ($null -ne $self) { $els.Add($self); }
+    $children = $el.FindAll([TreeScope]::Descendants, $cond);
+    $els.AddRange($children);
+    return $els;
+`;
 
 const FIND_FIRST = pwsh$ /* ps1 */ `${0}.FindFirst([TreeScope]::${1}, ${2})`;
 const FIND_ALL = pwsh$ /* ps1 */ `${0}.FindAll([TreeScope]::${1}, ${2})`;

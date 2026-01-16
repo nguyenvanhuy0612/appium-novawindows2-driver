@@ -1,0 +1,16 @@
+--- Connecting to Root (Desktop) ---
+Connecting to Appium at http://192.168.1.19:4723/
+1. Finding Explorer Window from Root...
+   Found Window: File Explorer
+   RuntimeId: 42.329256
+2. Trying user XPath from Root: /Window/Pane[2]/Pane/Pane/Pane/Pane/Button[2]
+   Found button!
+   Failed to find button from Root: Can't call getAttribute on element with selector "/Window/Pane[2]/Pane/Pane/Pane/Pane/Button[2]" because element wasn't found
+2.1. Control Test: Finding Close Button...
+   Found Close Button!
+   Failed to find Close Button: Can't call getAttribute on element with selector "/Window/TitleBar/Button[@Name="Close"]" because element wasn't found
+3. Dumping children of the found Explorer Window...
+   Child[1]: Pane ("UIRibbonDockTop") Class="UIRibbonCommandBarDock" RuntimeId="42.263740"
+   Child[2]: Pane ("") Class="ReBarWindow32" RuntimeId="42.394040"
+   Child[3]: Pane ("File Explorer") Class="ShellTabWindowClass" RuntimeId="42.263718"
+   Child[4]: TitleBar ("") Class="" RuntimeId="42.329256.4.-2147483647.329256.-2.0"
