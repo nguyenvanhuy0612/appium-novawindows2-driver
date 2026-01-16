@@ -3,11 +3,14 @@ const fs = require('fs');
 const path = require('path');
 
 async function main() {
-    console.log('--- 02_page_source_screenshot.js (Enhanced) ---');
     let driver;
     try {
         driver = await createDriver({
-            hostname: '192.168.8.245'
+            hostname: '192.168.8.245',
+            capabilities: {
+                'appium:app': "C:\\Program Files\\SecureAge\\bin\\SecureAge.exe",
+                "appium:automationName": "NovaWindows",
+            }
         });
 
         // 1. Get Page Source (XML)
@@ -28,15 +31,28 @@ async function main() {
         console.log(`   Saved full screenshot to: ${screenPath}`);
 
         // 3. Element Screenshot
-        console.log('3. Taking element screenshot (Start button)...');
+        console.log('3. Taking element screenshot (ComboBox button)...');
         try {
-            const taskbar = await driver.$('//Pane[@ClassName="Shell_TrayWnd"]');
-            await taskbar.saveScreenshot('examples/webdriverio/taskbar.png');
-            console.log(`   Saved element screenshot to: taskbar.png`);
-
-            const startBtn = await taskbar.$('//*[@Name="Start"]');
-            await startBtn.saveScreenshot('examples/webdriverio/start_button.png');
-            console.log(`   Saved element screenshot to: start_button.png`);
+            const path = path.resolve(__dirname, 'combobox.png');
+            const combobox = await driver.$('//ComboBox');
+            await combobox.saveScreenshot(path);
+            console.log(`   Saved element screenshot to: ${path}`);
+        } catch (e) {
+            console.log('   Failed to take element screenshot: ' + e.message);
+        }
+        try {
+            const path = path.resolve(__dirname, 'icon.png');
+            const icon = await combobox.$('//Text');
+            await icon.saveScreenshot(path);
+            console.log(`   Saved element screenshot to: ${path}`);
+        } catch (e) {
+            console.log('   Failed to take element screenshot: ' + e.message);
+        }
+        try {
+            const path = path.resolve(__dirname, 'dropdown.png');
+            const dropdown = await combobox.$('//Button');
+            await dropdown.saveScreenshot(path);
+            console.log(`   Saved element screenshot to: ${path}`);
         } catch (e) {
             console.log('   Failed to take element screenshot: ' + e.message);
         }

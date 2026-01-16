@@ -1,10 +1,26 @@
 const { createDriver } = require('../util/setup');
-const fs = require('fs');
-const path = require('path');
+const caps = {
+    hostname: '192.168.8.245',
+    capabilities: {
+        platformName: 'Windows',
+        'appium:automationName': 'NovaWindows',
+        'appium:app': "Root"
+    }
+};
+const caps2 = {
+    hostname: '192.168.8.245',
+    capabilities: {
+        platformName: 'Windows',
+        'appium:automationName': 'NovaWindows2',
+        'appium:app': "Root",
+        'appium:includeContextElementInSearch': true
+    }
+};
 
 async function main() {
     console.log('--- 10_perf_check2.js ---');
     let driver;
+    let driver2;
     const timeFunc = async (func) => {
         const startTime = Date.now();
         try {
@@ -19,43 +35,23 @@ async function main() {
         }
     }
     try {
-        driver = await createDriver({
-            hostname: '192.168.1.19',
-            capabilities: {
-                platformName: 'Windows',
-                'appium:automationName': 'NovaWindows',
-                'appium:app': "Root"
-            }
-        });
-
-        // 1. Find elements with NovaWindows
-        console.log('1. Finding all elements use NovaWindows...');
-        const elements = await timeFunc(() => driver.$$('//*'));
-        console.log(`   Elements found: ${elements.length}`);
-        //console.log(elements);
-
-        await driver.deleteSession();
-
-        driver = await createDriver({
-            hostname: '192.168.1.19',
-            capabilities: {
-                platformName: 'Windows',
-                'appium:automationName': 'NovaWindows2',
-                'appium:app': "Root",
-                'appium:includeContextElementInSearch': true
-            }
-        });
-
-        // 2. Find elements with NovaWindows2
-        console.log('2. Finding all elements use NovaWindows2...');
-        const elements2 = await timeFunc(() => driver.$$('//*'));
-        console.log(`   Elements found: ${elements2.length}`);
-        //console.log(elements2);
-
+        driver = await createDriver(caps);
+        driver2 = await createDriver(caps2);
+        
+        const locator = ['//*', '/Pane/Pane[1]/Pane[1]/ToolBar/Button[1]', '//Button'];
+        for (const loc of locator) {
+            console.log(`1. Finding ${loc} use NovaWindows...`);
+            const elements = await timeFunc(() => driver.$$(loc));
+            console.log(`   Elements found: ${elements.length}`);
+            console.log(`2. Finding ${loc} use NovaWindows2...`);
+            const elements2 = await timeFunc(() => driver2.$$(loc));
+            console.log(`   Elements found: ${elements2.length}`);
+        }
     } catch (err) {
         console.error('Error:', err);
     } finally {
         if (driver) await driver.deleteSession();
+        if (driver2) await driver2.deleteSession();
     }
 }
 

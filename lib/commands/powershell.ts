@@ -1,7 +1,7 @@
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
-import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE } from './functions';
+import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE, FIND_DESCENDANTS_FUNCTIONS } from './functions';
 import { MSAA_HELPER_SCRIPT } from '../powershell/msaa';
 import { decodePwsh } from '../powershell/core';
 
@@ -239,7 +239,8 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         INIT_CACHE_REQUEST,
         INIT_ELEMENT_TABLE,
         PAGE_SOURCE,
-        FIND_CHILDREN_RECURSIVELY
+        FIND_CHILDREN_RECURSIVELY,
+        FIND_DESCENDANTS_FUNCTIONS
     ];
 
     const scriptNames = [
@@ -250,7 +251,8 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         'INIT_CACHE_REQUEST',
         'INIT_ELEMENT_TABLE',
         'PAGE_SOURCE',
-        'FIND_CHILDREN_RECURSIVELY'
+        'FIND_CHILDREN_RECURSIVELY',
+        'FIND_DESCENDANTS_FUNCTIONS'
     ];
 
     for (const [index, script] of initScripts.entries()) {

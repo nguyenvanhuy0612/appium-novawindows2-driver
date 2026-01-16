@@ -106,7 +106,7 @@ const FIND_ALL_FOLLOWING = pwsh$ /* ps1 */ `
             if ($null -ne $nextSibling) {
                 $el = $nextSibling;
                 $els.Add($el);
-                $els.AddRange($el.FindAll([TreeScope]::Children, ${1}));
+                foreach ($child in $el.FindAll([TreeScope]::Children, ${1})) { $els.Add($child); }
             }
 
             $el = $treeWalker.GetParent($el);
@@ -175,7 +175,7 @@ const FIND_ALL_PRECEDING = pwsh$ /* ps1 */ `
             if ($null -ne $previousSibling) {
                 $el = $previousSibling;
                 $els.Add($el);
-                $els.AddRange($el.FindAll([TreeScope]::Children, ${1}));
+                foreach ($child in $el.FindAll([TreeScope]::Children, ${1})) { $els.Add($child); }
             }
 
             $el = $treeWalker.GetParent($el);
@@ -245,26 +245,11 @@ const FIND_ALL_CHILDREN_OR_SELF = pwsh$ /* ps1 */ `
     return $els;
 `;
 
-const FIND_DESCENDANTS = pwsh$ /* ps1 */ `${0}.FindFirst([TreeScope]::Descendants, ${1})`;
-const FIND_ALL_DESCENDANTS = pwsh$ /* ps1 */ `${0}.FindAll([TreeScope]::Descendants, ${1})`;
+const FIND_DESCENDANTS = pwsh$ /* ps1 */ `Find-Descendant -element (${0}) -condition (${1})`;
+const FIND_ALL_DESCENDANTS = pwsh$ /* ps1 */ `Find-AllDescendants -element (${0}) -condition (${1})`;
 
-const FIND_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `
-    $el = ${0};
-    $cond = ${1};
-    $res = $el.FindFirst([TreeScope]::Element, $cond);
-    if ($null -ne $res) { return $res; }
-    return $el.FindFirst([TreeScope]::Descendants, $cond);
-`;
-const FIND_ALL_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `
-    $el = ${0};
-    $cond = ${1};
-    $els = New-Object System.Collections.Generic.List[AutomationElement];
-    $self = $el.FindFirst([TreeScope]::Element, $cond);
-    if ($null -ne $self) { $els.Add($self); }
-    $children = $el.FindAll([TreeScope]::Descendants, $cond);
-    $els.AddRange($children);
-    return $els;
-`;
+const FIND_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `Find-Descendant -element (${0}) -condition (${1}) -includeSelf`;
+const FIND_ALL_DESCENDANTS_OR_SELF = pwsh$ /* ps1 */ `Find-AllDescendants -element (${0}) -condition (${1}) -includeSelf`;
 
 const FIND_FIRST = pwsh$ /* ps1 */ `${0}.FindFirst([TreeScope]::${1}, ${2})`;
 const FIND_ALL = pwsh$ /* ps1 */ `${0}.FindAll([TreeScope]::${1}, ${2})`;

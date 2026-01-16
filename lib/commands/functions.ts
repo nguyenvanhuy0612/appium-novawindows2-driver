@@ -39,6 +39,38 @@ export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
     }
 `;
 
+export const FIND_DESCENDANTS_FUNCTIONS = pwsh /* ps1 */ `
+    function Find-Descendant {
+        param (
+            [Parameter(Mandatory=$false)]
+            [AutomationElement]$element,
+            [Parameter(Mandatory=$false)]
+            [Condition]$condition,
+            [switch]$includeSelf
+        );
+
+        if ($null -eq $element -or $null -eq $condition) { return $null };
+
+        $scope = if ($includeSelf) { [TreeScope]::Subtree } else { [TreeScope]::Descendants };
+        return $element.FindFirst($scope, $condition);
+    }
+
+    function Find-AllDescendants {
+        param (
+            [Parameter(Mandatory=$false)]
+            [AutomationElement]$element,
+            [Parameter(Mandatory=$false)]
+            [Condition]$condition,
+            [switch]$includeSelf
+        );
+
+        if ($null -eq $element -or $null -eq $condition) { return @() };
+
+        $scope = if ($includeSelf) { [TreeScope]::Subtree } else { [TreeScope]::Descendants };
+        return $element.FindAll($scope, $condition);
+    }
+`;
+
 export const FIND_CHILDREN_RECURSIVELY = pwsh /* ps1 */ `
     function Find-ChildrenRecursively {
         param (

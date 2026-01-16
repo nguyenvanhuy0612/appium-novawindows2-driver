@@ -7,7 +7,10 @@ async function main() {
     let driver;
     try {
         driver = await createDriver({
-            hostname: '192.168.8.245'
+            hostname: '192.168.8.245',
+            capabilities: {
+                'appium:app': 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+            }
         });
 
         // 1. Get Page Source (XML)
@@ -28,15 +31,15 @@ async function main() {
         console.log(`   Saved full screenshot to: ${screenPath}`);
 
         // 3. Element Screenshot
-        console.log('3. Taking element screenshot (Start button)...');
+        console.log('3. Taking element screenshot (Clear button)...');
         try {
-            const taskbar = await driver.$('//Pane[@ClassName="Shell_TrayWnd"]');
-            await taskbar.saveScreenshot('examples/webdriverio/taskbar.png');
-            console.log(`   Saved element screenshot to: taskbar.png`);
+            const backspaceBtn = await driver.$('//Button[@Name="Backspace"]');
+            await backspaceBtn.saveScreenshot('examples/webdriverio/backspace_button.png');
+            console.log(`   Saved element screenshot to: backspace_button.png`);
 
-            const startBtn = await taskbar.$('//*[@Name="Start"]');
-            await startBtn.saveScreenshot('examples/webdriverio/start_button.png');
-            console.log(`   Saved element screenshot to: start_button.png`);
+            const icon = await backspaceBtn.$('//Text');
+            await icon.saveScreenshot('examples/webdriverio/icon.png');
+            console.log(`   Saved element screenshot to: icon.png`);
         } catch (e) {
             console.log('   Failed to take element screenshot: ' + e.message);
         }

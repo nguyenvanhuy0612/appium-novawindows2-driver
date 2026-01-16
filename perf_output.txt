@@ -1,8 +1,0 @@
---- 02_page_source_screenshot.js (Enhanced) ---
-Connecting to Appium at http://192.168.1.19:4723/
-1. Finding button...
-Time taken: 1500ms
-   Button found: [object Object]
-Connecting to Appium at http://192.168.1.19:4723/
-2. Finding button2...
-Time taken: 1648ms
