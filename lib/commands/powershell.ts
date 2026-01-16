@@ -231,37 +231,24 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
     }
 
     // Initialize PowerShell environment
-    const initScripts = [
+    // Combine all scripts into one for faster execution
+    // 'using namespace' must be at the beginning of the script, so USE_UI_AUTOMATION_CLIENT comes first
+    const combinedScript = [
+        USE_UI_AUTOMATION_CLIENT,
         SET_UTF8_ENCODING,
         ADD_NECESSARY_ASSEMBLIES,
         MSAA_HELPER_SCRIPT,
-        USE_UI_AUTOMATION_CLIENT,
         INIT_CACHE_REQUEST,
         INIT_ELEMENT_TABLE,
         PAGE_SOURCE,
         FIND_CHILDREN_RECURSIVELY,
         FIND_DESCENDANTS_FUNCTIONS
-    ];
+    ].join('\n');
 
-    const scriptNames = [
-        'SET_UTF8_ENCODING',
-        'ADD_NECESSARY_ASSEMBLIES',
-        'MSAA_HELPER_SCRIPT',
-        'USE_UI_AUTOMATION_CLIENT',
-        'INIT_CACHE_REQUEST',
-        'INIT_ELEMENT_TABLE',
-        'PAGE_SOURCE',
-        'FIND_CHILDREN_RECURSIVELY',
-        'FIND_DESCENDANTS_FUNCTIONS'
-    ];
-
-    for (const [index, script] of initScripts.entries()) {
-        const scriptName = scriptNames[index] || `Script_${index}`;
-        this.log.debug(`[Init] Executing ${scriptName}...`);
-        const start = Date.now();
-        await sendPowerShellCommand.call(this, script);
-        this.log.debug(`[Init] ${scriptName} completed in ${Date.now() - start}ms`);
-    }
+    this.log.info('Initializing PowerShell environment...');
+    const start = Date.now();
+    await sendPowerShellCommand.call(this, combinedScript);
+    this.log.debug(`PowerShell environment initialized in ${Date.now() - start}ms`);
 
     // Setup root element based on capabilities
     await setupRootElement.call(this);

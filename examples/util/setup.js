@@ -18,6 +18,7 @@ const defaultOptions = {
     port: PORT,
     path: '/',
     logLevel: 'error',
+    connectionRetryTimeout: 300000,
     capabilities: defaultCaps
 };
 

@@ -10,8 +10,7 @@ import {
     PropertyCondition,
     TreeScope,
     TrueCondition,
-    pwsh$,
-    pwsh,
+    pwsh$
 } from '../powershell';
 import { sleep } from '../util';
 import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
@@ -36,20 +35,19 @@ const GET_PAGE_SOURCE_COMMAND = pwsh$ /* ps1 */ `
     }
 `;
 
-
-
 export async function getPageSource(this: NovaWindows2Driver): Promise<string> {
     return await this.sendPowerShellCommand(GET_PAGE_SOURCE_COMMAND.format(AutomationElement.automationRoot));
 }
 
 export async function getScreenshot(this: NovaWindows2Driver): Promise<string> {
-    const automationRootId = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
+    // const automationRootId = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
 
     if (this.caps.app && this.caps.app.toLowerCase() !== 'root') {
         try {
-            await this.focusElement({
-                [W3C_ELEMENT_KEY]: automationRootId.trim(),
-            } satisfies Element);
+            const nativeWindowHandle = Number(await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetPropertyCommand(Property.NATIVE_WINDOW_HANDLE)));
+            if (!isNaN(nativeWindowHandle) && nativeWindowHandle !== 0) {
+                trySetForegroundWindow(nativeWindowHandle);
+            }
         } catch {
             // noop
         }
@@ -187,23 +185,56 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
 
     if (nativeWindowHandles.length !== 0) {
         let elementId = '';
+        let fallbackElementId = '';
+
+        // Loop attempts to find a window that is both present and focusable
         for (let i = 1; i <= 20; i++) {
-            elementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(nativeWindowHandles[0]))).buildCommand());
+            for (let handle of nativeWindowHandles) {
+                const tempElementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle))).buildCommand());
+
+                if (tempElementId) {
+                    this.log.debug(`Element ID of the window with handle 0x${handle.toString(16).padStart(8, '0')}: ${tempElementId}`);
+
+                    // We found an element. Check if we can interact with it.
+                    // 1. Try SetForegroundWindow (Win32)
+                    if (trySetForegroundWindow(handle)) {
+                        elementId = tempElementId;
+                        break;
+                    }
+
+                    // 2. Try UIA SetFocus
+                    try {
+                        await this.focusElement({ [W3C_ELEMENT_KEY]: tempElementId } satisfies Element);
+                        elementId = tempElementId;
+                        break;
+                    } catch (e: any) {
+                        this.log.debug(`Focus failed for handle 0x${handle.toString(16).padStart(8, '0')}: ${e.message}`);
+                        // Store as fallback if we haven't found one yet
+                        if (!fallbackElementId) {
+                            fallbackElementId = tempElementId;
+                        }
+                    }
+                } else {
+                    this.log.debug(`Window with handle 0x${handle.toString(16).padStart(8, '0')} not found in UIA yet.`);
+                }
+            }
+
             if (elementId) {
                 break;
             }
-            this.log.info(`The window with handle 0x${nativeWindowHandles[0].toString(16).padStart(8, '0')} is not yet available in the UI Automation tree. Sleeping for 500 milliseconds and retrying... (${i}/20)`); // TODO: make a setting for the number of retries or timeout
-            await sleep(500); // TODO: make a setting for the sleep timeout
+
+            this.log.info(`No suitable application window found yet. Sleeping for 500 milliseconds and retrying... (${i}/20)`);
+            await sleep(500);
         }
 
-        await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -ne $rootElement`)).toLowerCase() === 'true') {
-            const nativeWindowHandle = Number(await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetPropertyCommand(Property.NATIVE_WINDOW_HANDLE)));
-            if (!trySetForegroundWindow(nativeWindowHandle)) {
-                await this.focusElement({
-                    [W3C_ELEMENT_KEY]: elementId,
-                } satisfies Element);
-            };
+        // If no focusable window found, but we have a fallback (unfocusable window), use it.
+        if (!elementId && fallbackElementId) {
+            this.log.info(`Could not focus any application window. Attaching to the first found window (Fallback) using element ID: ${fallbackElementId}`);
+            elementId = fallbackElementId;
+        }
+
+        if (elementId) {
+            await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);
             return;
         }
     }
