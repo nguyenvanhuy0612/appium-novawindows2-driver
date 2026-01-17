@@ -12,8 +12,8 @@ import {
     mouseUp,
     sendKeyboardEvents,
     findWindowHandle,
-    setForegroundWindow as setForegroundWindowWinApi,
-    showWindow
+    showWindow,
+    trySetForegroundWindow
 } from '../winapi/user32';
 import { KeyEventFlags, VirtualKey } from '../winapi/types';
 import {
@@ -715,7 +715,7 @@ export async function setForegroundWindow(this: NovaWindows2Driver, args: { proc
     const hwnd = findWindowHandle(args.process);
     if (hwnd) {
         showWindow(hwnd, 9); // SW_RESTORE
-        setForegroundWindowWinApi(hwnd);
+        trySetForegroundWindow(hwnd);
     } else {
         throw new errors.NoSuchElementError(`Could not find a window for process '${args.process}'`);
     }

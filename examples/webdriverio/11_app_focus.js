@@ -1,11 +1,11 @@
-const { createDriver } = require('../util/setup');
+const { createDriver, sleep } = require('../util/setup');
 const caps = {
     hostname: '192.168.8.245',
     capabilities: {
         platformName: 'Windows',
         'appium:automationName': 'NovaWindows2',
-        // 'appium:app': "C:\\Program Files\\SecureAge\\bin\\SecureAge.exe",
-        'appium:app': "Root",
+        'appium:app': "C:\\Program Files\\SecureAge\\bin\\SecureAge.exe",
+        // 'appium:app': "Root",
     }
 };
 
@@ -22,18 +22,20 @@ async function main() {
         } catch (e) {
             const end = performance.now();
             console.log(`Time taken: ${end - start}ms`);
-            throw e;
+            return null;
         }
     };
 
     try {
         driver = await createDriver(caps);
-
-        const source = await timeFunc(() => driver.getPageSource());
-        console.log(`Source length: ${source.length}`);
-
-        const manageBtn = await timeFunc(() => driver.$("//Button[@Name='Manage ...']"));
-        await timeFunc(() => manageBtn.click());
+        for (let i = 0; i < 10; i++) {
+            const windows = await driver.$$("//Window[starts-with(@Name,'SecureAge')]");
+            if (windows?.length > 0) {
+                console.log(`Windows length: ${windows.length}`);
+                break;
+            }
+            await sleep(1000);
+        }
 
     } catch (err) {
         console.error('Error:', err);

@@ -154,14 +154,14 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
         const normalizedPath = normalize(path);
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process '${normalizedPath}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
         await sleep(500); // TODO: make a setting for the initial wait time
+        const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
+        const executable = breadcrumbs[breadcrumbs.length - 1];
+        const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;
         for (let i = 1; i <= 20; i++) {
             try {
-                const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
-                const executable = breadcrumbs[breadcrumbs.length - 1];
-                const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;
                 const result = await this.sendPowerShellCommand(/* ps1 */ `(Get-Process -Name '${processName}' | Sort-Object StartTime -Descending).Id`);
                 const processIds = result.split('\n').map((pid) => pid.trim()).filter(Boolean).map(Number);
-                this.log.debug(`Process IDs of '${processName}' processes: ` + processIds.join(', '));
+                this.log.debug(`${i}: Process IDs of '${processName}' processes: ` + processIds.join(', '));
 
                 await this.attachToApplicationWindow(processIds);
                 return;
@@ -183,59 +183,48 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
     const nativeWindowHandles = getWindowAllHandlesForProcessIds(processIds);
     this.log.debug(`Detected the following native window handles for the given process IDs: ${nativeWindowHandles.map((handle) => `0x${handle.toString(16).padStart(8, '0')}`).join(', ')}`);
 
-    if (nativeWindowHandles.length !== 0) {
+    if (nativeWindowHandles.length === 0) {
+        throw new errors.UnknownError('Failed to locate window of the app.');
+    }
+
+    // Loop attempts to find a window that is both present and focusable
+    for (let i = 1; i <= 20; i++) {
         let elementId = '';
-        let fallbackElementId = '';
-
-        // Loop attempts to find a window that is both present and focusable
-        for (let i = 1; i <= 20; i++) {
-            for (let handle of nativeWindowHandles) {
-                const tempElementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle))).buildCommand());
-
-                if (tempElementId) {
-                    this.log.debug(`Element ID of the window with handle 0x${handle.toString(16).padStart(8, '0')}: ${tempElementId}`);
-
-                    // We found an element. Check if we can interact with it.
-                    // 1. Try SetForegroundWindow (Win32)
-                    if (trySetForegroundWindow(handle)) {
-                        elementId = tempElementId;
-                        break;
-                    }
-
-                    // 2. Try UIA SetFocus
-                    try {
-                        await this.focusElement({ [W3C_ELEMENT_KEY]: tempElementId } satisfies Element);
-                        elementId = tempElementId;
-                        break;
-                    } catch (e: any) {
-                        this.log.debug(`Focus failed for handle 0x${handle.toString(16).padStart(8, '0')}: ${e.message}`);
-                        // Store as fallback if we haven't found one yet
-                        if (!fallbackElementId) {
-                            fallbackElementId = tempElementId;
-                        }
-                    }
-                } else {
-                    this.log.debug(`Window with handle 0x${handle.toString(16).padStart(8, '0')} not found in UIA yet.`);
-                }
-            }
+        for (let handle of nativeWindowHandles) {
+            const handlePadded = `0x${handle.toString(16).padStart(8, '0')}`;
+            elementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle))).buildCommand());
 
             if (elementId) {
-                break;
+                this.log.debug(`${i}: Element ID of the window with handle ${handlePadded}: ${elementId}`);
+
+                // 1. Try SetForegroundWindow (Win32)
+                if (trySetForegroundWindow(handle)) {
+                    break;
+                } else {
+                    this.log.debug(`${i}: Failed to set foreground window for handle ${handlePadded}.`);
+                }
+
+                // 2. Try UIA SetFocus
+                try {
+                    await this.focusElement({ [W3C_ELEMENT_KEY]: elementId } satisfies Element);
+                    break;
+                } catch (e: any) {
+                    this.log.debug(`${i}: Focus failed for handle ${handlePadded}: ${e.message}`);
+                }
+            } else {
+                this.log.debug(`${i}: Window with handle ${handlePadded} not found in UIA yet.`);
             }
-
-            this.log.info(`No suitable application window found yet. Sleeping for 500 milliseconds and retrying... (${i}/20)`);
-            await sleep(500);
-        }
-
-        // If no focusable window found, but we have a fallback (unfocusable window), use it.
-        if (!elementId && fallbackElementId) {
-            this.log.info(`Could not focus any application window. Attaching to the first found window (Fallback) using element ID: ${fallbackElementId}`);
-            elementId = fallbackElementId;
         }
 
         if (elementId) {
+            this.log.debug(`${i}: Found element ID: ${elementId}`);
             await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);
             return;
         }
+
+        this.log.info(`No suitable application window found yet. Sleeping for 500 milliseconds and retrying... (${i}/20)`);
+        await sleep(500);
     }
+
+    throw new errors.UnknownError('Failed to locate window of the app.');
 }
