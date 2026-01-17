@@ -154,7 +154,7 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
         this.commandQueue = Promise.resolve();
     }
 
-    this.commandQueue = this.commandQueue.then(async () => {
+    this.commandQueue = this.commandQueue.catch(() => { }).then(async () => {
         ensureSessionReady(this);
 
         this.powerShellStdOut = '';

@@ -261,17 +261,39 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
     const easingFunction = this.caps.smoothPointerMove;
     const element = new FoundAutomationElement(elementId);
 
+    const ancestorCondition = new OrCondition(
+        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
+        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
+    );
+
     const focusCondition = new AndCondition(
         new PropertyCondition(Property.IS_KEYBOARD_FOCUSABLE, new PSBoolean(true)),
-        new OrCondition(
-            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
-            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
-        ),
+        ancestorCondition,
     );
 
     try {
-        const focusableElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand());
-        await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId.trim()).buildSetFocusCommand());
+        // this.log.debug(`[Click] Setting focus for element ${elementId}`);
+        // this.log.debug(`[Click] Finding focusable ancestor with command: \n${element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand()}`);
+        
+        let focusableElementId = '';
+        for (let i = 0; i < 20; i++) {
+            const ancestorElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, ancestorCondition).buildCommand());
+            if (ancestorElementId) {
+                // const allProps = await this.sendPowerShellCommand(new FoundAutomationElement(ancestorElementId).buildGetPropertyCommand('all'));
+                // this.log.debug(`[Click] Element allProps: '${allProps}'`);
+                const isKeyboardFocusable = await this.sendPowerShellCommand(new FoundAutomationElement(ancestorElementId).buildGetPropertyCommand(Property.IS_KEYBOARD_FOCUSABLE));
+                if (isKeyboardFocusable.toLowerCase() === 'true') {
+                    focusableElementId = ancestorElementId;
+                    break;
+                }
+            }
+        }
+
+        if (focusableElementId) {
+            await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId).buildSetFocusCommand());
+        } else {
+            this.log.warn(`[Click] No focusable ancestor found. Skipping SetFocus and proceeding to click.`);
+        }
     } catch {
         // ignore if it fails, focus may fail if there is a forced popup window
     }

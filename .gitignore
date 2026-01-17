@@ -1,4 +1,5 @@
 # IDE
+.agent
 .idea
 .vscode
 .npmrc
@@ -6,6 +7,7 @@ temp
 *.code-workspace
 ref_repo
 lib_*
+log
 
 # Logs
 screenshot.png
