@@ -105,10 +105,10 @@ function waitForCommandCompletion(
                 // driver.log.debug(`[PS Output] \n${driver.powerShellStdOut}`);
                 // driver.log.debug(`[PS Error] \n${driver.powerShellStdErr}`);
                 if (driver.powerShellStdErr) {
-                    driver.log.error(`PowerShell error: ${driver.powerShellStdErr}`);
+                    driver.log.error(`[PowerShell Error] ${driver.powerShellStdErr}`);
                     // driver.log.debug(`PowerShell Decoded Command: \n${command}`);
                     const decodedCommand = decodePwsh(command || '');
-                    driver.log.debug(`PowerShell Raw Command: \n${decodedCommand}`);
+                    driver.log.debug(`[PowerShell Raw Command] \n${decodedCommand}`);
                     reject(new errors.UnknownError(driver.powerShellStdErr));
                 } else {
                     const result = driver.powerShellStdOut.replace(COMMAND_END_MARKER, '').trim();
@@ -131,7 +131,7 @@ function waitForCommandCompletion(
                 const codeStr = code !== null ? code : 'Unknown';
                 const hexCode = code !== null ? '0x' + code.toString(16).toUpperCase() : 'Signal';
                 const errorMsg = driver.powerShellStdErr || 'No error details';
-                const msg = `PowerShell exited with code ${codeStr} (${hexCode}). stderr: \n${errorMsg}`;
+                const msg = `[PowerShell Error] Exited with code ${codeStr} (${hexCode}). stderr: \n${errorMsg}`;
                 driver.log.error(msg);
                 reject(new errors.UnknownError(msg));
             }
@@ -154,7 +154,9 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
         this.commandQueue = Promise.resolve();
     }
 
-    this.commandQueue = this.commandQueue.catch(() => { }).then(async () => {
+    this.commandQueue = this.commandQueue.catch((err) => {
+        this.log.debug(`[Command Queue] Previous command failed, proceeding with next command. Error: ${err?.message || err}`);
+    }).then(async () => {
         ensureSessionReady(this);
 
         this.powerShellStdOut = '';

@@ -439,6 +439,17 @@ export class XPathExecutor {
                     }, context, positions, relativeExprNodes);
                 }
             // eslint-disable-next-line no-fallthrough
+            case RELATIVE_LOCATION_PATH: {
+                const locNode = exprNode as LocationNode;
+                if (locNode.steps.length === 1
+                    && locNode.steps[0].axis === ATTRIBUTE
+                    && locNode.steps[0].test.type === NODE_NAME_TEST
+                    && locNode.steps[0].test.name === '*'
+                ) {
+                    return [new TrueCondition(), relativeExprNodes];
+                }
+            }
+            // eslint-disable-next-line no-fallthrough
             default: {
                 const result = await this.processExprNode(exprNode, context, undefined);
 
