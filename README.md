@@ -527,6 +527,20 @@ Closes a window or UI element using the `WindowPattern`.
 driver.execute_script('windows: close', element)
 ```
 
+#### `windows: setForegroundWindow`
+Brings the main window of the specified process to the foreground.
+
+| Name | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `process` | `string` | yes | The name of the process whose window should be brought to the foreground. | `notepad` |
+
+#### Usage
+```python
+driver.execute_script('windows: setForegroundWindow', {
+    'process': 'notepad'
+})
+```
+
 #### `windows: setFocus`
 Sets focus to the specified UI element using UIAutomationElement's `SetFocus` method.
 
