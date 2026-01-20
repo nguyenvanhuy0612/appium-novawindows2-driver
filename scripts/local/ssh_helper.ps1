@@ -1,8 +1,7 @@
-## Generate ssh key and copy ssh public key to remote machine
+# Generate ssh key and copy ssh public key to remote machine
 
 $ip = "192.168.1.19"
 $user = "admin"
-$password = "welcome"
 
 # Check if ssh key exists
 if (-not (Test-Path "~/.ssh/id_rsa")) {

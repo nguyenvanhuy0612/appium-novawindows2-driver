@@ -1,1 +1,0 @@
-Set-Clipboard -Value ([System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('QzpcQ2VydGlmaWNhdGVGb2xkZXJcNFpSbGd2U2ZMZExRaGJJRzY1b0s=')))
