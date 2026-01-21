@@ -2,7 +2,6 @@
 
 $ip = "192.168.1.19"
 $user = "admin"
-$password = "welcome"
 
 # Copy log from remote machine to local machine
 $remotePath = "C:/Users/$user/Desktop/appium_server.log"

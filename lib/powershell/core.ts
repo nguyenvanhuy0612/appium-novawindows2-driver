@@ -14,11 +14,11 @@ export class PSObject {
 
 export function pwsh(strings: TemplateStringsArray, ...values: string[]): string {
     let command = strings.reduce((result, str, i) => result + str + (i < values.length ? values[i] : ''), '');
-    // Remove comments
-    command = command.replace(/<#[\s\S]*?#>/g, ''); // Block comments
-    command = command.replace(/(#.*$)/gm, ''); // Line comments
-    // Normalize whitespace
-    command = command.replace(/\s+/g, ' ').trim();
+    // // Remove comments
+    // command = command.replace(/<#[\s\S]*?#>/g, ''); // Block comments
+    // command = command.replace(/(#.*$)/gm, ''); // Line comments
+    // // Normalize whitespace
+    // command = command.replace(/\s+/g, ' ').trim();
     return /* ps1 */ `(Invoke-Expression -Command ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${btoa(command)}'))))`;
 }
 
@@ -27,11 +27,11 @@ export function pwsh$(literals: TemplateStringsArray, ...substitutions: number[]
     const defaultFormat = templateInstance.format.bind(templateInstance);
     templateInstance.format = (...args: any[]) => {
         let command = defaultFormat(...args);
-        // Remove comments
-        command = command.replace(/<#[\s\S]*?#>/g, ''); // Block comments
-        command = command.replace(/(#.*$)/gm, ''); // Line comments
-        // Normalize whitespace
-        command = command.replace(/\s+/g, ' ').trim();
+        // // Remove comments
+        // command = command.replace(/<#[\s\S]*?#>/g, ''); // Block comments
+        // command = command.replace(/(#.*$)/gm, ''); // Line comments
+        // // Normalize whitespace
+        // command = command.replace(/\s+/g, ' ').trim();
         return /* ps1 */ `(Invoke-Expression -Command ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${btoa(command)}'))))`;
     };
 

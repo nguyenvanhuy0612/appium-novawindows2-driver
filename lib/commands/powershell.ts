@@ -4,6 +4,7 @@ import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE, FIND_DESCENDANTS_FUNCTIONS } from './functions';
 import { MSAA_HELPER_SCRIPT } from '../powershell/msaa';
 import { decodePwsh } from '../powershell/core';
+// import { UIA_HELPER_SCRIPT } from '../powershell/uiahelper';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8`;
 // const ADD_NECESSARY_ASSEMBLIES = /* ps1 */ `
@@ -240,6 +241,7 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         SET_UTF8_ENCODING,
         ADD_NECESSARY_ASSEMBLIES,
         MSAA_HELPER_SCRIPT,
+        // UIA_HELPER_SCRIPT,
         INIT_CACHE_REQUEST,
         INIT_ELEMENT_TABLE,
         PAGE_SOURCE,

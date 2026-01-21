@@ -1,32 +1,7 @@
-#!/usr/bin/expect -f
-
-set ip "192.168.8.245"
-set user "admin"
-set password "welcome"
-set port 22
-set local_script "scripts/Start_Appium.ps1"
-set remote_script "Start_Appium.ps1"
-
-# Set timeout
-set timeout 60
-
-# Step 1: SCP the script
-send_user "Copying script to remote machine...\n"
-spawn scp -P $port $local_script $user@$ip:$remote_script
-expect {
-    -re ".*Are you sure you want to continue connecting.*" { send "yes\r"; exp_continue }
-    "password:" { send "$password\r"; exp_continue }
-    eof
-}
-
-# Step 2: SSH to execute the script
-send_user "Executing remote script...\n"
-spawn ssh -p $port $user@$ip "powershell -File $remote_script"
-expect {
-    -re ".*Are you sure you want to continue connecting.*" { send "yes\r"; exp_continue }
-    "password:" { send "$password\r"; exp_continue }
-    timeout { send_user "Timeout waiting for script execution.\n"; exit 1 }
-    eof
-}
-
-send_user "Done.\n"
+#!/bin/bash
+USER_HOST="admin@192.168.8.245"
+ps_command="Stop-Process -Name node -ErrorAction SilentlyContinue;"
+ps_command+="cd C:\\Share\\appium-novawindows2-driver;"
+ps_command+="& './scripts/Start_Appium.ps1'"
+ssh $USER_HOST "powershell -Command \"$ps_command\""
+echo "Appium restarted on $USER_HOST"

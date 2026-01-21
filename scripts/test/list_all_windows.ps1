@@ -1,5 +1,5 @@
 
-$user32 = Add-Type -MemberDefinition @"
+Add-Type -MemberDefinition @"
     [DllImport("user32.dll")]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
