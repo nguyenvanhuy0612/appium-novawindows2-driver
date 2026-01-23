@@ -4,6 +4,7 @@
 .vscode
 .npmrc
 temp
+tmp
 *.code-workspace
 ref_repo
 lib_*

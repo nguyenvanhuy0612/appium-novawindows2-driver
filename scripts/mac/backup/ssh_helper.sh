@@ -9,15 +9,7 @@ fi
 
 # Copy ssh public key to remote machine (Windows SSH Server)
 pubKey=$(cat ~/.ssh/id_rsa.pub)
-remoteCmd="
-\$path = 'C:\ProgramData\ssh\administrators_authorized_keys';
-if (-not (Test-Path \$path)) {
-    New-Item -Path \$path -Force | Out-Null
-};
-\$content = Get-Content -Path \$path -Raw -ErrorAction SilentlyContinue;
-if (-not \$content -or -not \$content.Contains('$pubKey')) {
-    Add-Content -Path \$path -Value '$pubKey' -Force
-}"
+remoteCmd="\$path = 'C:\ProgramData\ssh\administrators_authorized_keys'; if (-not (Test-Path \$path)) { New-Item -Path \$path -Force | Out-Null }; \$content = Get-Content -Path \$path -Raw -ErrorAction SilentlyContinue; if (-not \$content -or -not \$content.Contains('$pubKey')) { Add-Content -Path \$path -Value '$pubKey' -Encoding Ascii -Force }; & icacls \$path /inheritance:r /grant Administrators:F /grant SYSTEM:F"
 ssh $target_user@$target_ip "powershell -Command \"$remoteCmd\""
 
 # Test ssh connection
