@@ -1,24 +1,18 @@
 const { remote } = require('webdriverio');
 
-// const HOST = '192.168.8.245';
-const HOST = '192.168.1.19';
-const PORT = 4723;
-const APP = 'Root'; // 'Root' attaches to the desktop
-
 const defaultCaps = {
     "platformName": "Windows",
     "appium:automationName": "NovaWindows2",
-    "appium:app": APP,
+    "appium:app": 'Root',
     "appium:newCommandTimeout": 3600,
     "appium:connectHardwareKeyboard": true
 };
 
 const defaultOptions = {
-    hostname: HOST,
-    port: PORT,
+    hostname: '192.168.8.245',
+    port: 4723,
     path: '/',
     logLevel: 'error',
-    connectionRetryTimeout: 300000,
     capabilities: defaultCaps
 };
 

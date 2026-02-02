@@ -676,7 +676,7 @@ function optimizeDoubleSlash(steps: StepNode[], includeContextElementInSearch: b
     for (let i = 0; i < steps.length - 1; i++) {
         // detect double slash: //element is the same as /descendant-or-self::node()/child::element
         if (steps[i].axis === DESCENDANT_OR_SELF && steps[i].test.type === NODE_TYPE_TEST && steps[i].predicates.length === 0 && steps[i + 1].axis === CHILD) {
-            const includeSelf = i === 0 && includeContextElementInSearch;
+            const includeSelf = steps.slice(0, i).every((step) => step.axis === SELF && step.test.type === NODE_TYPE_TEST && step.test.name === NODE) && includeContextElementInSearch;
             const optimizedStep: StepNode = { axis: includeSelf ? DESCENDANT_OR_SELF : DESCENDANT, test: steps[i + 1].test, predicates: steps[i + 1].predicates };
             if (steps[i + 1][OptimizeLastStep]) {
                 optimizedStep[OptimizeLastStep] = true;
