@@ -139,6 +139,15 @@ export async function execute(this: NovaWindows2Driver, script: string, args: an
         return await this.pullFolder(path);
     }
 
+    if (script === 'arguments[0].scrollIntoView()') {
+        const element = args[0];
+        // basic validation
+        if (!element || typeof element !== 'object') {
+            throw new errors.InvalidArgumentError('First argument must be an element object.');
+        }
+        return await this.patternScrollIntoView(element);
+    }
+
     throw new errors.NotImplementedError();
 };
 

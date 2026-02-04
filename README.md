@@ -391,6 +391,12 @@ Scrolls the UI element into view using the `ScrollItemPattern`.
 driver.execute_script('windows: scrollIntoView', element)
 ```
 
+> **Note**
+> You can also use the standard JavaScript way:
+> ```javascript
+> await driver.executeScript('arguments[0].scrollIntoView()', element);
+> ```
+
 #### `windows: toggle`
 Toggles a UI element’s state using the `TogglePattern`.
 
