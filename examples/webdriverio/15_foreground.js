@@ -24,9 +24,7 @@ async function main() {
             hostname: '192.168.8.245'
         });
 
-        // Scroll to bottom
-        const item = await checkTime(() => driver.$('//List/ListItem[last()]'));
-        await checkTime(() => driver.execute('arguments[0].scrollIntoView()', item));
+        await checkTime(() => driver.execute('windows: setProcessForeground', { process: 'secureage.exe' }));
 
     } catch (e) {
         console.error(`ERROR in test case: ${e.message}`);

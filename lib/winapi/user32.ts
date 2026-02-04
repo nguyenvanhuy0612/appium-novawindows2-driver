@@ -842,10 +842,6 @@ export function trySetForegroundWindow(windowHandle: number): boolean {
     }, 0);
 }
 
-export function setForegroundWindow(windowHandle: number): boolean {
-    return SetForegroundWindow(windowHandle);
-}
-
 export function showWindow(windowHandle: number, nCmdShow: number): boolean {
     return ShowWindow(windowHandle, nCmdShow);
 }

@@ -59,7 +59,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     setFocus: 'focusElement',
     getClipboard: 'getClipboardBase64',
     setClipboard: 'setClipboardFromBase64',
-    setForegroundWindow: 'setForegroundWindow',
+    setProcessForeground: 'activateProcess',
     getAttributes: 'getAttributes',
     typeDelay: 'typeDelay',
 } as const);
@@ -241,7 +241,7 @@ export async function scrollWithKeyboard(this: NovaWindows2Driver, automationEle
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
-                    actions: [{ type: 'keyDown', value: Key.DOWN }, { type: 'keyUp', value: Key.DOWN }]
+                    actions: [{ type: 'keyDown', value: Key.PAGE_DOWN }, { type: 'keyUp', value: Key.PAGE_DOWN }]
                 });
 
                 await sleep(200);
@@ -250,7 +250,7 @@ export async function scrollWithKeyboard(this: NovaWindows2Driver, automationEle
             // Final check
             const isOffscreen = await this.sendPowerShellCommand(automationElement.buildGetPropertyCommand(Property.IS_OFFSCREEN));
             if (isOffscreen.toLowerCase() === 'true') {
-                throw new Error(`Element still offscreen after ${maxRetries} ArrowDown presses.`);
+                throw new Error(`Element still offscreen after ${maxRetries} PageDown presses.`);
             }
         } else {
             throw new Error('Could not find parent element to focus.');
@@ -716,7 +716,7 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     }
 }
 
-export async function setForegroundWindow(this: NovaWindows2Driver, args: { process: string }) {
+export async function activateProcess(this: NovaWindows2Driver, args: { process: string }) {
     if (!args || typeof args !== 'object' || !args.process) {
         throw new errors.InvalidArgumentError(`'process' must be provided.`);
     }
