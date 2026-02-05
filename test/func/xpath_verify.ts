@@ -1,4 +1,4 @@
-import { xpathToElIdOrIds } from '../lib/xpath/core';
+import { xpathToElIdOrIds } from '../../lib/xpath/core';
 
 async function main() {
     // This selector uses 'contains', which is a function call.
