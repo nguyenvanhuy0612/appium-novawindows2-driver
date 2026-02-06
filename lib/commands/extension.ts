@@ -62,6 +62,7 @@ const EXTENSION_COMMANDS = Object.freeze({
     setProcessForeground: 'activateProcess',
     getAttributes: 'getAttributes',
     typeDelay: 'typeDelay',
+    clickAndDrag: 'executeClickAndDrag',
 } as const);
 
 const ContentType = Object.freeze({
@@ -755,4 +756,141 @@ export async function typeDelay(this: NovaWindows2Driver, args: { delay: number 
     }
 
     this.caps.typeDelay = delay;
+}
+
+export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDragArgs: {
+    startElementId?: string,
+    startX?: number,
+    startY?: number,
+    endElementId?: string,
+    endX?: number,
+    endY?: number,
+    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
+    durationMs?: number,
+    button?: 'left' | 'right' | 'middle',
+    smoothPointerMove?: string,
+}) {
+    const {
+        startElementId,
+        startX, startY,
+        endElementId,
+        endX, endY,
+        modifierKeys = [],
+        durationMs = 1000,
+        button = 'left',
+        smoothPointerMove,
+    } = clickAndDragArgs;
+
+    if ((startX != null) !== (startY != null)) {
+        throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
+    }
+
+    if ((endX != null) !== (endY != null)) {
+        throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
+    }
+
+    if (!startElementId && (startX == null || startY == null)) {
+        throw new errors.InvalidArgumentError('Either startElementId or both startX and startY must be provided.');
+    }
+
+    if (!endElementId && (endX == null || endY == null)) {
+        throw new errors.InvalidArgumentError('Either endElementId or both endX and endY must be provided.');
+    }
+
+    const clickTypeToButtonMapping: { [key: string]: number } = {
+        'left': 0,
+        'middle': 1,
+        'right': 2,
+    };
+
+    const mouseButton = clickTypeToButtonMapping[button.toLowerCase()];
+    if (mouseButton === undefined) {
+        throw new errors.InvalidArgumentError(`Invalid button '${button}'. Supported values are 'left', 'middle', 'right'.`);
+    }
+
+    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
+
+    // Calculate Start Position
+    let startPos: [number, number];
+    if (startElementId) {
+        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) {
+            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(startElementId.split('.').map(Number)));
+            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
+
+            if (elId.trim() === '') {
+                throw new errors.NoSuchElementError();
+            }
+        }
+
+        const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(startElementId).buildGetElementRectCommand());
+        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        startPos = [
+            rect.x + (startX ?? Math.trunc(rect.width / 2)),
+            rect.y + (startY ?? Math.trunc(rect.height / 2))
+        ];
+    } else {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        startPos = [startX!, startY!];
+    }
+
+    // Calculate End Position
+    let endPos: [number, number];
+    if (endElementId) {
+        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) {
+            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(endElementId.split('.').map(Number)));
+            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
+
+            if (elId.trim() === '') {
+                throw new errors.NoSuchElementError();
+            }
+        }
+
+        const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(endElementId).buildGetElementRectCommand());
+        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        endPos = [
+            rect.x + (endX ?? Math.trunc(rect.width / 2)),
+            rect.y + (endY ?? Math.trunc(rect.height / 2))
+        ];
+    } else {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        endPos = [endX!, endY!];
+    }
+
+    // Perform Action
+    await mouseMoveAbsolute(startPos[0], startPos[1], 0);
+
+    // Modifiers Down
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+        keyDown(Key.CONTROL);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+        keyDown(Key.ALT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+        keyDown(Key.SHIFT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+        keyDown(Key.META);
+    }
+
+    mouseDown(mouseButton);
+
+    // Drag
+    await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, smoothPointerMove ?? this.caps.smoothPointerMove, startPos[0], startPos[1]);
+
+    mouseUp(mouseButton);
+
+    // Modifiers Up
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
+        keyUp(Key.CONTROL);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
+        keyUp(Key.ALT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
+        keyUp(Key.SHIFT);
+    }
+    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
+        keyUp(Key.META);
+    }
 }

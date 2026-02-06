@@ -655,9 +655,9 @@ function sendMouseButtonInput(button: number, down: boolean) {
     assertSuccessSendInputReturnCode(returnCode);
 }
 
-async function sendMouseMoveInput(args: { x: number, y: number, relative: boolean, duration: number, easingFunction?: string }): Promise<void> {
+async function sendMouseMoveInput(args: { x: number, y: number, relative: boolean, duration: number, easingFunction?: string, startX?: number, startY?: number }): Promise<void> {
     const { duration } = args;
-    let { x, y, easingFunction, relative } = args;
+    let { x, y, easingFunction, relative, startX, startY } = args;
     const screenResolutionAndRefreshRate = getScreenResolutionAndRefreshRate();
     const [, , refreshRate] = screenResolutionAndRefreshRate;
     const updateInterval = 1000 / refreshRate;
@@ -668,7 +668,16 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
         y: 0,
     } satisfies Point;
 
-    if (GetCursorPos(cursorPosition) && iterations > 1) {
+    let gotCursorPos = false;
+    if (startX !== undefined && startY !== undefined) {
+        cursorPosition.x = startX;
+        cursorPosition.y = startY;
+        gotCursorPos = true;
+    } else {
+        gotCursorPos = GetCursorPos(cursorPosition);
+    }
+
+    if (gotCursorPos && iterations > 1) {
         if (relative) {
             x += cursorPosition.x;
             y += cursorPosition.y;
@@ -786,8 +795,8 @@ export function mouseScroll(x: number, y: number): void {
     sendMouseScrollInput(x, y);
 }
 
-export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction?: string): Promise<void> {
-    await sendMouseMoveInput({ x, y, relative: false, duration, easingFunction });
+export async function mouseMoveAbsolute(x: number, y: number, duration: number = 0, easingFunction?: string, startX?: number, startY?: number): Promise<void> {
+    await sendMouseMoveInput({ x, y, relative: false, duration, easingFunction, startX, startY });
 }
 
 export function mouseDown(button: number = 0): void {

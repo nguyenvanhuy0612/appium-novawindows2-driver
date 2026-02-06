@@ -53,7 +53,7 @@ NovaWindows2 Driver supports the following capabilities:
 | :--- | :--- | :--- | :--- |
 | `platformName` | Must be set to `Windows` (case-insensitive). | (Required) | `Windows` |
 | `automationName` | Must be set to `NovaWindows2` (case-insensitive). | (Required) | `NovaWindows2` |
-| `smoothPointerMove` | CSS-like easing function (including valid Bezier curve). This controls the smooth movement of the mouse for `delayBeforeClick` ms. | (None) | `ease-in`, `cubic-bezier(0.42, 0, 0.58, 1)` |
+| `smoothPointerMove` | CSS-like easing function (including valid Bezier curve). This controls the smooth movement of the mouse for `delayBeforeClick` ms. | (None) | `ease-in`, `linear`, `ease`, `ease-in`, `ease-out`, `ease-in-out`, `cubic-bezier(0.42, 0, 0.58, 1)` |
 | `delayBeforeClick` | Time in milliseconds before a click is performed. | `0` | `500` |
 | `delayAfterClick` | Time in milliseconds after a click is performed. | `0` | `500` |
 | `appTopLevelWindow` | The handle of an existing application top-level window to attach to. It can be a number or string (not necessarily hexadecimal). | (None) | `12345`, `0x12345` |
@@ -175,6 +175,33 @@ driver.execute_script('windows: click', {
     'button': 'right',
     'times': 2,
     'modifierKeys': ['ctrl', 'alt']
+})
+```
+
+#### `windows: clickAndDrag`
+Performs a click-and-drag gesture.
+
+| Name | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `startElementId` | `string` | no | Hexadecimal identifier of the start element. Either this OR both `startX` and `startY` must be provided. | `123e4567-e89b...` |
+| `startX` | `number` | no | Horizontal coordinate of the start point. Required if `startElementId` is missing. | `100` |
+| `startY` | `number` | no | Vertical coordinate of the start point. Required if `startElementId` is missing. | `100` |
+| `endElementId` | `string` | no | Hexadecimal identifier of the end element. Either this OR both `endX` and `endY` must be provided. | `123e4567-e89b...` |
+| `endX` | `number` | no | Horizontal coordinate of the end point. Required if `endElementId` is missing. | `200` |
+| `endY` | `number` | no | Vertical coordinate of the end point. Required if `endElementId` is missing. | `200` |
+| `durationMs` | `number` | no | Duration of the drag in milliseconds. Default is `1000`. | `2000` |
+| `button` | `string` | no | Mouse button to use (`left`, `right`, `middle`). Default is `left`. | `right` |
+| `smoothPointerMove` | `string` | no | CSS-like easing function (e.g., `linear`, `ease-out`) for smooth movement. Default is `None`. | `linear` |
+| `modifierKeys` | `string[]` \| `string` | no | Keys to hold during the drag. | `shift` |
+
+#### Usage
+```python
+driver.execute_script('windows: clickAndDrag', {
+    'startElementId': element1.id,
+    'endX': 500,
+    'endY': 500,
+    'durationMs': 2000,
+    'smoothPointerMove': 'linear'
 })
 ```
 
