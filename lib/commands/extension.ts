@@ -142,7 +142,6 @@ export async function execute(this: NovaWindows2Driver, script: string, args: an
 
     if (script === 'arguments[0].scrollIntoView()') {
         const element = args[0];
-        // basic validation
         if (!element || typeof element !== 'object') {
             throw new errors.InvalidArgumentError('First argument must be an element object.');
         }
@@ -460,8 +459,8 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
         interClickDelayMs = 100,
     } = clickArgs;
 
-    if ((x != null) !== (y != null)) {
-        throw new errors.InvalidArgumentError('Both x and y must be provided if either is set.');
+    if (!elementId && (x == null || y == null)) {
+        throw new errors.InvalidArgumentError('Either elementId or both x and y must be provided.');
     }
 
     let pos: [number, number];
@@ -559,12 +558,12 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
         durationMs = 500,
     } = hoverArgs;
 
-    if ((startX != null) !== (startY != null)) {
-        throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
+    if (!startElementId && (startX == null || startY == null)) {
+        throw new errors.InvalidArgumentError('Either startElementId or both startX and startY must be provided.');
     }
 
-    if ((endX != null) !== (endY != null)) {
-        throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
+    if (!endElementId && (endX == null || endY == null)) {
+        throw new errors.InvalidArgumentError('Either endElementId or both endX and endY must be provided.');
     }
 
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
@@ -658,12 +657,8 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
         modifierKeys = [],
     } = scrollArgs;
 
-    if (!!elementId && ((x !== null && x !== undefined) || (y !== null && y !== undefined))) {
-        throw new errors.InvalidArgumentError('Either elementId or x and y must be provided.');
-    }
-
-    if ((x !== null && x !== undefined) !== (y !== null && y !== undefined)) {
-        throw new errors.InvalidArgumentError('Both x and y must be provided.');
+    if (!elementId && (x == null || y == null)) {
+        throw new errors.InvalidArgumentError('Either elementId or both x and y must be provided.');
     }
 
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
@@ -767,7 +762,7 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     endY?: number,
     modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
     durationMs?: number,
-    button?: 'left' | 'right' | 'middle',
+    button?: ClickType,
     smoothPointerMove?: string,
 }) {
     const {
@@ -777,17 +772,9 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
         endX, endY,
         modifierKeys = [],
         durationMs = 1000,
-        button = 'left',
+        button = ClickType.LEFT,
         smoothPointerMove,
     } = clickAndDragArgs;
-
-    if ((startX != null) !== (startY != null)) {
-        throw new errors.InvalidArgumentError('Both startX and startY must be provided if either is set.');
-    }
-
-    if ((endX != null) !== (endY != null)) {
-        throw new errors.InvalidArgumentError('Both endX and endY must be provided if either is set.');
-    }
 
     if (!startElementId && (startX == null || startY == null)) {
         throw new errors.InvalidArgumentError('Either startElementId or both startX and startY must be provided.');
@@ -797,15 +784,17 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
         throw new errors.InvalidArgumentError('Either endElementId or both endX and endY must be provided.');
     }
 
-    const clickTypeToButtonMapping: { [key: string]: number } = {
-        'left': 0,
-        'middle': 1,
-        'right': 2,
+    const clickTypeToButtonMapping: { [key in ClickType]: number } = {
+        [ClickType.LEFT]: 0,
+        [ClickType.MIDDLE]: 1,
+        [ClickType.RIGHT]: 2,
+        [ClickType.BACK]: 3,
+        [ClickType.FORWARD]: 4
     };
 
-    const mouseButton = clickTypeToButtonMapping[button.toLowerCase()];
+    const mouseButton = clickTypeToButtonMapping[button];
     if (mouseButton === undefined) {
-        throw new errors.InvalidArgumentError(`Invalid button '${button}'. Supported values are 'left', 'middle', 'right'.`);
+        throw new errors.InvalidArgumentError(`Invalid button '${button}'. Supported values are 'left', 'middle', 'right', 'back', 'forward'.`);
     }
 
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];

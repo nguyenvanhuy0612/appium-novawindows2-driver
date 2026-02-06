@@ -114,9 +114,9 @@ Retrieve comprehensive details about UI elements using standard or bulk methods.
 - **Bulk Retrieval**: Use the `"all"` keyword to get 80+ properties in a single JSON object.
 - **Dotted Names**: Access pattern-specific properties directly (e.g., `Window.CanMaximize`, `LegacyIAccessible.Name`).
 
-```js
-// getAttributes returns all properties as a JSON string
-const allAttributes = await element.getAttribute("all");
+```python
+# getAttributes returns all properties as a JSON string
+all_attributes = element.get_attribute("all")
 ```
 
 ### PowerShell Execution
@@ -124,15 +124,15 @@ Execute internal PowerShell scripts or commands directly from your test. This re
 
 It is possible to execute a single PowerShell command or a whole script. Note that `powerShell` is case-insensitive.
 
-```javascript
-// Execute a command string
-await driver.executeScript('powerShell', { command: 'Get-Process Notepad' });
+```python
+# Execute a command string
+driver.execute_script('powerShell', {'command': 'Get-Process Notepad'})
 
-// Execute a script string
-await driver.executeScript('powerShell', { script: '$p = Get-Process Notepad; $p.Kill();' });
+# Execute a script string
+driver.execute_script('powerShell', {'script': '$p = Get-Process Notepad; $p.Kill();'})
 
-// Shorthand (executes as command/script depending on context)
-await driver.executeScript('powerShell', 'Get-Process');
+# Shorthand (executes as command/script depending on context)
+driver.execute_script('powerShell', 'Get-Process')
 ```
 
 ### Enhanced Text Input
@@ -169,12 +169,31 @@ This is a shortcut for a single mouse click gesture.
 | `interClickDelayMs` | `number` | no | Duration of the pause between each click gesture. Only makes sense if `times` is greater than one. 100ms by default. | `10` |
 
 #### Usage
+
+**Scenario 1: Using Element ID (Clicks Center)**
 ```python
 driver.execute_script('windows: click', {
     'elementId': element.id,
     'button': 'right',
-    'times': 2,
-    'modifierKeys': ['ctrl', 'alt']
+    'times': 2
+})
+```
+
+**Scenario 2: Using Absolute Coordinates**
+```python
+driver.execute_script('windows: click', {
+    'x': 500,
+    'y': 300,
+    'button': 'left'
+})
+```
+
+**Scenario 3: Using Element ID with Offset (Relative to Top-Left)**
+```python
+driver.execute_script('windows: click', {
+    'elementId': element.id,
+    'x': 10,   # 10px from the left edge of the element
+    'y': 10    # 10px from the top edge of the element
 })
 ```
 
@@ -195,13 +214,36 @@ Performs a click-and-drag gesture.
 | `modifierKeys` | `string[]` \| `string` | no | Keys to hold during the drag. | `shift` |
 
 #### Usage
+
+**Scenario 1: Element to Element (Center to Center)**
 ```python
 driver.execute_script('windows: clickAndDrag', {
     'startElementId': element1.id,
+    'endElementId': element2.id,
+    'durationMs': 2000
+})
+```
+
+**Scenario 2: Absolute Coordinates**
+```python
+driver.execute_script('windows: clickAndDrag', {
+    'startX': 100,
+    'startY': 100,
     'endX': 500,
     'endY': 500,
-    'durationMs': 2000,
     'smoothPointerMove': 'linear'
+})
+```
+
+**Scenario 3: Element with Offset (Drag from specific point inside element)**
+```python
+driver.execute_script('windows: clickAndDrag', {
+    'startElementId': element1.id,
+    'startX': 10,  # Start 10px from left of element1
+    'startY': 10,  # Start 10px from top of element1
+    'endElementId': element2.id,
+    'endX': 50,    # End 50px from left of element2
+    'endY': 50     # End 50px from top of element2
 })
 ```
 
@@ -241,11 +283,35 @@ This is a shortcut for a hover gesture.
 | `durationMs` | `number` | no | The number of milliseconds between moving the cursor from the starting to the ending hover point. 500ms by default. | `700` |
 
 #### Usage
+
+**Scenario 1: Element to Element (Center to Center)**
 ```python
 driver.execute_script('windows: hover', {
     'startElementId': element1.id,
     'endElementId': element2.id,
     'durationMs': 1000
+})
+```
+
+**Scenario 2: Absolute Coordinates**
+```python
+driver.execute_script('windows: hover', {
+    'startX': 100,
+    'startY': 100,
+    'endX': 500,
+    'endY': 500
+})
+```
+
+**Scenario 3: Element with Offset (Hover specific point)**
+```python
+driver.execute_script('windows: hover', {
+    'startElementId': element1.id,
+    'startX': 5,
+    'startY': 5,
+    'endElementId': element2.id,
+    'endX': 5,
+    'endY': 5
 })
 ```
 
