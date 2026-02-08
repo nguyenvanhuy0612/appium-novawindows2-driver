@@ -1,7 +1,8 @@
 #!/bin/bash
 source_code_dir="$HOME/Documents/appium-novawindows2-driver"
 target_dir="C:/appium/appium-novawindows2-driver"
-target_ip="192.168.8.245"
+# target_ip="192.168.8.245"
+target_ip="172.16.10.37"
 target_user="admin"
 
 # Build

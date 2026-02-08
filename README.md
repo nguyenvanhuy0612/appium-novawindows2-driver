@@ -263,7 +263,7 @@ This is a shortcut for a mouse wheel scroll gesture. The API is a thin wrapper o
 ```python
 driver.execute_script('windows: scroll', {
     'elementId': element.id,
-    'deltaY': -5, # Scroll down 5 clicks
+    'deltaY': -120, # Scroll down 3 lines
     'modifierKeys': 'shift'
 })
 ```
