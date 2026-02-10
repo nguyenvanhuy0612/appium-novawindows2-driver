@@ -40,7 +40,6 @@ export async function getPageSource(this: NovaWindows2Driver): Promise<string> {
 }
 
 export async function getScreenshot(this: NovaWindows2Driver): Promise<string> {
-    // const automationRootId = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
 
     if (this.caps.app && this.caps.app.toLowerCase() !== 'root') {
         try {
@@ -135,12 +134,12 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process 'explorer.exe' 'shell:AppsFolder\\${path}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
         await sleep(500); // TODO: make a setting for the initial wait time
         for (let i = 1; i <= 20; i++) {
-            const result = await this.sendPowerShellCommand(/* ps1 */ `(Get-Process -Name 'ApplicationFrameHost').Id`);
+            const result = await this.sendPowerShellCommand(/* ps1 */ `(Get-Process -Name 'ApplicationFrameHost' | Sort-Object StartTime -Descending).Id`);
             const processIds = result.split('\n').map((pid) => pid.trim()).filter(Boolean).map(Number);
 
-            this.log.debug('Process IDs of ApplicationFrameHost processes: ' + processIds.join(', '));
+            this.log.debug(`Attempt ${i}: Process IDs of ApplicationFrameHost processes: ` + processIds.join(', '));
             try {
-                await this.attachToApplicationWindow(processIds);
+                await this.attachToApplicationWindow(processIds, i);
                 return;
             } catch {
                 // noop
@@ -163,7 +162,7 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
                 const processIds = result.split('\n').map((pid) => pid.trim()).filter(Boolean).map(Number);
                 this.log.debug(`${i}: Process IDs of '${processName}' processes: ` + processIds.join(', '));
 
-                await this.attachToApplicationWindow(processIds);
+                await this.attachToApplicationWindow(processIds, i);
                 return;
             } catch (err) {
                 if (err instanceof Error) {
@@ -179,29 +178,42 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
     throw new errors.UnknownError('Failed to locate window of the app.');
 }
 
-export async function attachToApplicationWindow(this: NovaWindows2Driver, processIds: number[]): Promise<void> {
-    const nativeWindowHandles = getWindowAllHandlesForProcessIds(processIds);
-    this.log.debug(`Detected the following native window handles for the given process IDs: ${nativeWindowHandles.map((handle) => `0x${handle.toString(16).padStart(8, '0')}`).join(', ')}`);
+export async function attachToApplicationWindow(this: NovaWindows2Driver, processIds: number[], attemptNumber: number = 1): Promise<void> {
+    const windowHandlesByPid = getWindowAllHandlesForProcessIds(processIds);
+    const allHandles = Array.from(windowHandlesByPid.values()).flat();
+    this.log.debug(`Attempt ${attemptNumber}: Detected the following native window handles for the given process IDs: ${allHandles.map((handle) => `0x${handle.toString(16).padStart(8, '0')}`).join(', ')}`);
 
-    if (nativeWindowHandles.length === 0) {
+    if (allHandles.length === 0) {
         throw new errors.UnknownError('Failed to locate window of the app.');
     }
 
-    // Loop attempts to find a window that is both present and focusable
-    for (let i = 1; i <= 20; i++) {
-        let elementId = '';
-        for (let handle of nativeWindowHandles) {
+    let elementId = '';
+    // Iterate PIDs in order
+    for (const [index, pid] of processIds.entries()) {
+        // Grace period: strictly prioritize the newest process (index 0) for the first 6 attempts (approx. 3 sec).
+        // This prevents attaching to an old process's window that might be present while the new process is starting.
+        // If UWP app, we don't need this check because the processIds are typically just the one we found.
+        if (index > 0 && attemptNumber <= 6) {
+            continue;
+        }
+
+        const handles = windowHandlesByPid.get(pid);
+        if (!handles || handles.length === 0) {
+            continue;
+        }
+
+        for (const handle of handles) {
             const handlePadded = `0x${handle.toString(16).padStart(8, '0')}`;
             elementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle))).buildCommand());
 
             if (elementId) {
-                this.log.debug(`${i}: Element ID of the window with handle ${handlePadded}: ${elementId}`);
+                this.log.debug(`Attempt ${attemptNumber}: Element ID of the window from PID ${pid} with handle ${handlePadded}: ${elementId}`);
 
                 // 1. Try SetForegroundWindow (Win32)
                 if (trySetForegroundWindow(handle)) {
                     break;
                 } else {
-                    this.log.debug(`${i}: Failed to set foreground window for handle ${handlePadded}.`);
+                    this.log.debug(`Attempt ${attemptNumber}: Failed to set foreground window for handle ${handlePadded}.`);
                 }
 
                 // 2. Try UIA SetFocus
@@ -209,21 +221,22 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
                     await this.focusElement({ [W3C_ELEMENT_KEY]: elementId } satisfies Element);
                     break;
                 } catch (e: any) {
-                    this.log.debug(`${i}: Focus failed for handle ${handlePadded}: ${e.message}`);
+                    this.log.debug(`Attempt ${attemptNumber}: Focus failed for handle ${handlePadded}: ${e.message}`);
                 }
             } else {
-                this.log.debug(`${i}: Window with handle ${handlePadded} not found in UIA yet.`);
+                this.log.debug(`Attempt ${attemptNumber}: Window with handle ${handlePadded} not found in UIA yet.`);
             }
         }
 
         if (elementId) {
-            this.log.debug(`${i}: Found element ID: ${elementId}`);
-            await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);
-            return;
+            break; // Found a valid window for a prioritized PID
         }
+    }
 
-        this.log.info(`No suitable application window found yet. Sleeping for 500 milliseconds and retrying... (${i}/20)`);
-        await sleep(500);
+    if (elementId) {
+        this.log.debug(`Attempt ${attemptNumber}: Found element ID: ${elementId}`);
+        await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);
+        return;
     }
 
     throw new errors.UnknownError('Failed to locate window of the app.');

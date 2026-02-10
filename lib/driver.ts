@@ -258,13 +258,15 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             } catch {
                 // noop
             }
-        } // change to close the whole process, not only the window
-        await this.terminatePowerShellSession();
+        }
 
         if (this.caps.postrun) {
             this.log.info('Executing postrun PowerShell script...');
             await this.executePowerShellScript(this.caps.postrun as Exclude<Parameters<typeof commands['executePowerShellScript']>[0], string>);
         }
+
+        // Close the whole process
+        await this.terminatePowerShellSession();
 
         await super.deleteSession(sessionId);
     }

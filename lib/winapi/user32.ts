@@ -819,8 +819,12 @@ export function setDpiAwareness() {
     };
 }
 
-export function getWindowAllHandlesForProcessIds(processIds: number[]): number[] {
-    const handles: number[] = [];
+export function getWindowAllHandlesForProcessIds(processIds: number[]): Map<number, number[]> {
+    const handles = new Map<number, number[]>();
+    for (const pid of processIds) {
+        handles.set(pid, []);
+    }
+
     EnumWindows((hWnd) => {
         const ptr: [LPDWORD | null] = [null];
         GetWindowThreadProcessId(hWnd, ptr);
@@ -831,7 +835,7 @@ export function getWindowAllHandlesForProcessIds(processIds: number[]): number[]
             const windowTitle = buffer.toString('utf8').replace(/\0/g, '');
 
             if (windowTitle) {
-                handles.push(Number(address(hWnd)));
+                handles.get(pid)?.push(Number(address(hWnd)));
             }
         }
 
