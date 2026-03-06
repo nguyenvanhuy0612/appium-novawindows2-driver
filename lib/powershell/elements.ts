@@ -419,31 +419,42 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
             } catch {
                 # Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
             }
-        }
 
-        ## 2c. MSAA Fallback (Point-based) - Useful for controls without their own HWND
-        ## [TODO: need to fix] Use Point-based is not work for now
-        #if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
-        #    try {
-        #        Write-Host "[DEBUG] Phase 2c MSAA Fallback (Point-based)"
-        #        $rect = $el.Current.BoundingRectangle
-        #        if ($null -ne $rect -and $rect.Width -gt 0) {
-        #            $cx = [int]($rect.Left + $rect.Width/2)
-        #            $cy = [int]($rect.Top + $rect.Height/2)
-        #            $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
-        #            if ($null -ne $props) { 
-        #                $val = $props[$propName]
-        #                if ($null -ne $val) { return $val.ToString() }
-        #            } else {
-        #                Write-Host "[DEBUG] Phase 2c: No properties found at point ($cx, $cy)"
-        #            }
-        #        } else {
-        #            Write-Host "[DEBUG] Phase 2c Skipped: Invalid BoundingRectangle"
-        #        }
-        #    } catch {
-        #        Write-Host "[DEBUG] Phase 2c MSAA Fallback failed"
-        #    }
-        #}
+            # 2c. MSAA Fallback (Point-based) - Useful for controls without their own HWND
+            try {
+                # Write-Host "[DEBUG] Phase 2c MSAA Fallback (Point-based)"
+                $rect = $el.Current.BoundingRectangle
+                if ($null -ne $rect -and $rect.Width -gt 0) {
+                    $cx = [int]($rect.Left + $rect.Width/2)
+                    $cy = [int]($rect.Top + $rect.Height/2)
+                    $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
+                    if ($null -ne $props) {
+                        $val = $props[$propName]
+                        if ($null -ne $val) { return $val.ToString() }
+                    } else {
+                        # Write-Host "[DEBUG] Phase 2c: No properties found at point ($cx, $cy)"
+                    }
+                } else {
+                    # Write-Host "[DEBUG] Phase 2c Skipped: Invalid BoundingRectangle"
+                }
+            } catch {
+                # Write-Host "[DEBUG] Phase 2c MSAA Fallback failed"
+            }
+
+            # 2d. UIA Value Pattern Fallback - When MSAA returns nothing, try UIA ValuePattern
+            if ($propName -eq "Value") {
+                try {
+                    # Write-Host "[DEBUG] Phase 2d UIA Value Pattern Fallback"
+                    $valuePattern = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern);
+                    if ($null -ne $valuePattern) {
+                        $val = $valuePattern.Current.Value;
+                        if ($null -ne $val) { return $val.ToString() };
+                    }
+                } catch {
+                    # Write-Host "[DEBUG] Phase 2d UIA Value Pattern Fallback failed"
+                }
+            }
+        }
     }
     
     # If specifically looking for LegacyIAccessible and fallback failed, do NOT try fuzzy match to avoid ArgumentNullException
