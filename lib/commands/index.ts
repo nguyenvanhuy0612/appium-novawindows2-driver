@@ -6,6 +6,7 @@ import * as device from './device';
 import * as system from './system';
 import * as app from './app';
 import * as file from './file';
+import * as screenRecorder from './screen-recorder';
 
 const commands = {
     ...actions,
@@ -16,6 +17,7 @@ const commands = {
     ...device,
     ...app,
     ...file,
+    ...screenRecorder,
     // add the rest of the commands here
 };
 

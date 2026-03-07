@@ -68,6 +68,8 @@ NovaWindows2 Driver supports the following capabilities:
 | `includeContextElementInSearch` | Include the context element itself in the search. | `true` | `true` |
 | `releaseModifierKeys` | Whether to release modifier keys after `sendKeys`. | `true` | `true` |
 | `typeDelay` | Time in milliseconds to wait after inputting each character. Note that this delay does not apply to modifier keys (Shift, Ctrl, Alt, Win). | `0` | `100` |
+| `ms:waitForAppLaunch` | Time in seconds to wait after launching the app before searching for the root window. | `0` | `3` |
+| `ms:forcequit` | Whether to force-kill the application process on session deletion. | `false` | `true` |
 
 ---
 
@@ -651,6 +653,26 @@ Sets focus to the specified UI element using UIAutomationElement's `SetFocus` me
 ```python
 driver.execute_script('windows: setFocus', element)
 ```
+
+### Screen Recording
+
+#### `windows: startRecordingScreen`
+Starts screen recording using ffmpeg.
+
+| Name | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `fps` | `number` | no | Frames per second. Default is 15. | `15` |
+| `timeLimit` | `number` | no | Recording time limit in seconds. Default is 600. | `60` |
+| `preset` | `string` | no | ffmpeg preset. Default is `veryfast`. | `ultrafast` |
+| `captureCursor` | `boolean` | no | Whether to capture mouse cursor. | `true` |
+| `captureClicks` | `boolean` | no | Whether to capture mouse clicks. | `true` |
+
+#### `windows: stopRecordingScreen`
+Stops screen recording and returns the video as base64 string.
+
+| Name | Type | Required | Description | Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `remotePath` | `string` | no | Remote path to upload the video to. | `http://example.com/upload` |
 
 ---
 

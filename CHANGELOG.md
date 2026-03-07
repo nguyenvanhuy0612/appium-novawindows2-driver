@@ -1,3 +1,22 @@
+## [1.0.0] (2026-03-08)
+
+### Features
+
+* Added `ms:forcequit` and `ms:waitForAppLaunch` capabilities for better app lifecycle management.
+* Integrated Screen Recording support with `windows:startRecordingScreen` and `windows:stopRecordingScreen` commands.
+* Standardized extension commands under the `windows:` prefix for better consistency.
+
+### Bug Fixes
+
+* **Critical**: Fixed a truthiness bug in extension commands (click, hover, scroll) where PowerShell string responses ("True"/"False") were incorrectly evaluated in JavaScript.
+* Improved robustness of app termination logic in `deleteSession`.
+* Fixed various syntax and type issues across the driver.
+* Ensured screen recording processes are cleaned up when a session is deleted.
+
+### Refactoring
+
+* Refactored `lib/commands/extension.ts` to improve command mapping and parameter handling.
+
 ## [0.2.8] (2026-01-07)
 
 ### Refactoring

@@ -63,6 +63,8 @@ const EXTENSION_COMMANDS = Object.freeze({
     getAttributes: 'getAttributes',
     typeDelay: 'typeDelay',
     clickAndDrag: 'executeClickAndDrag',
+    startRecordingScreen: 'startRecordingScreen',
+    stopRecordingScreen: 'stopRecordingScreen',
 } as const);
 
 const ContentType = Object.freeze({
@@ -305,8 +307,8 @@ export async function patternSetValue(this: NovaWindows2Driver, element: Element
     }
 }
 
-export async function patternGetValue(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetValueCommand());
+export async function patternGetValue(this: NovaWindows2Driver, element: Element): Promise<string> {
+    return await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetValueCommand());
 }
 
 export async function patternMaximize(this: NovaWindows2Driver, element: Element): Promise<void> {
@@ -465,7 +467,7 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
 
     let pos: [number, number];
     if (elementId) {
-        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`)) {
+        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(elementId.split('.').map(Number)));
             const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
 
@@ -476,6 +478,7 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
         const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        // Calculate absolute position. Default to center of element if x/y are not provided.
         pos = [
             rect.x + (x ?? Math.trunc(rect.width / 2)),
             rect.y + (y ?? Math.trunc(rect.height / 2)),
@@ -569,7 +572,7 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
     let startPos: [number, number];
     if (startElementId) {
-        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) {
+        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(startElementId.split('.').map(Number)));
             const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
 
@@ -580,9 +583,10 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(startElementId).buildGetElementRectCommand());
         const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        // Calculate absolute start position. Default to center of element if startX/startY are not provided.
         startPos = [
-            rect.x + (startX ?? rect.width / 2),
-            rect.y + (startY ?? rect.height / 2)
+            rect.x + (startX ?? Math.trunc(rect.width / 2)),
+            rect.y + (startY ?? Math.trunc(rect.height / 2))
         ];
     } else {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -591,7 +595,7 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
 
     let endPos: [number, number];
     if (endElementId) {
-        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) {
+        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(endElementId.split('.').map(Number)));
             const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
 
@@ -602,9 +606,10 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(endElementId).buildGetElementRectCommand());
         const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        // Calculate absolute end position. Default to center of element if endX/endY are not provided.
         endPos = [
-            rect.x + (endX ?? rect.width / 2),
-            rect.y + (endY ?? rect.height / 2)
+            rect.x + (endX ?? Math.trunc(rect.width / 2)),
+            rect.y + (endY ?? Math.trunc(rect.height / 2))
         ];
     } else {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -626,6 +631,7 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
         keyDown(Key.META);
     }
 
+    // Execute smooth or immediate pointer move to end position
     await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, this.caps.smoothPointerMove);
 
     if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
@@ -664,7 +670,7 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
     let pos: [number, number];
     if (elementId) {
-        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`)) {
+        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(elementId.split('.').map(Number)));
             const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
 
@@ -675,7 +681,11 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
         const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
-        pos = [rect.x + (rect.width / 2), rect.y + (rect.height / 2)];
+        // Scroll at the center of the element
+        pos = [
+            rect.x + Math.trunc(rect.width / 2),
+            rect.y + Math.trunc(rect.height / 2)
+        ];
     } else {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         pos = [x!, y!];
@@ -802,7 +812,7 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     // Calculate Start Position
     let startPos: [number, number];
     if (startElementId) {
-        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) {
+        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(startElementId.split('.').map(Number)));
             const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
 
@@ -825,7 +835,7 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     // Calculate End Position
     let endPos: [number, number];
     if (endElementId) {
-        if (await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) {
+        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(endElementId.split('.').map(Number)));
             const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
 
@@ -865,7 +875,13 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     mouseDown(mouseButton);
 
     // Drag
-    await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, smoothPointerMove ?? this.caps.smoothPointerMove, startPos[0], startPos[1]);
+    // Drag to end position
+    await mouseMoveAbsolute(
+        endPos[0], endPos[1],
+        durationMs,
+        smoothPointerMove ?? this.caps.smoothPointerMove,
+        startPos[0], startPos[1]
+    );
 
     mouseUp(mouseButton);
 

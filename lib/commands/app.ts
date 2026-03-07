@@ -132,7 +132,7 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
     if (path.includes('!') && path.includes('_') && !(path.includes('/') || path.includes('\\'))) {
         this.log.debug('Detected app path to be in the UWP format.');
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process 'explorer.exe' 'shell:AppsFolder\\${path}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
-        await sleep(500); // TODO: make a setting for the initial wait time
+        await sleep((this.caps['ms:waitForAppLaunch'] as number ?? 0) * 1000 || 500);
         for (let i = 1; i <= 20; i++) {
             const result = await this.sendPowerShellCommand(/* ps1 */ `(Get-Process -Name 'ApplicationFrameHost' | Sort-Object StartTime -Descending).Id`);
             const processIds = result.split('\n').map((pid) => pid.trim()).filter(Boolean).map(Number);
@@ -152,7 +152,7 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
         this.log.debug('Detected app path to be in the classic format.');
         const normalizedPath = normalize(path);
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process '${normalizedPath}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
-        await sleep(500); // TODO: make a setting for the initial wait time
+        await sleep((this.caps['ms:waitForAppLaunch'] as number ?? 0) * 1000 || 500);
         const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
         const executable = breadcrumbs[breadcrumbs.length - 1];
         const processName = executable.endsWith('.exe') ? executable.slice(0, executable.length - 4) : executable;

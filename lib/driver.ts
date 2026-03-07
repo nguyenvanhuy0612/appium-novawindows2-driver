@@ -33,6 +33,7 @@ import type {
     StringRecord,
     W3CDriverCaps
 } from '@appium/types';
+import type { ScreenRecorder } from './commands/screen-recorder';
 
 type W3CNovaWindowsDriverCaps = W3CDriverCaps<NovaWindowsDriverConstraints>;
 type DefaultWindowsCreateSessionResult = DefaultCreateSessionResult<NovaWindowsDriverConstraints>;
@@ -67,6 +68,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         meta: false,
         shift: false,
     };
+    _screenRecorder: ScreenRecorder | null = null;
     activeCommands: number = 0;
 
     constructor(opts: InitialOpts = {} as InitialOpts, shouldValidateCaps = true) {
@@ -76,7 +78,10 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
         this.desiredCapConstraints = UI_AUTOMATION_DRIVER_CONSTRAINTS;
 
         for (const key in commands) {
-            (this as any)[key] = commands[key].bind(this);
+            const command = (commands as any)[key];
+            if (typeof command === 'function') {
+                (this as any)[key] = command.bind(this);
+            }
         }
     }
 
@@ -109,7 +114,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
     override async findElementFromElement(strategy: string, selector: string, elementId: string): Promise<Element> {
         [strategy, selector] = this.processSelector(strategy, selector);
         if (this.caps.convertAbsoluteXPathToRelativeFromElement && strategy === 'xpath' && selector.startsWith('/')) {
-            selector = `.${selector}`;
+            selector = `.${selector} `;
         }
         return super.findElementFromElement(strategy, selector, elementId);
     }
@@ -117,7 +122,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
     override async findElementsFromElement(strategy: string, selector: string, elementId: string): Promise<Element[]> {
         [strategy, selector] = this.processSelector(strategy, selector);
         if (this.caps.convertAbsoluteXPathToRelativeFromElement && strategy === 'xpath' && selector.startsWith('/')) {
-            selector = `.${selector}`;
+            selector = `.${selector} `;
         }
         return super.findElementsFromElement(strategy, selector, elementId);
     }
@@ -162,7 +167,7 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             case 'xpath':
                 return await xpathToElIdOrIds(selector, mult, context, this.sendPowerShellCommand.bind(this), this.caps.includeContextElementInSearch);
             default:
-                throw new errors.InvalidArgumentError(`Invalid find strategy ${strategy}`);
+                throw new errors.InvalidArgumentError(`Invalid find strategy ${strategy} `);
         }
 
         const searchContext = context ? new FoundAutomationElement(context) : AutomationElement.automationRoot;
@@ -203,8 +208,8 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
 
         try {
             this.log.debug('Creating NovaWindows driver session...');
-            this.log.debug(`User provided capabilities: \n${JSON.stringify(w3cCaps ?? jwpCaps)}`);
-            this.log.debug(`Supported capabilities: \n${Object.keys(UI_AUTOMATION_DRIVER_CONSTRAINTS).join(', ')}`);
+            this.log.debug(`User provided capabilities: \n${JSON.stringify(w3cCaps ?? jwpCaps)} `);
+            this.log.debug(`Supported capabilities: \n${Object.keys(UI_AUTOMATION_DRIVER_CONSTRAINTS).join(', ')} `);
             const [sessionId, caps] = await super.createSession(jwpCaps, reqCaps, w3cCaps, driverData);
             if (caps.smoothPointerMove) {
                 assertSupportedEasingFunction(caps.smoothPointerMove);
@@ -236,8 +241,8 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             }
 
             setDpiAwareness();
-            this.log.debug(`Started session: ${sessionId}`);
-            this.log.debug(`Session capabilities: \n${JSON.stringify(caps)}`);
+            this.log.debug(`Started session: ${sessionId} `);
+            this.log.debug(`Session capabilities: \n${JSON.stringify(caps)} `);
             return [sessionId, caps];
         } catch (e) {
             await this.deleteSession();
@@ -248,12 +253,30 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
     override async deleteSession(sessionId?: string | null | undefined): Promise<void> {
         this.log.debug('Deleting NovaWindows driver session...');
 
+        if (this._screenRecorder) {
+            await this._screenRecorder.stop(true);
+            this._screenRecorder = null;
+        }
+
         if (this.caps.shouldCloseApp && this.caps.app && this.caps.app.toLowerCase() !== 'root') {
             try {
-                const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
-                const elementId = result.split('\n').map((id) => id.trim()).filter(Boolean)[0];
-                if (elementId) {
-                    await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildCloseCommand());
+                if (this.caps['ms:forcequit'] === true) {
+                    await this.sendPowerShellCommand(/* ps1 */ `
+if ($null -ne $rootElement) {
+    try {
+        $processId = $rootElement.Current.ProcessId
+        if ($processId -gt 0) {
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+}
+`);
+                } else {
+                    const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
+                    const elementId = result.split('\n').map((id) => id.trim()).filter(Boolean)[0];
+                    if (elementId) {
+                        await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildCloseCommand());
+                    }
                 }
             } catch {
                 // noop

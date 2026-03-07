@@ -1,4 +1,19 @@
 import { errors } from '@appium/base-driver';
+import path from 'node:path';
+
+/**
+ * Resolves the path to the bundled ffmpeg binary from the ffmpeg-static package.
+ * Used by startRecordingScreen; no system PATH fallback.
+ */
+export function getBundledFfmpegPath(): string | null {
+    try {
+        const mod = require('ffmpeg-static') as string | { default?: string } | undefined;
+        const ffmpegPath = typeof mod === 'string' ? mod : mod?.default;
+        return typeof ffmpegPath === 'string' && ffmpegPath.length > 0 ? ffmpegPath : null;
+    } catch {
+        return null;
+    }
+}
 
 const SupportedEasingFunctions = Object.freeze([
     'linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out',
@@ -8,7 +23,7 @@ export function assertSupportedEasingFunction(value: string) {
     const cubicBezierRegex = /^cubic-bezier\(\s*(0|1|0?\.\d+|\d+(\.\d+)?)\s*,\s*(-?0|-?1|-?0?\.\d+|-?\d+(\.\d+)?)\s*,\s*(0|1|0?\.\d+|\d+(\.\d+)?)\s*,\s*(-?0|-?1|-?0?\.\d+|-?\d+(\.\d+)?)\s*\)$/;
     if (!SupportedEasingFunctions.includes(value) && !cubicBezierRegex.test(value)) {
         throw new errors.InvalidArgumentError(`Unsupported or invalid easing function '${value}' in appium:smoothPointerMove capability.`
-            + `Supported functions are [${SupportedEasingFunctions.join[', ']}, cubic-bezier(x1,y1,x2,y2)].`);
+            + `Supported functions are [${SupportedEasingFunctions.join(', ')}, cubic-bezier(x1,y1,x2,y2)].`);
     }
 }
 

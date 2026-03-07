@@ -50,6 +50,12 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     },
     typeDelay: {
         isNumber: true,
+    },
+    'ms:waitForAppLaunch': {
+        isNumber: true,
+    },
+    'ms:forcequit': {
+        isBoolean: true,
     }
 } as const satisfies Constraints;
 
