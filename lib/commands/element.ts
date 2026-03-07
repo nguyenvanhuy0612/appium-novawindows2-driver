@@ -20,7 +20,29 @@ import { Key } from '../enums';
 import { sleep } from '../util';
 
 export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
-    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(propertyName));
+    const el = new FoundAutomationElement(elementId);
+
+    const legacyPropsAlias = [
+        'LegacyName', 'LegacyValue', 'LegacyDescription', 'LegacyHelp',
+        'LegacyDefaultAction', 'LegacyKeyboardShortcut', 'LegacyRole',
+        'LegacyState', 'LegacyChildId', 'LegacySelection'
+    ];
+
+    // Normalize property name for consistent Builder interpolation
+    const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
+    const lowerProp = propertyName.toLowerCase();
+
+    // Route to Complex path if it's Value pattern, Legacy pattern, Window pattern, Transform pattern, or a legacy alias
+    if (lowerProp.startsWith('value.') ||
+        lowerProp.startsWith('legacyiaccessible.') ||
+        lowerProp.startsWith('window.') ||
+        lowerProp.startsWith('transform.') ||
+        legacyPropsAlias.some(alias => alias.toLowerCase() === lowerProp)) {
+        return await this.sendPowerShellCommand(el.buildGetComplexPropertyCommand(normalizedProp));
+    }
+
+    // Default to Basic path (used by XPath and standard property requests)
+    return await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
 }
 
 export async function getAttribute(this: NovaWindows2Driver, propertyName: string, elementId: string) {

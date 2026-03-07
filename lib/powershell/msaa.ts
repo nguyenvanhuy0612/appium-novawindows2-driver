@@ -58,17 +58,17 @@ public static class MSAAHelper {
                 object[] args = new object[] { (int)0 };
 
                 string memberName = "";
-                switch(propertyName) {
-                    case "Name": memberName = "accName"; break;
-                    case "Value": memberName = "accValue"; break;
-                    case "Description": memberName = "accDescription"; break;
-                    case "Role": memberName = "accRole"; break;
-                    case "State": memberName = "accState"; break;
-                    case "Help": memberName = "accHelp"; break;
-                    case "KeyboardShortcut": memberName = "accKeyboardShortcut"; break;
-                    case "DefaultAction": memberName = "accDefaultAction"; break;
-                    case "Focus": memberName = "accFocus"; args = null; break; // accFocus takes no args? No, it takes no args on interface but prop get might be different. Actually get_accFocus takes no args.
-                    case "Selection": memberName = "accSelection"; args = null; break;
+                switch(propertyName.ToLower()) {
+                    case "name": memberName = "accName"; break;
+                    case "value": memberName = "accValue"; break;
+                    case "description": memberName = "accDescription"; break;
+                    case "role": memberName = "accRole"; break;
+                    case "state": memberName = "accState"; break;
+                    case "help": memberName = "accHelp"; break;
+                    case "keyboardshortcut": memberName = "accKeyboardShortcut"; break;
+                    case "defaultaction": memberName = "accDefaultAction"; break;
+                    case "focus": memberName = "accFocus"; args = null; break;
+                    case "selection": memberName = "accSelection"; args = null; break;
                     default: return null;
                 }
 
@@ -82,83 +82,64 @@ public static class MSAAHelper {
         return null;
     }
 
+
     [HandleProcessCorruptedStateExceptions]
     [SecurityCritical]
-    public static bool SetLegacyValue(IntPtr hwnd, string value) {
+    public static object GetLegacyPropertyWithFallback(IntPtr hwnd, int x, int y, string propertyName) {
         try {
-            if (hwnd == IntPtr.Zero) return false;
+            // 1. Attempt retrieval using NativeWindowHandle
+            if (hwnd != IntPtr.Zero) {
+                object val = GetLegacyProperty(hwnd, propertyName);
+                if (val != null) return val;
+            }
 
-            Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+            // 2. Fallback: Attempt retrieval using the element's center point (X, Y)
+            POINT pt;
+            pt.x = x;
+            pt.y = y;
             object accObj = null;
-            int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
+            object childIdObj = null;
+            int res = AccessibleObjectFromPoint(pt, out accObj, out childIdObj);
+
             if (res == 0 && accObj != null) {
-                // set_accValue(childId, value)
-                object[] args = new object[] { (int)0, value };
+                object[] args = new object[] { childIdObj };
+                string memberName = "";
+                switch(propertyName.ToLower()) {
+                    case "name": memberName = "accName"; break;
+                    case "value": memberName = "accValue"; break;
+                    case "description": memberName = "accDescription"; break;
+                    case "role": memberName = "accRole"; break;
+                    case "state": memberName = "accState"; break;
+                    case "help": memberName = "accHelp"; break;
+                    case "keyboardshortcut": memberName = "accKeyboardShortcut"; break;
+                    case "defaultaction": memberName = "accDefaultAction"; break;
+                    case "focus": memberName = "accFocus"; args = null; break;
+                    case "selection": memberName = "accSelection"; args = null; break;
+                    default: return null;
+                }
 
-                accObj.GetType().InvokeMember("accValue", 
-                    BindingFlags.SetProperty, 
+                return accObj.GetType().InvokeMember(memberName, 
+                    BindingFlags.GetProperty, 
                     null, accObj, args);
-
-                return true;
             }
         } catch { }
-        return false;
+        return null;
     }
 
     [HandleProcessCorruptedStateExceptions]
     [SecurityCritical]
-    public static Hashtable GetAllLegacyProperties(IntPtr hwnd) {
+    public static Hashtable GetLegacyPropsWithFallback(IntPtr hwnd, int x, int y) {
         Hashtable props = new Hashtable();
         try {
-            if (hwnd == IntPtr.Zero) return null;
             string[] propertyNames = { "Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction" };
-
             foreach (string propName in propertyNames) {
-                try {
-                    object value = GetLegacyProperty(hwnd, propName);
-                    if (value != null) {
-                        props.Add(propName, value);
-                    }
-                } catch { }
+                object val = GetLegacyPropertyWithFallback(hwnd, x, y, propName);
+                if (val != null) {
+                    props.Add(propName, val);
+                }
             }
-
         } catch { }
         return props;
-    }
-
-    [HandleProcessCorruptedStateExceptions]
-    [SecurityCritical]
-    public static Hashtable GetLegacyPropsFromPoint(int x, int y) {
-        // Not implemented with Reflection yet, keeping simple return null for now or reusing logic if critical. 
-        // User primary focus is Window-based. Keeping it null safe.
-        // Or we can try to implement same pattern.
-        object accObj = null;
-        object childIdObj = null;
-        POINT pt;
-        pt.x = x;
-        pt.y = y;
-
-        int res = AccessibleObjectFromPoint(pt, out accObj, out childIdObj);
-
-        if (res == 0 && accObj != null) {
-             Hashtable props = new Hashtable();
-             try {
-                object[] args = new object[] { childIdObj };
-                Type t = accObj.GetType();
-
-                try { props.Add("Name", t.InvokeMember("accName", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("Value", t.InvokeMember("accValue", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("Description", t.InvokeMember("accDescription", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("Role", t.InvokeMember("accRole", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("State", t.InvokeMember("accState", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("Help", t.InvokeMember("accHelp", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("KeyboardShortcut", t.InvokeMember("accKeyboardShortcut", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-                try { props.Add("DefaultAction", t.InvokeMember("accDefaultAction", BindingFlags.GetProperty, null, accObj, args)); } catch {}
-
-                return props;
-             } catch { return null; }
-        }
-        return null;
     }
 }
 

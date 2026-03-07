@@ -273,213 +273,77 @@ const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
 const ELEMENT_TABLE_GET = pwsh$ /* ps1 */ `$elementTable['${0}']`;
 
 // TODO: maybe encode the result first? Some properties may be on multiple lines, it may cause a problem when returning multiple element results at once
-const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
-    $el = ${0};
-    $target = ${1};
-
-    if ($null -eq $el -or $null -eq $target -or -not $target.Contains(".")) { 
-        return $null;
-    }
-
-    $parts = $target.Split(".");
-    $pKey = $parts[0];
-    $propName = $parts[1];
-
-    # 2a. Generic Pattern Property Handler (UIA)
-    $patObj = $null;
-    switch ($pKey) {
-        # "LegacyIAccessible" { $patObj = [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern }
-        "Value"             { $patObj = [System.Windows.Automation.ValuePattern]::Pattern }
-        "Window"            { $patObj = [System.Windows.Automation.WindowPattern]::Pattern }
-        "Transform"         { $patObj = [System.Windows.Automation.TransformPattern]::Pattern }
-        "Scroll"            { $patObj = [System.Windows.Automation.ScrollPattern]::Pattern }
-        "Selection"         { $patObj = [System.Windows.Automation.SelectionPattern]::Pattern }
-        "SelectionItem"     { $patObj = [System.Windows.Automation.SelectionItemPattern]::Pattern }
-        "RangeValue"        { $patObj = [System.Windows.Automation.RangeValuePattern]::Pattern }
-        "ExpandCollapse"    { $patObj = [System.Windows.Automation.ExpandCollapsePattern]::Pattern }
-        "Toggle"            { $patObj = [System.Windows.Automation.TogglePattern]::Pattern }
-        "Grid"              { $patObj = [System.Windows.Automation.GridPattern]::Pattern }
-        "GridItem"          { $patObj = [System.Windows.Automation.GridItemPattern]::Pattern }
-        "Dock"              { $patObj = [System.Windows.Automation.DockPattern]::Pattern }
-        "Table"             { $patObj = [System.Windows.Automation.TablePattern]::Pattern }
-        "TableItem"         { $patObj = [System.Windows.Automation.TableItemPattern]::Pattern }
-        "MultipleView"      { $patObj = [System.Windows.Automation.MultipleViewPattern]::Pattern }
-        "Invoke"            { $patObj = [System.Windows.Automation.InvokePattern]::Pattern }
-    }
-
-    if ($null -ne $patObj) {
-        try {
-            # Write-Host "[DEBUG] Phase 2a Pattern Property"
-            $currPat = $el.GetCurrentPattern($patObj);
-            if ($null -ne $currPat) {
-                # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
-                $val = $currPat.Current.$propName;
-                if ($null -ne $val) { return $val.ToString() };
-            }
-        } catch {
-            # Write-Host "[DEBUG] Phase 2a Pattern Property failed"
-        }
-    }
-
-    try {
-        # Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
-        $hwnd = $el.Current.NativeWindowHandle;
-        if ($hwnd -gt 0) {
-            $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName);
-            if ($null -ne $msaaVal) { return $msaaVal.ToString() };
-        } else {
-            # Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
-        }
-    } catch {
-        # Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
-    }
-
-    return $null;
-`;
 
 const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0};
-    $target = ${1};
-    # Write-Host "============[DEBUG] Getting property $target ================"
+    try {
+        $p = [System.Windows.Automation.AutomationElement]::${1}Property;
+        $val = $el.GetCurrentPropertyValue($p);
+        if ($null -ne $val) { return $val.ToString() };
+    } catch { }
+    return $null;
+`;
 
-    if ($null -eq $el -or $null -eq $target) { 
-        return $null;
-    }
+const GET_ELEMENT_COMPLEX_PROPERTY = pwsh$ /* ps1 */ `
+    $el = ${0};
+    $target = "${1}";
+    if ($null -eq $el -or $null -eq $target) { return $null; }
 
-    # 1. Normal Properties (Standard AutomationElement direct properties)
-    # Check if the target matches a standard AutomationElement property (e.g. "Name", "AccessKey")
-    # Only try this for simple property names (no dots)
-    if (-not $target.Contains(".")) {
+    $parts = $target.Split(".");
+    $pKey = $parts[0];
+    $propName = if ($parts.Length -gt 1) { $parts[1] } else { $target };
+
+    # 1. Value Pattern (UIA with MSAA fallback)
+    if ($pKey -eq "Value") {
         try {
-            # Write-Host "[DEBUG] Phase 1 Normal Property"
-            $prop = [System.Windows.Automation.AutomationElement]::($target + "Property");
-            if ($null -ne $prop) {
-                $val = $el.GetCurrentPropertyValue($prop);
+            $valPat = [System.Windows.Automation.ValuePattern]::Pattern;
+            $currPat = $el.GetCurrentPattern($valPat);
+            if ($null -ne $currPat) {
+                $val = $currPat.Current.$propName;
                 if ($null -ne $val) { return $val.ToString() };
             }
-        } catch {
-            # Write-Host "[DEBUG] Phase 1 Normal Property failed"
-        }
+        } catch { }
     }
 
-    # 2. Pattern Properties (Pattern.Property)
-    if ($target.Contains(".")) {
-        $parts = $target.Split(".");
-        $pKey = $parts[0];
-        $propName = $parts[1];
-
-        # 2a. Generic Pattern Property Handler (UIA)
-        # Write-Host "[DEBUG] Phase 2a Generic Pattern Property Handler (UIA)"
-        $patObj = $null;
-        switch ($pKey) {
-            # "LegacyIAccessible" { $patObj = [System.Windows.Automation.LegacyIAccessiblePattern]::Pattern }
-            "Value"             { $patObj = [System.Windows.Automation.ValuePattern]::Pattern }
-            "Window"            { $patObj = [System.Windows.Automation.WindowPattern]::Pattern }
-            "Transform"         { $patObj = [System.Windows.Automation.TransformPattern]::Pattern }
-            "Scroll"            { $patObj = [System.Windows.Automation.ScrollPattern]::Pattern }
-            "Selection"         { $patObj = [System.Windows.Automation.SelectionPattern]::Pattern }
-            "SelectionItem"     { $patObj = [System.Windows.Automation.SelectionItemPattern]::Pattern }
-            "RangeValue"        { $patObj = [System.Windows.Automation.RangeValuePattern]::Pattern }
-            "ExpandCollapse"    { $patObj = [System.Windows.Automation.ExpandCollapsePattern]::Pattern }
-            "Toggle"            { $patObj = [System.Windows.Automation.TogglePattern]::Pattern }
-            "Grid"              { $patObj = [System.Windows.Automation.GridPattern]::Pattern }
-            "GridItem"          { $patObj = [System.Windows.Automation.GridItemPattern]::Pattern }
-            "Dock"              { $patObj = [System.Windows.Automation.DockPattern]::Pattern }
-            "Table"             { $patObj = [System.Windows.Automation.TablePattern]::Pattern }
-            "TableItem"         { $patObj = [System.Windows.Automation.TableItemPattern]::Pattern }
-            "MultipleView"      { $patObj = [System.Windows.Automation.MultipleViewPattern]::Pattern }
-            "Invoke"            { $patObj = [System.Windows.Automation.InvokePattern]::Pattern }
-        }
-
-        if ($null -ne $patObj) {
-            try {
-                # Write-Host "[DEBUG] Phase 2a Pattern Property"
-                $currPat = $el.GetCurrentPattern($patObj);
-                if ($null -ne $currPat) {
-                    # Dynamically access the property requested (e.g. IsReadOnly from Value.IsReadOnly)
-                    $val = $currPat.Current.$propName;
-                    if ($null -ne $val) { return $val.ToString() };
-                }
-            } catch {
-                # Write-Host "[DEBUG] Phase 2a Pattern Property failed"
+    # 2. Window Pattern
+    if ($pKey -eq "Window") {
+        try {
+            $winPat = [System.Windows.Automation.WindowPattern]::Pattern;
+            $currPat = $el.GetCurrentPattern($winPat);
+            if ($null -ne $currPat) {
+                $val = $currPat.Current.$propName;
+                if ($null -ne $val) { return $val.ToString() };
             }
-        }
-
-        # 2b. MSAA Fallback (LegacyIAccessible or Value) via Window Handle
-        if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value") {
-            try {
-                # Write-Host "[DEBUG] Phase 2b MSAA Fallback (Window Handle)"
-                $hwnd = $el.Current.NativeWindowHandle;
-                if ($hwnd -gt 0) {
-                    $msaaVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $propName);
-                    if ($null -ne $msaaVal) { return $msaaVal.ToString() };
-                } else {
-                    # Write-Host "[DEBUG] Phase 2b Skipped: No Window Handle"
-                }
-            } catch {
-                # Write-Host "[DEBUG] Phase 2b MSAA Fallback failed"
-            }
-
-            # 2c. MSAA Fallback (Point-based) - Useful for controls without their own HWND
-            try {
-                # Write-Host "[DEBUG] Phase 2c MSAA Fallback (Point-based)"
-                $rect = $el.Current.BoundingRectangle
-                if ($null -ne $rect -and $rect.Width -gt 0) {
-                    $cx = [int]($rect.Left + $rect.Width/2)
-                    $cy = [int]($rect.Top + $rect.Height/2)
-                    $props = [MSAAHelper]::GetLegacyPropsFromPoint($cx, $cy)
-                    if ($null -ne $props) {
-                        $val = $props[$propName]
-                        if ($null -ne $val) { return $val.ToString() }
-                    } else {
-                        # Write-Host "[DEBUG] Phase 2c: No properties found at point ($cx, $cy)"
-                    }
-                } else {
-                    # Write-Host "[DEBUG] Phase 2c Skipped: Invalid BoundingRectangle"
-                }
-            } catch {
-                # Write-Host "[DEBUG] Phase 2c MSAA Fallback failed"
-            }
-
-            # 2d. UIA Value Pattern Fallback - When MSAA returns nothing, try UIA ValuePattern
-            if ($propName -eq "Value") {
-                try {
-                    # Write-Host "[DEBUG] Phase 2d UIA Value Pattern Fallback"
-                    $valuePattern = $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern);
-                    if ($null -ne $valuePattern) {
-                        $val = $valuePattern.Current.Value;
-                        if ($null -ne $val) { return $val.ToString() };
-                    }
-                } catch {
-                    # Write-Host "[DEBUG] Phase 2d UIA Value Pattern Fallback failed"
-                }
-            }
-        }
+        } catch { }
     }
-    
-    # If specifically looking for LegacyIAccessible and fallback failed, do NOT try fuzzy match to avoid ArgumentNullException
-    #if ($target -like "LegacyIAccessible*") {
-    #    # Write-Host "[DEBUG] Phase 2d Supported Properties Category will ignore LegacyIAccessible"
-    #    return $null 
-    #}
 
-    ## 3. Supported Properties Category (Fuzzy / programmatic name match)
-    ## This searches all properties supported by the element (Pattern properties included)
-    #try {
-    #    # Write-Host "[DEBUG] Phase 3 Supported Properties Category"
-    #    $supportedProps = $el.GetSupportedProperties()
-    #    foreach ($prop in $supportedProps) {
-    #        # Write-Host "[DEBUG] Checking property: $($prop.ProgrammaticName)"
-    #        if ($prop.ProgrammaticName -like "*$target*") {
-    #            $val = $el.GetCurrentPropertyValue($prop)
-    #            if ($null -ne $val) { return $val.ToString() }
-    #        }
-    #    }
-    #} catch {
-    #    # Write-Host "[DEBUG] Phase 3 Supported Properties Category failed"
-    #}
+    # 3. Transform Pattern
+    if ($pKey -eq "Transform") {
+        try {
+            $transPat = [System.Windows.Automation.TransformPattern]::Pattern;
+            $currPat = $el.GetCurrentPattern($transPat);
+            if ($null -ne $currPat) {
+                $val = $currPat.Current.$propName;
+                if ($null -ne $val) { return $val.ToString() };
+            }
+        } catch { }
+    }
 
-    # Write-Host "[DEBUG] Last Phase return null"
+    # 4. LegacyIAccessible / MSAA Fallback
+    if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value" -or $pKey.StartsWith("Legacy")) {
+        try {
+            # Normalize property name for MSAA helper (e.g. LegacyIAccessible.Name -> Name)
+            $msaaProp = if ($propName.StartsWith("Legacy")) { $propName.Substring(6) } else { $propName };
+            
+            $hwnd = $el.Current.NativeWindowHandle;
+            $rect = $el.Current.BoundingRectangle;
+            $centerX = [int]($rect.Left + $rect.Width / 2);
+            $centerY = [int]($rect.Top + $rect.Height / 2);
+
+            $msaaVal = [MSAAHelper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $centerX, $centerY, $msaaProp);
+            if ($null -ne $msaaVal) { return $msaaVal.ToString() };
+        } catch { }
+    }
 
     return $null;
 `;
@@ -490,57 +354,45 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
 
     $out = [ordered]@{};
 
-    # 1. Standard Supported Properties
+    # 1. Standard Supported Properties (UIA)
     try {
         $props = $el.GetSupportedProperties();
-        foreach ($p in $props) {
+        foreach($p in $props) {
             try {
                 $val = $el.GetCurrentPropertyValue($p);
                 if ($null -ne $val) {
                     $name = $p.ProgrammaticName.Split('.')[-1];
                     $name = $name -replace "Property$", "";
-                    
+
                     if ($val -is [Array]) {
-                         $out[$name] = $val -join "," ;
+                        $out[$name] = $val -join ",";
                     } else {
-                         $out[$name] = $val.ToString();
+                        $out[$name] = $val.ToString();
                     }
                 }
             } catch { }
         }
     } catch { }
 
-    # 2. MSAA Fallback for LegacyIAccessible
+    # 2. Optimized MSAA Fallback for LegacyIAccessible and Value
     try {
         $hwnd = $el.Current.NativeWindowHandle;
-        if ($hwnd -gt 0) {
-            $msaaProps = @("Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction"); 
-            foreach ($mp in $msaaProps) {
-                $key = "LegacyIAccessible." + $mp;
-                # Prefer UIA result if available
-                if (-not $out.Contains($key)) {
-                    try {
-                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp);
-                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() };
-                    } catch {}
-                }
-            }
-        }
-    } catch { }
+        $rect = $el.Current.BoundingRectangle;
+        $cx = [int]($rect.Left + $rect.Width / 2);
+        $cy = [int]($rect.Top + $rect.Height / 2);
 
-    # 3. MSAA Fallback for Value
-    try {
-        $hwnd = $el.Current.NativeWindowHandle;
-        if ($hwnd -gt 0) {
-            $msaaProps = @("Value", "IsReadOnly"); 
-            foreach ($mp in $msaaProps) {
-                $key = "Value." + $mp;
-                # Prefer UIA result if available
+        $msaaProps = [MSAAHelper]::GetLegacyPropsWithFallback([IntPtr]$hwnd, $cx, $cy);
+        if ($null -ne $msaaProps) {
+            foreach($entry in $msaaProps.GetEnumerator()) {
+                $key = "LegacyIAccessible." + $entry.Key;
+                # Only add if not already present via UIA (to avoid duplicates or prefer UIA)
                 if (-not $out.Contains($key)) {
-                    try {
-                        $mVal = [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, $mp);
-                        if ($null -ne $mVal) { $out[$key] = $mVal.ToString() };
-                    } catch {}
+                    $out[$key] = $entry.Value.ToString();
+                }
+                
+                # Special mapping for "Value" which might be in both patterns
+                if ($entry.Key -eq "Value" -and -not $out.Contains("Value.Value")) {
+                    $out["Value.Value"] = $entry.Value.ToString();
                 }
             }
         }
@@ -552,27 +404,23 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
     try {
         ${0}.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
-    } catch {
-        # ElementNotAvailableException
-    }
+    } catch { }
 `;
 
 // TODO: [Huy] - Need to review to use Cached or Current
 const GET_ELEMENT_RECT = pwsh$ /* ps1 */ `
     $rect = ${0}.Current.BoundingRectangle;
     $rect | Select-Object X, Y, Width, Height |
-    ForEach-Object { $_ | ConvertTo-Json -Compress } |
-    ForEach-Object { 
-        if ($null -eq $_) { return };
-        $_.ToLower();
-    }
+        ForEach-Object { $_ | ConvertTo-Json -Compress } |
+        ForEach-Object {
+            if ($null -eq $_) { return };
+            $_.ToLower();
+        }
 `;
 
 const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
-    # try { $ct = $_.Cached.ControlType } catch { $ct = $_.Current.ControlType }
     $ct = ${0}.Current.ControlType;
-    $ct.ProgrammaticName |
-    ForEach-Object {
+    $ct.ProgrammaticName | ForEach-Object {
         $type = $_.Split('.')[-1];
         if ($type -eq 'DataGrid') {
             return 'List';
@@ -611,7 +459,7 @@ const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
         $targetIdArray = [int32[]]@($runtimeIdStr.Split('.'));
         $cond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::RuntimeIdProperty, $targetIdArray);
         $found = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond);
-        
+
         if ($null -ne $found) {
             $foundRuntimeId = $found.GetRuntimeId() -join '.';
             if (-not $elementTable.ContainsKey($foundRuntimeId)) {
@@ -622,7 +470,7 @@ const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
     }
 
     $el | Where-Object { $null -ne $_ } | ForEach-Object {
-        # 1. Try ScrollItem Pattern (Standard UIA)
+        # 1. Try ScrollItem Pattern
         try {
             $pattern = $_.GetCurrentPattern([ScrollItemPattern]::Pattern);
             if ($null -ne $pattern) {
@@ -631,13 +479,13 @@ const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
             }
         } catch { }
 
-        # 2. Try SetFocus (Often scrolls element into view)
+        # 2. Try SetFocus
         try {
             $_.SetFocus();
             return;
         } catch { }
 
-        # 3. Try LegacyIAccessible Select (TakeFocus)
+        # 3. Try LegacyIAccessible Select
         try {
             $legacy = $_.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
             if ($null -ne $legacy) {
@@ -646,29 +494,7 @@ const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
             }
         } catch { }
 
-        # 4. Try ItemContainerPattern on Parent (For virtualized lists)
-        try {
-            $parent = [TreeWalker]::ControlViewWalker.GetParent($_);
-            if ($null -ne $parent) {
-                $containerPattern = $parent.GetCurrentPattern([ItemContainerPattern]::Pattern);
-                if ($null -ne $containerPattern) {
-                    # Re-find the item using the container pattern which can trigger virtualization
-                    $found = $containerPattern.FindItemByProperty($null, [AutomationElement]::RuntimeIdProperty, $_.GetRuntimeId());
-                    if ($null -ne $found) {
-                        # Try scrolling the fresh reference
-                        $foundPattern = $found.GetCurrentPattern([ScrollItemPattern]::Pattern);
-                        if ($null -ne $foundPattern) {
-                            $foundPattern.ScrollIntoView();
-                            return;
-                        }
-                        $found.SetFocus();
-                        return;
-                    }
-                }
-            }
-        } catch { }
-
-        throw "Failed to scroll into view: ScrollItemPattern not supported, and SetFocus/LegacySelect/ItemContainerPattern fallbacks failed.";
+        throw "Failed to scroll into view.";
     }
 `;
 const IS_MULTIPLE_SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.CanSelectMultiple`;
@@ -682,34 +508,19 @@ const SET_ELEMENT_VALUE = pwsh$ /* ps1 */ `
     try {
         ${0}.GetCurrentPattern([ValuePattern]::Pattern).SetValue(${1});
     } catch { } 
-    
-    # try {
-    #     $hwnd = $_.Current.NativeWindowHandle
-    #     if ($hwnd -gt 0) {
-    #         [MSAAHelper]::SetLegacyValue([IntPtr]$hwnd, ${1})
-    #     }
-    # } catch { }
 `;
 const SET_ELEMENT_RANGE_VALUE = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([RangeValuePattern]::Pattern).SetValue(${1})`;
 const GET_ELEMENT_VALUE = pwsh$ /* ps1 */ `
     try {
         return ${0}.GetCurrentPattern([ValuePattern]::Pattern).Current.Value;
     } catch { }
-
-    # try {
-    #     $hwnd = $_.Current.NativeWindowHandle
-    #     if ($hwnd -gt 0) {
-    #         return [MSAAHelper]::GetLegacyProperty([IntPtr]$hwnd, "accValue")
-    #     } 
-    #     
-    #     return $null
-    # } catch { return $null; }
+    return $null;
 `;
 const GET_ELEMENT_TOGGLE_STATE = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TogglePattern]::Pattern).Current.ToggleState`;
 const MAXIMIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Maximized)`;
 const MINIMIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Minimized)`;
 const RESTORE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Normal)`;
-const CLOSE_WINDOW = pwsh$ /* ps1 */ `try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Close(); } catch { }`;
+const CLOSE_WINDOW = pwsh$ /* ps1 */ `try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Close(); } catch { } `;
 
 const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
     try {
@@ -717,8 +528,7 @@ const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
         $rect = $el.Current.BoundingRectangle;
 
         if ($el -eq $null -or $rect.Width -le 0 -or $rect.Height -le 0) {
-            # Return 1x1 placeholder
-            $bitmap = New-Object Drawing.Bitmap 1,1;
+            $bitmap = New-Object Drawing.Bitmap 1, 1;
             $stream = New-Object IO.MemoryStream;
             $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
             $bitmap.Dispose();
@@ -727,15 +537,11 @@ const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
 
         $bitmap = New-Object Drawing.Bitmap([int32]$rect.Width, [int32]$rect.Height);
         $graphics = [Drawing.Graphics]::FromImage($bitmap);
-
         try {
-            # 0,0 is destination X,Y in the bitmap
             $graphics.CopyFromScreen([int32]$rect.Left, [int32]$rect.Top, 0, 0, $bitmap.Size);
         } catch {
-            # UAC or other failure
             $graphics.Clear([Drawing.Color]::Red);
         }
-
         $graphics.Dispose();
 
         $stream = New-Object IO.MemoryStream;
@@ -743,8 +549,7 @@ const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
         $bitmap.Dispose();
         [Convert]::ToBase64String($stream.ToArray());
     } catch {
-        # Global fallback
-        $bitmap = New-Object Drawing.Bitmap 1,1;
+        $bitmap = New-Object Drawing.Bitmap 1, 1;
         $stream = New-Object IO.MemoryStream;
         $graphics = [Drawing.Graphics]::FromImage($bitmap);
         $graphics.Clear([Drawing.Color]::Red);
@@ -854,6 +659,10 @@ export class AutomationElement extends PSObject {
         return GET_ELEMENT_TAG_NAME.format(this);
     }
 
+    buildGetComplexPropertyCommand(property: string): string {
+        return GET_ELEMENT_COMPLEX_PROPERTY.format(this, property);
+    }
+
     buildGetPropertyCommand(property: string): string {
         if (property.toLowerCase() === 'all') {
             return this.buildGetAllPropertiesCommand();
@@ -867,28 +676,7 @@ export class AutomationElement extends PSObject {
             return GET_ELEMENT_TAG_NAME.format(this);
         }
 
-        const legacyPropsAlias = {
-            'LegacyName': 'LegacyIAccessible.Name',
-            'LegacyValue': 'LegacyIAccessible.Value',
-            'LegacyDescription': 'LegacyIAccessible.Description',
-            'LegacyHelp': 'LegacyIAccessible.Help',
-            'LegacyDefaultAction': 'LegacyIAccessible.DefaultAction',
-            'LegacyKeyboardShortcut': 'LegacyIAccessible.KeyboardShortcut',
-            'LegacyRole': 'LegacyIAccessible.Role',
-            'LegacyState': 'LegacyIAccessible.State',
-            'LegacyChildId': 'LegacyIAccessible.ChildId',
-            'LegacySelection': 'LegacyIAccessible.Selection'
-        }
-
-        if (legacyPropsAlias[property]) {
-            property = legacyPropsAlias[property];
-        }
-
-        // if (property.toLowerCase().startsWith('legacyiaccessible.')) {
-        //     return GET_ELEMENT_LEGACY_PROPERTY.format(this, new PSString(property).toString());
-        // }
-
-        return GET_ELEMENT_PROPERTY.format(this, new PSString(property).toString());
+        return GET_ELEMENT_PROPERTY.format(this, property);
     }
 
     buildGetAllPropertiesCommand(): string {
@@ -916,7 +704,7 @@ export class AutomationElementGroup extends AutomationElement {
     readonly groups: AutomationElement[];
 
     constructor(...automationElements: AutomationElement[]) {
-        super(`@( ${automationElements.map((el) => `(${el.buildCommand()})`).join(', ')} )`);
+        super(`@(${automationElements.map((el) => `(${el.buildCommand()})`).join(', ')} )`);
         this.groups = automationElements;
     }
 

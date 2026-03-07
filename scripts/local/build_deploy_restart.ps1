@@ -16,7 +16,7 @@
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-$ip = "192.168.1.19"
+$ip = "192.168.1.17"
 $user = "admin"
 $source = "D:/SecureAge/appium-novawindows2-driver"
 $remoteDest = "C:/Share/appium-novawindows2-driver"
@@ -164,7 +164,7 @@ $startScript = @"
     # Install production dependencies only for speed
     #Write-Host '  -> Running npm install...'
     #npm install --no-save | Out-Null
-    npm run build | Out-Null
+    #npm run build | Out-Null
 
     # Identify the active user for the GUI session (explorer.exe owner)
     `$u = (Get-Process explorer -IncludeUserName | Select-Object -First 1).UserName.Split('\')[-1]
