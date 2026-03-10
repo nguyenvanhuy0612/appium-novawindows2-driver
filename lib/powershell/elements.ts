@@ -284,66 +284,43 @@ const GET_ELEMENT_PROPERTY = pwsh$ /* ps1 */ `
     return $null;
 `;
 
-const GET_ELEMENT_COMPLEX_PROPERTY = pwsh$ /* ps1 */ `
+const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0};
-    $target = "${1}";
-    if ($null -eq $el -or $null -eq $target) { return $null; }
+    if ($null -eq $el) { return $null };
+    try {
+        $pattern = $el.GetCurrentPattern([System.Windows.Automation.${1}Pattern]::Pattern);
+        if ($null -ne $pattern) {
+            $val = $pattern.Current.${2};
+            if ($null -ne $val) { return $val.ToString() };
+        }
+    } catch { }
+    return $null;
+`;
 
-    $parts = $target.Split(".");
-    $pKey = $parts[0];
-    $propName = if ($parts.Length -gt 1) { $parts[1] } else { $target };
+const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
+    $el = ${0};
+    if ($null -eq $el) { return $null };
 
-    # 1. Value Pattern (UIA with MSAA fallback)
-    if ($pKey -eq "Value") {
-        try {
-            $valPat = [System.Windows.Automation.ValuePattern]::Pattern;
-            $currPat = $el.GetCurrentPattern($valPat);
-            if ($null -ne $currPat) {
-                $val = $currPat.Current.$propName;
-                if ($null -ne $val) { return $val.ToString() };
-            }
-        } catch { }
-    }
+    # 1. UIA LegacyIAccessiblePattern (most reliable - works for both Win32 and modern apps)
+    try {
+        $pattern = $el.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
+        if ($null -ne $pattern) {
+            $val = $pattern.Current.${1};
+            if ($null -ne $val) { return $val.ToString() };
+        }
+    } catch { }
 
-    # 2. Window Pattern
-    if ($pKey -eq "Window") {
-        try {
-            $winPat = [System.Windows.Automation.WindowPattern]::Pattern;
-            $currPat = $el.GetCurrentPattern($winPat);
-            if ($null -ne $currPat) {
-                $val = $currPat.Current.$propName;
-                if ($null -ne $val) { return $val.ToString() };
-            }
-        } catch { }
-    }
+    # 2. Raw MSAA: hwnd first, then center-point fallback
+    $hwnd = 0;
+    try { $hwnd = [int]$el.Current.NativeWindowHandle; } catch { }
+    $rect = $el.Current.BoundingRectangle;
+    $centerX = [int]($rect.Left + $rect.Width / 2);
+    $centerY = [int]($rect.Top + $rect.Height / 2);
 
-    # 3. Transform Pattern
-    if ($pKey -eq "Transform") {
-        try {
-            $transPat = [System.Windows.Automation.TransformPattern]::Pattern;
-            $currPat = $el.GetCurrentPattern($transPat);
-            if ($null -ne $currPat) {
-                $val = $currPat.Current.$propName;
-                if ($null -ne $val) { return $val.ToString() };
-            }
-        } catch { }
-    }
-
-    # 4. LegacyIAccessible / MSAA Fallback
-    if ($pKey -eq "LegacyIAccessible" -or $pKey -eq "Value" -or $pKey.StartsWith("Legacy")) {
-        try {
-            # Normalize property name for MSAA helper (e.g. LegacyIAccessible.Name -> Name)
-            $msaaProp = if ($propName.StartsWith("Legacy")) { $propName.Substring(6) } else { $propName };
-            
-            $hwnd = $el.Current.NativeWindowHandle;
-            $rect = $el.Current.BoundingRectangle;
-            $centerX = [int]($rect.Left + $rect.Width / 2);
-            $centerY = [int]($rect.Top + $rect.Height / 2);
-
-            $msaaVal = [MSAAHelper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $centerX, $centerY, $msaaProp);
-            if ($null -ne $msaaVal) { return $msaaVal.ToString() };
-        } catch { }
-    }
+    try {
+        $val = [MSAAHelper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $centerX, $centerY, "${1}");
+        if ($null -ne $val) { return $val.ToString() };
+    } catch { }
 
     return $null;
 `;
@@ -354,15 +331,26 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
 
     $out = [ordered]@{};
 
-    # 1. Standard Supported Properties (UIA)
+    # 1. UIA direct + pattern properties via GetSupportedProperties()
+    #    ProgrammaticName format:
+    #      AutomationElementIdentifiers.<Prop>Property  -> key: <Prop>
+    #      <Pattern>PatternIdentifiers.<Prop>Property   -> key: <Pattern>.<Prop>
     try {
         $props = $el.GetSupportedProperties();
         foreach($p in $props) {
             try {
                 $val = $el.GetCurrentPropertyValue($p);
                 if ($null -ne $val) {
-                    $name = $p.ProgrammaticName.Split('.')[-1];
-                    $name = $name -replace "Property$", "";
+                    $nameParts = $p.ProgrammaticName.Split('.');
+                    $prefix = $nameParts[0];
+                    $rawName = $nameParts[-1] -replace "Property$", "";
+
+                    if ($prefix -eq "AutomationElementIdentifiers") {
+                        $name = $rawName;
+                    } else {
+                        $patternName = $prefix -replace "PatternIdentifiers$", "";
+                        $name = "$patternName.$rawName";
+                    }
 
                     if ($val -is [Array]) {
                         $out[$name] = $val -join ",";
@@ -374,7 +362,7 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
         }
     } catch { }
 
-    # 2. Optimized MSAA Fallback for LegacyIAccessible and Value
+    # 2. MSAA fallback for LegacyIAccessible props not already captured by UIA
     try {
         $hwnd = $el.Current.NativeWindowHandle;
         $rect = $el.Current.BoundingRectangle;
@@ -385,14 +373,8 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
         if ($null -ne $msaaProps) {
             foreach($entry in $msaaProps.GetEnumerator()) {
                 $key = "LegacyIAccessible." + $entry.Key;
-                # Only add if not already present via UIA (to avoid duplicates or prefer UIA)
                 if (-not $out.Contains($key)) {
                     $out[$key] = $entry.Value.ToString();
-                }
-                
-                # Special mapping for "Value" which might be in both patterns
-                if ($entry.Key -eq "Value" -and -not $out.Contains("Value.Value")) {
-                    $out["Value.Value"] = $entry.Value.ToString();
                 }
             }
         }
@@ -659,20 +641,22 @@ export class AutomationElement extends PSObject {
         return GET_ELEMENT_TAG_NAME.format(this);
     }
 
-    buildGetComplexPropertyCommand(property: string): string {
-        return GET_ELEMENT_COMPLEX_PROPERTY.format(this, property);
+    buildGetPatternPropertyCommand(patternName: string, propName: string): string {
+        return GET_ELEMENT_PATTERN_PROPERTY.format(this, patternName, propName);
+    }
+
+    buildGetLegacyPropertyCommand(propName: string): string {
+        return GET_ELEMENT_LEGACY_PROPERTY.format(this, propName);
     }
 
     buildGetPropertyCommand(property: string): string {
-        if (property.toLowerCase() === 'all') {
-            return this.buildGetAllPropertiesCommand();
-        }
+        const proLower = property.toLowerCase();
 
-        if (property.toLowerCase() === 'runtimeid') {
+        if (proLower === 'runtimeid') {
             return GET_ELEMENT_RUNTIME_ID.format(this);
         }
 
-        if (property.toLowerCase() === 'controltype') {
+        if (proLower === 'controltype') {
             return GET_ELEMENT_TAG_NAME.format(this);
         }
 

@@ -46,13 +46,12 @@ public static class MSAAHelper {
     [HandleProcessCorruptedStateExceptions]
     [SecurityCritical]
     public static object GetLegacyProperty(IntPtr hwnd, string propertyName) {
+        if (hwnd == IntPtr.Zero) return null;
+
+        Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
+        object accObj = null;
         try {
-            if (hwnd == IntPtr.Zero) return null;
-
-            Guid IID_IAccessible = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");
-            object accObj = null;
             int res = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref IID_IAccessible, out accObj);
-
             if (res == 0 && accObj != null) {
                 // childId = 0 (Self)
                 object[] args = new object[] { (int)0 };
@@ -72,13 +71,16 @@ public static class MSAAHelper {
                     default: return null;
                 }
 
-                object result = accObj.GetType().InvokeMember(memberName, 
-                    BindingFlags.GetProperty, 
+                object result = accObj.GetType().InvokeMember(memberName,
+                    BindingFlags.GetProperty,
                     null, accObj, args);
 
                 return result;
             }
         } catch { }
+        finally {
+            if (accObj != null) try { System.Runtime.InteropServices.Marshal.ReleaseComObject(accObj); } catch { }
+        }
         return null;
     }
 
@@ -86,19 +88,19 @@ public static class MSAAHelper {
     [HandleProcessCorruptedStateExceptions]
     [SecurityCritical]
     public static object GetLegacyPropertyWithFallback(IntPtr hwnd, int x, int y, string propertyName) {
-        try {
-            // 1. Attempt retrieval using NativeWindowHandle
-            if (hwnd != IntPtr.Zero) {
-                object val = GetLegacyProperty(hwnd, propertyName);
-                if (val != null) return val;
-            }
+        // 1. Attempt retrieval using NativeWindowHandle
+        if (hwnd != IntPtr.Zero) {
+            object val = GetLegacyProperty(hwnd, propertyName);
+            if (val != null) return val;
+        }
 
-            // 2. Fallback: Attempt retrieval using the element's center point (X, Y)
-            POINT pt;
-            pt.x = x;
-            pt.y = y;
-            object accObj = null;
-            object childIdObj = null;
+        // 2. Fallback: Attempt retrieval using the element's center point (X, Y)
+        POINT pt;
+        pt.x = x;
+        pt.y = y;
+        object accObj = null;
+        object childIdObj = null;
+        try {
             int res = AccessibleObjectFromPoint(pt, out accObj, out childIdObj);
 
             if (res == 0 && accObj != null) {
@@ -115,14 +117,18 @@ public static class MSAAHelper {
                     case "defaultaction": memberName = "accDefaultAction"; break;
                     case "focus": memberName = "accFocus"; args = null; break;
                     case "selection": memberName = "accSelection"; args = null; break;
+                    case "childid": return childIdObj;
                     default: return null;
                 }
 
-                return accObj.GetType().InvokeMember(memberName, 
-                    BindingFlags.GetProperty, 
+                return accObj.GetType().InvokeMember(memberName,
+                    BindingFlags.GetProperty,
                     null, accObj, args);
             }
         } catch { }
+        finally {
+            if (accObj != null) try { System.Runtime.InteropServices.Marshal.ReleaseComObject(accObj); } catch { }
+        }
         return null;
     }
 
@@ -131,7 +137,7 @@ public static class MSAAHelper {
     public static Hashtable GetLegacyPropsWithFallback(IntPtr hwnd, int x, int y) {
         Hashtable props = new Hashtable();
         try {
-            string[] propertyNames = { "Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction" };
+            string[] propertyNames = { "Name", "Value", "Description", "Role", "State", "Help", "KeyboardShortcut", "DefaultAction", "ChildId" };
             foreach (string propName in propertyNames) {
                 object val = GetLegacyPropertyWithFallback(hwnd, x, y, propName);
                 if (val != null) {

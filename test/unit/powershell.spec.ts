@@ -8,23 +8,10 @@ import {
     TreeScope,
     FoundAutomationElement
 } from '../../lib/powershell';
+import { decodePwsh } from '../../lib/powershell/core';
 
-// Helper to recursively decode the PowerShell command
 function decodeCommand(cmd: string): string {
-    const base64Regex = /FromBase64String\('(.+?)'\)/;
-    const match = cmd.match(base64Regex);
-    if (match && match[1]) {
-        const decoded = Buffer.from(match[1], 'base64').toString('utf8');
-        // If the decoded string itself contains another encoding layer, recurse
-        if (decoded.includes('Invoke-Expression')) {
-            // We might have multiple nested commands.
-            // But usually the structure is: (Invoke... (Invoke...))
-            // We want to unwrap fully.
-            return decodeCommand(decoded);
-        }
-        return decoded;
-    }
-    return cmd;
+    return decodePwsh(cmd);
 }
 
 // Since the command structure allows mixed raw and encoded parts (via string interpolation),
@@ -42,17 +29,7 @@ describe('PowerShell Generation', () => {
         const decoded = decodeCommand(command);
         console.log('DEBUG FindFirst:', decoded);
 
-        // Expect the Search Loop and Condition
-        expect(decoded).to.contain('Find-ChildrenRecursively');
-        // Actually, looking at elements.ts `FIND_DESCENDANTS` uses `Find-ChildrenRecursively`
-
-        // Wait, AutomationRoot is simpler. 
-        // Let's check finding from Root.
-        // AutomationRoot uses AUTOMATION_ROOT = `$rootElement`
-        // findFirst uses `FIND_DESCENDANTS.format(this, condition)`
-
-        // The decoded string should contain the script block logic
-        expect(decoded).to.contain('Find-ChildrenRecursively');
+        expect(decoded).to.contain('Find-Descendant');
         expect(decoded).to.contain('[AutomationElement]::nameProperty');
     });
 
