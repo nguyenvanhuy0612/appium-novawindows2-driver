@@ -109,7 +109,41 @@ export async function clear(this: NovaWindows2Driver, elementId: string): Promis
 }
 
 export async function setValue(this: NovaWindows2Driver, value: string | string[], elementId: string): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildSetFocusCommand());
+    const element = new FoundAutomationElement(elementId);
+
+    // Normalize to a flat string first so delay-prefix parsing and char iteration are consistent
+    const rawString = Array.isArray(value) ? value.join('') : value;
+
+    let typeDelay = this.caps.typeDelay ?? 0;
+    let processedString = rawString;
+
+    if (typeDelay > 0) {
+        const match = rawString.match(/^\[delay:\s*(\d+)\]/i);
+        if (match) {
+            typeDelay = parseInt(match[1], 10);
+            processedString = rawString.substring(match[0].length);
+        }
+    }
+
+    // Flat char array — consistent regardless of whether value was string or string[]
+    const chars = [...processedString];
+
+    // Try SetFocus; if it fails and value is plain text, fall back to ValuePattern.SetValue directly
+    let focusSet = false;
+    try {
+        await this.sendPowerShellCommand(element.buildSetFocusCommand());
+        focusSet = true;
+    } catch (e: any) {
+        this.log.debug(`[setValue] SetFocus failed: ${e.message}`);
+    }
+
+    const isPlainText = chars.every((c) => c.charCodeAt(0) < 0xE000);
+    if (!focusSet && isPlainText) {
+        this.log.info('[setValue] SetFocus unavailable — using ValuePattern.SetValue as fallback');
+        await this.sendPowerShellCommand(element.buildSetValueCommand(processedString));
+        return;
+    }
+
     const metaKeyStates: {
         shift?: string;
         ctrl?: string;
@@ -124,35 +158,12 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
     let keysToSend: string[] = [];
 
     const sendKeysAndResetArray = async () => {
+        if (keysToSend.length === 0) return;
         await this.sendPowerShellCommand(/* ps1 */ `[Windows.Forms.SendKeys]::SendWait(${new PSString(keysToSend.join(''))})`);
         keysToSend = [];
     };
 
-    const parseDelay = (defaultDelay: number, text: string): { delay: number; textWithoutDelay: string } => {
-        const match = text.match(/^\[delay:\s*(\d+)\]/i);
-        if (match) {
-            const delay = parseInt(match[1], 10);
-            const textWithoutDelay = text.substring(match[0].length);
-            return { delay, textWithoutDelay };
-        }
-        return { delay: defaultDelay, textWithoutDelay: text };
-    };
-
-    let typeDelay = this.caps.typeDelay ?? 0;
-
-    if (typeDelay > 0) {
-        if (!Array.isArray(value)) {
-            const { delay, textWithoutDelay } = parseDelay(typeDelay, value as string);
-            typeDelay = delay;
-            value = textWithoutDelay;
-        } else {
-            const { delay, textWithoutDelay } = parseDelay(typeDelay, value.join(''));
-            typeDelay = delay;
-            value = textWithoutDelay.split('');
-        }
-    }
-
-    for (const char of value) {
+    for (const char of chars) {
         switch (char) {
             case Key.SHIFT:
             case Key.R_SHIFT:
@@ -246,7 +257,7 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
                         await sleep(typeDelay);
                     }
                 } else {
-                    keysToSend.push(char.replace(/[+^%~()]/, '{$&}'));
+                    keysToSend.push(char.replace(/[+^%~()]/g, '{$&}'));
                     if (typeDelay) {
                         await sendKeysAndResetArray();
                         await sleep(typeDelay);
