@@ -1,5 +1,5 @@
 # Generate ssh key and copy ssh public key to remote machine
-$ip = "192.168.1.19"
+$ip = "192.168.196.135"
 $user = "admin"
 
 # Check if ssh key exists

@@ -16,12 +16,13 @@
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-$ip = "192.168.1.17"
+$ip = "192.168.196.132"
 $user = "admin"
 $source = "D:/SecureAge/appium-novawindows2-driver"
-$remoteDest = "C:/Share/appium-novawindows2-driver"
+$dest = "C:/appium"
+$remoteDest = "$dest/appium-novawindows2-driver"
 $zipPath = "$source/log/deploy_novawindows.zip"
-$remoteZipPath = "C:/Share/deploy_novawindows.zip"
+$remoteZipPath = "$dest/deploy_novawindows.zip"
 
 # Items to include in the deployment package
 $includeItems = @("build", "lib", "scripts", "*.json")
@@ -86,7 +87,7 @@ catch {
 Write-Host "[3/6] Transferring package to remote machine..." -ForegroundColor Cyan
 
 # Ensure remote destination directory exists for the zip
-$createDirScript = "if (-not (Test-Path 'C:\Share')) {New-Item -Path 'C:\Share' -ItemType Directory -Force | Out-Null }"
+$createDirScript = "if (-not (Test-Path '$dest')) {New-Item -Path '$dest' -ItemType Directory -Force | Out-Null }"
 ssh $user@$ip "powershell -Command `"$createDirScript`""
 
 # Copy zip to remote

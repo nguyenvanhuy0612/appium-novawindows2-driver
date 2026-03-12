@@ -2,6 +2,7 @@
 .agent
 .idea
 .vscode
+.claude
 .npmrc
 temp
 tmp
