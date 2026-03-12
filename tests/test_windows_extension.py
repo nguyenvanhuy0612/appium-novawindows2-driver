@@ -112,8 +112,14 @@ class TestWindowsExtension:
             target_line = edit_area.find_element(AppiumBy.XPATH, "//*[contains(@Name, 'Line 99')]")
             self.driver.execute_script("windows: scrollIntoView", {"elementId": target_line.id})
             print("scrollIntoView successful")
+            
+            # --- test click auto-scroll ---
+            print("Testing implicit scroll on click for an off-screen element...")
+            target_line_10 = edit_area.find_element(AppiumBy.XPATH, "//*[contains(@Name, 'Line 10')]")
+            self.driver.execute_script("windows: click", {"elementId": target_line_10.id})
+            print("Implicit click-scroll successful")
         except Exception as e:
-            print(f"scrollIntoView test skipped or failed: {e}")
+            print(f"scrollIntoView or click test skipped or failed: {e}")
 
         print("All extension tests completed!")
 

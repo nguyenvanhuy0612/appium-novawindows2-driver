@@ -1,0 +1,285 @@
+commit c74791ea160a32075ae21936a385aea8e808b8ac
+Author: Huy <vanhuy.nguyen@secureage.com>
+Date:   Tue Mar 10 14:19:46 2026 +0700
+
+    update to version 1.0.2 refactor get attributes
+
+diff --git a/lib/commands/element.ts b/lib/commands/element.ts
+index f02b59c..0df77e9 100644
+--- a/lib/commands/element.ts
++++ b/lib/commands/element.ts
+@@ -19,29 +19,71 @@ import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
+ import { Key } from '../enums';
+ import { sleep } from '../util';
+ 
++// Maps lowercase dot-prefix to the PascalCase UIA pattern class name
++const PATTERN_MAP: Record<string, string> = {
++    'value':           'Value',
++    'window':          'Window',
++    'transform':       'Transform',
++    'toggle':          'Toggle',
++    'expandcollapse':  'ExpandCollapse',
++    'rangevalue':      'RangeValue',
++    'selection':       'Selection',
++    'selectionitem':   'SelectionItem',
++    'scroll':          'Scroll',
++    'grid':            'Grid',
++    'griditem':        'GridItem',
++    'table':           'Table',
++    'tableitem':       'TableItem',
++    'dock':            'Dock',
++    'multipleview':    'MultipleView',
++};
++
++// Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and MSAAHelper
++const LEGACY_ALIAS_MAP: Record<string, string> = {
++    'legacyname':             'Name',
++    'legacyvalue':            'Value',
++    'legacydescription':      'Description',
++    'legacyrole':             'Role',
++    'legacystate':            'State',
++    'legacyhelp':             'Help',
++    'legacykeyboardshortcut': 'KeyboardShortcut',
++    'legacydefaultaction':    'DefaultAction',
++    'legacychildid':          'ChildId',
++};
++
+ export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
+     const el = new FoundAutomationElement(elementId);
++    const lowerKey = propertyName.toLowerCase();
+ 
+-    const legacyPropsAlias = [
+-        'LegacyName', 'LegacyValue', 'LegacyDescription', 'LegacyHelp',
+-        'LegacyDefaultAction', 'LegacyKeyboardShortcut', 'LegacyRole',
+-        'LegacyState', 'LegacyChildId', 'LegacySelection'
+-    ];
++    // 1. Legacy shorthand alias (e.g. "LegacyName", "LegacyValue")
++    if (lowerKey in LEGACY_ALIAS_MAP) {
++        return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(LEGACY_ALIAS_MAP[lowerKey]));
++    }
+ 
+-    // Normalize property name for consistent Builder interpolation
+-    const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
+-    const lowerProp = propertyName.toLowerCase();
+-
+-    // Route to Complex path if it's Value pattern, Legacy pattern, Window pattern, Transform pattern, or a legacy alias
+-    if (lowerProp.startsWith('value.') ||
+-        lowerProp.startsWith('legacyiaccessible.') ||
+-        lowerProp.startsWith('window.') ||
+-        lowerProp.startsWith('transform.') ||
+-        legacyPropsAlias.some(alias => alias.toLowerCase() === lowerProp)) {
+-        return await this.sendPowerShellCommand(el.buildGetComplexPropertyCommand(normalizedProp));
++    // 2. LegacyIAccessible dot-notation (e.g. "LegacyIAccessible.Name")
++    if (lowerKey.startsWith('legacyiaccessible.')) {
++        const propName = propertyName.slice('LegacyIAccessible.'.length);
++        return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(propName));
+     }
+ 
+-    // Default to Basic path (used by XPath and standard property requests)
++    // 3. UIA Pattern dot-notation (e.g. "Toggle.ToggleState", "Value.Value", "Window.CanMaximize")
++    const dotIdx = lowerKey.indexOf('.');
++    if (dotIdx !== -1) {
++        const prefix = lowerKey.slice(0, dotIdx);
++        if (prefix in PATTERN_MAP) {
++            const patternName = PATTERN_MAP[prefix];
++            const propName = propertyName.slice(dotIdx + 1);
++            return await this.sendPowerShellCommand(el.buildGetPatternPropertyCommand(patternName, propName));
++        }
++    }
++
++    // 4. Dump all properties
++    if (lowerKey === 'all') {
++        return await this.sendPowerShellCommand(el.buildGetAllPropertiesCommand());
++    }
++
++    // 5. UIA direct property (also handles 'runtimeid', 'controltype')
++    const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
+     return await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
+ }
+ 
+
+commit 95da98d1aefc3a723f541ec0c651f1057313df88
+Author: nguyenvanhuy0612 <nguyenvanhuy0612@gmail.com>
+Date:   Sat Mar 7 17:30:42 2026 +0700
+
+    feat: optimize property retrieval and add window/transform pattern support
+
+diff --git a/lib/commands/element.ts b/lib/commands/element.ts
+index 76e4aaa..f02b59c 100644
+--- a/lib/commands/element.ts
++++ b/lib/commands/element.ts
+@@ -20,7 +20,29 @@ import { Key } from '../enums';
+ import { sleep } from '../util';
+ 
+ export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
+-    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(propertyName));
++    const el = new FoundAutomationElement(elementId);
++
++    const legacyPropsAlias = [
++        'LegacyName', 'LegacyValue', 'LegacyDescription', 'LegacyHelp',
++        'LegacyDefaultAction', 'LegacyKeyboardShortcut', 'LegacyRole',
++        'LegacyState', 'LegacyChildId', 'LegacySelection'
++    ];
++
++    // Normalize property name for consistent Builder interpolation
++    const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
++    const lowerProp = propertyName.toLowerCase();
++
++    // Route to Complex path if it's Value pattern, Legacy pattern, Window pattern, Transform pattern, or a legacy alias
++    if (lowerProp.startsWith('value.') ||
++        lowerProp.startsWith('legacyiaccessible.') ||
++        lowerProp.startsWith('window.') ||
++        lowerProp.startsWith('transform.') ||
++        legacyPropsAlias.some(alias => alias.toLowerCase() === lowerProp)) {
++        return await this.sendPowerShellCommand(el.buildGetComplexPropertyCommand(normalizedProp));
++    }
++
++    // Default to Basic path (used by XPath and standard property requests)
++    return await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
+ }
+ 
+ export async function getAttribute(this: NovaWindows2Driver, propertyName: string, elementId: string) {
+
+commit 455be2f5965fd9467b0d2e0429c092d098c85c9e
+Author: nguyenvanhuy0612 <nguyenvanhuy0612@gmail.com>
+Date:   Sun Jan 18 10:46:25 2026 +0700
+
+    ver 0.2.22
+
+diff --git a/lib/commands/element.ts b/lib/commands/element.ts
+index d68884c..76e4aaa 100644
+--- a/lib/commands/element.ts
++++ b/lib/commands/element.ts
+@@ -12,6 +12,7 @@ import {
+     PSControlType,
+     PSString,
+     TreeScope,
++    TrueCondition,
+ } from '../powershell';
+ import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+ import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
+@@ -261,38 +262,20 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
+     const easingFunction = this.caps.smoothPointerMove;
+     const element = new FoundAutomationElement(elementId);
+ 
+-    const ancestorCondition = new OrCondition(
+-        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
+-        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
+-    );
+-
+     const focusCondition = new AndCondition(
+         new PropertyCondition(Property.IS_KEYBOARD_FOCUSABLE, new PSBoolean(true)),
+-        ancestorCondition,
++        new OrCondition(
++            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
++            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
++        ),
+     );
+ 
+     try {
+-        // this.log.debug(`[Click] Setting focus for element ${elementId}`);
+-        // this.log.debug(`[Click] Finding focusable ancestor with command: \n${element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand()}`);
+-        
+-        let focusableElementId = '';
+-        for (let i = 0; i < 20; i++) {
+-            const ancestorElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, ancestorCondition).buildCommand());
+-            if (ancestorElementId) {
+-                // const allProps = await this.sendPowerShellCommand(new FoundAutomationElement(ancestorElementId).buildGetPropertyCommand('all'));
+-                // this.log.debug(`[Click] Element allProps: '${allProps}'`);
+-                const isKeyboardFocusable = await this.sendPowerShellCommand(new FoundAutomationElement(ancestorElementId).buildGetPropertyCommand(Property.IS_KEYBOARD_FOCUSABLE));
+-                if (isKeyboardFocusable.toLowerCase() === 'true') {
+-                    focusableElementId = ancestorElementId;
+-                    break;
+-                }
+-            }
+-        }
+-
+-        if (focusableElementId) {
+-            await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId).buildSetFocusCommand());
++        const focusableElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand());
++        if (focusableElementId && focusableElementId.trim()) {
++            await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId.trim()).buildSetFocusCommand());
+         } else {
+-            this.log.warn(`[Click] No focusable ancestor found. Skipping SetFocus and proceeding to click.`);
++            this.log.warn(`Could not find a focusable element ${elementId} in the ancestors or self of the element`);
+         }
+     } catch {
+         // ignore if it fails, focus may fail if there is a forced popup window
+
+commit f93e4fe27946f9e728182f56676ea3d2f29a7bce
+Author: nguyenvanhuy0612 <nguyenvanhuy0612@gmail.com>
+Date:   Sun Jan 18 01:13:14 2026 +0700
+
+    update to version 0.2.21
+
+diff --git a/lib/commands/element.ts b/lib/commands/element.ts
+index 041398b..d68884c 100644
+--- a/lib/commands/element.ts
++++ b/lib/commands/element.ts
+@@ -261,17 +261,39 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
+     const easingFunction = this.caps.smoothPointerMove;
+     const element = new FoundAutomationElement(elementId);
+ 
++    const ancestorCondition = new OrCondition(
++        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
++        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
++    );
++
+     const focusCondition = new AndCondition(
+         new PropertyCondition(Property.IS_KEYBOARD_FOCUSABLE, new PSBoolean(true)),
+-        new OrCondition(
+-            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
+-            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
+-        ),
++        ancestorCondition,
+     );
+ 
+     try {
+-        const focusableElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand());
+-        await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId.trim()).buildSetFocusCommand());
++        // this.log.debug(`[Click] Setting focus for element ${elementId}`);
++        // this.log.debug(`[Click] Finding focusable ancestor with command: \n${element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand()}`);
++        
++        let focusableElementId = '';
++        for (let i = 0; i < 20; i++) {
++            const ancestorElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, ancestorCondition).buildCommand());
++            if (ancestorElementId) {
++                // const allProps = await this.sendPowerShellCommand(new FoundAutomationElement(ancestorElementId).buildGetPropertyCommand('all'));
++                // this.log.debug(`[Click] Element allProps: '${allProps}'`);
++                const isKeyboardFocusable = await this.sendPowerShellCommand(new FoundAutomationElement(ancestorElementId).buildGetPropertyCommand(Property.IS_KEYBOARD_FOCUSABLE));
++                if (isKeyboardFocusable.toLowerCase() === 'true') {
++                    focusableElementId = ancestorElementId;
++                    break;
++                }
++            }
++        }
++
++        if (focusableElementId) {
++            await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId).buildSetFocusCommand());
++        } else {
++            this.log.warn(`[Click] No focusable ancestor found. Skipping SetFocus and proceeding to click.`);
++        }
+     } catch {
+         // ignore if it fails, focus may fail if there is a forced popup window
+     }
+
+commit 2243cc35ed6ebdc6d0e9d424034bcab7434872df
+Author: Huy <vanhuy.nguyen@secureage.com>
+Date:   Thu Jan 15 16:08:54 2026 +0700
+
+    update to 0.2.18, support screenshot
+
+diff --git a/lib/commands/element.ts b/lib/commands/element.ts
+index 033d706..041398b 100644
+--- a/lib/commands/element.ts
++++ b/lib/commands/element.ts
+@@ -301,4 +301,8 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
+     if (this.caps.delayAfterClick) {
+         await sleep(this.caps.delayAfterClick ?? 0);
+     }
++}
++
++export async function getElementScreenshot(this: NovaWindows2Driver, elementId: string): Promise<string> {
++    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementScreenshotCommand());
+ }
+\ No newline at end of file

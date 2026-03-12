@@ -1,5 +1,5 @@
 import { Element, Rect } from '@appium/types';
-import { NovaWindows2Driver } from '../driver';
+import { NovaWindowsDriver } from '../driver';
 import {
     AndCondition,
     AutomationElement,
@@ -12,115 +12,50 @@ import {
     PSControlType,
     PSString,
     TreeScope,
-    TrueCondition,
 } from '../powershell';
 import { W3C_ELEMENT_KEY } from '@appium/base-driver';
 import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';
 
-// Maps lowercase dot-prefix to the PascalCase UIA pattern class name
-const PATTERN_MAP: Record<string, string> = {
-    'value':           'Value',
-    'window':          'Window',
-    'transform':       'Transform',
-    'toggle':          'Toggle',
-    'expandcollapse':  'ExpandCollapse',
-    'rangevalue':      'RangeValue',
-    'selection':       'Selection',
-    'selectionitem':   'SelectionItem',
-    'scroll':          'Scroll',
-    'grid':            'Grid',
-    'griditem':        'GridItem',
-    'table':           'Table',
-    'tableitem':       'TableItem',
-    'dock':            'Dock',
-    'multipleview':    'MultipleView',
-};
-
-// Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and MSAAHelper
-const LEGACY_ALIAS_MAP: Record<string, string> = {
-    'legacyname':             'Name',
-    'legacyvalue':            'Value',
-    'legacydescription':      'Description',
-    'legacyrole':             'Role',
-    'legacystate':            'State',
-    'legacyhelp':             'Help',
-    'legacykeyboardshortcut': 'KeyboardShortcut',
-    'legacydefaultaction':    'DefaultAction',
-    'legacychildid':          'ChildId',
-};
-
-export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
-    const el = new FoundAutomationElement(elementId);
-    const lowerKey = propertyName.toLowerCase();
-
-    // 1. Legacy shorthand alias (e.g. "LegacyName", "LegacyValue")
-    if (lowerKey in LEGACY_ALIAS_MAP) {
-        return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(LEGACY_ALIAS_MAP[lowerKey]));
-    }
-
-    // 2. LegacyIAccessible dot-notation (e.g. "LegacyIAccessible.Name")
-    if (lowerKey.startsWith('legacyiaccessible.')) {
-        const propName = propertyName.slice('LegacyIAccessible.'.length);
-        return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(propName));
-    }
-
-    // 3. UIA Pattern dot-notation (e.g. "Toggle.ToggleState", "Value.Value", "Window.CanMaximize")
-    const dotIdx = lowerKey.indexOf('.');
-    if (dotIdx !== -1) {
-        const prefix = lowerKey.slice(0, dotIdx);
-        if (prefix in PATTERN_MAP) {
-            const patternName = PATTERN_MAP[prefix];
-            const propName = propertyName.slice(dotIdx + 1);
-            return await this.sendPowerShellCommand(el.buildGetPatternPropertyCommand(patternName, propName));
-        }
-    }
-
-    // 4. Dump all properties
-    if (lowerKey === 'all') {
-        return await this.sendPowerShellCommand(el.buildGetAllPropertiesCommand());
-    }
-
-    // 5. UIA direct property (also handles 'runtimeid', 'controltype')
-    const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
-    return await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
+export async function getProperty(this: NovaWindowsDriver, propertyName: string, elementId: string): Promise<string> {
+    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(propertyName));
 }
 
-export async function getAttribute(this: NovaWindows2Driver, propertyName: string, elementId: string) {
+export async function getAttribute(this: NovaWindowsDriver, propertyName: string, elementId: string) {
     this.log.warn('Warning: Use getProperty instead of getAttribute for retrieving element properties.');
     return await this.getProperty(propertyName, elementId);
 }
 
-export async function active(this: NovaWindows2Driver): Promise<Element> {
+export async function active(this: NovaWindowsDriver): Promise<Element> {
     return { [W3C_ELEMENT_KEY]: await this.sendPowerShellCommand(AutomationElement.focusedElement.buildCommand()) };
 }
 
-export async function getName(this: NovaWindows2Driver, elementId: string): Promise<string> {
+export async function getName(this: NovaWindowsDriver, elementId: string): Promise<string> {
     return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetTagNameCommand());
 }
 
-export async function getText(this: NovaWindows2Driver, elementId: string): Promise<string> {
+export async function getText(this: NovaWindowsDriver, elementId: string): Promise<string> {
     return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetTextCommand());
 }
 
-export async function clear(this: NovaWindows2Driver, elementId: string): Promise<void> {
+export async function clear(this: NovaWindowsDriver, elementId: string): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildSetValueCommand(''));
 }
 
-export async function setValue(this: NovaWindows2Driver, value: string | string[], elementId: string): Promise<void> {
+export async function setValue(this: NovaWindowsDriver, value: string | string[], elementId: string): Promise<void> {
     await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildSetFocusCommand());
-    const metaKeyStates: {
-        shift?: string;
-        ctrl?: string;
-        meta?: string;
-        alt?: string;
-    } = {
-        shift: undefined,
-        ctrl: undefined,
-        meta: undefined,
-        alt: undefined,
+    const metaKeyStates = {
+        shift: false,
+        ctrl: false,
+        meta: false,
+        alt: false,
     };
+
+    if (!Array.isArray(value)) {
+        value = value.split('');
+    }
+
     let keysToSend: string[] = [];
 
     const sendKeysAndResetArray = async () => {
@@ -128,46 +63,22 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         keysToSend = [];
     };
 
-    const parseDelay = (defaultDelay: number, text: string): { delay: number; textWithoutDelay: string } => {
-        const match = text.match(/^\[delay:\s*(\d+)\]/i);
-        if (match) {
-            const delay = parseInt(match[1], 10);
-            const textWithoutDelay = text.substring(match[0].length);
-            return { delay, textWithoutDelay };
-        }
-        return { delay: defaultDelay, textWithoutDelay: text };
-    };
-
-    let typeDelay = this.caps.typeDelay ?? 0;
-
-    if (typeDelay > 0) {
-        if (!Array.isArray(value)) {
-            const { delay, textWithoutDelay } = parseDelay(typeDelay, value as string);
-            typeDelay = delay;
-            value = textWithoutDelay;
-        } else {
-            const { delay, textWithoutDelay } = parseDelay(typeDelay, value.join(''));
-            typeDelay = delay;
-            value = textWithoutDelay.split('');
-        }
-    }
-
     for (const char of value) {
         switch (char) {
             case Key.SHIFT:
             case Key.R_SHIFT:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.shift) {
+                    metaKeyStates.shift = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
-                    metaKeyStates.shift = undefined;
                     break;
                 }
 
-                metaKeyStates.shift = char;
+                metaKeyStates.shift = true;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -178,16 +89,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_CONTROL:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.ctrl) {
+                    metaKeyStates.ctrl = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
-                    metaKeyStates.ctrl = undefined;
                     break;
                 }
 
-                metaKeyStates.ctrl = char;
+                metaKeyStates.ctrl = true;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -198,16 +109,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_META:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.meta) {
+                    metaKeyStates.meta = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
-                    metaKeyStates.meta = undefined;
                     break;
                 }
 
-                metaKeyStates.meta = char;
+                metaKeyStates.meta = true;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -218,16 +129,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
             case Key.R_ALT:
                 await sendKeysAndResetArray();
                 if (metaKeyStates.alt) {
+                    metaKeyStates.alt = false;
                     await this.handleKeyActionSequence({
                         type: 'key',
                         id: 'default keyboard',
                         actions: [{ type: 'keyUp', value: char }]
                     });
-                    metaKeyStates.alt = undefined;
                     break;
                 }
 
-                metaKeyStates.alt = char;
+                metaKeyStates.alt = true;
                 await this.handleKeyActionSequence({
                     type: 'key',
                     id: 'default keyboard',
@@ -242,54 +153,16 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
                         id: 'default keyboard',
                         actions: [{ type: 'keyDown', value: char }, { type: 'keyUp', value: char }]
                     });
-                    if (typeDelay) {
-                        await sleep(typeDelay);
-                    }
                 } else {
                     keysToSend.push(char.replace(/[+^%~()]/, '{$&}'));
-                    if (typeDelay) {
-                        await sendKeysAndResetArray();
-                        await sleep(typeDelay);
-                    }
                 }
         }
     }
 
     await sendKeysAndResetArray();
-
-    if (this.caps.releaseModifierKeys) {
-        if (metaKeyStates.shift) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.shift }]
-            });
-        }
-        if (metaKeyStates.ctrl) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.ctrl }]
-            });
-        }
-        if (metaKeyStates.meta) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.meta }]
-            });
-        }
-        if (metaKeyStates.alt) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.alt }]
-            });
-        }
-    }
 }
 
-export async function getElementRect(this: NovaWindows2Driver, elementId: string): Promise<Rect> {
+export async function getElementRect(this: NovaWindowsDriver, elementId: string): Promise<Rect> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
     const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
     const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
@@ -301,13 +174,13 @@ export async function getElementRect(this: NovaWindows2Driver, elementId: string
     return rect;
 }
 
-export async function elementDisplayed(this: NovaWindows2Driver, elementId: string): Promise<boolean> {
+export async function elementDisplayed(this: NovaWindowsDriver, elementId: string): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.IS_OFFSCREEN));
     return result.toLowerCase() === 'true' ? false : true;
 }
 
 // TODO: find better way to handle whether to use select or toggle
-export async function elementSelected(this: NovaWindows2Driver, elementId: string): Promise<boolean> {
+export async function elementSelected(this: NovaWindowsDriver, elementId: string): Promise<boolean> {
     try {
         const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildIsSelectedCommand());
         return result === 'True';
@@ -317,12 +190,12 @@ export async function elementSelected(this: NovaWindows2Driver, elementId: strin
     }
 }
 
-export async function elementEnabled(this: NovaWindows2Driver, elementId: string): Promise<boolean> {
+export async function elementEnabled(this: NovaWindowsDriver, elementId: string): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.IS_ENABLED));
     return result.toLowerCase() === 'true' ? true : false;
 }
 
-export async function click(this: NovaWindows2Driver, elementId: string): Promise<void> {
+export async function click(this: NovaWindowsDriver, elementId: string): Promise<void> {
     const easingFunction = this.caps.smoothPointerMove;
     const element = new FoundAutomationElement(elementId);
 
@@ -336,20 +209,9 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
 
     try {
         const focusableElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand());
-        if (focusableElementId && focusableElementId.trim()) {
-            await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId.trim()).buildSetFocusCommand());
-        } else {
-            this.log.warn(`Could not find a focusable element ${elementId} in the ancestors or self of the element`);
-        }
+        await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId.trim()).buildSetFocusCommand());
     } catch {
         // ignore if it fails, focus may fail if there is a forced popup window
-    }
-
-    try {
-        // Automatically scroll the element into view if possible by setting focus to it
-        await this.sendPowerShellCommand(element.buildSetFocusCommand());
-    } catch (e: any) {
-        this.log.debug(`[Click] Could not set focus to element: ${e.message}`);
     }
 
     const coordinates = {
@@ -377,8 +239,4 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
     if (this.caps.delayAfterClick) {
         await sleep(this.caps.delayAfterClick ?? 0);
     }
-}
-
-export async function getElementScreenshot(this: NovaWindows2Driver, elementId: string): Promise<string> {
-    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementScreenshotCommand());
 }

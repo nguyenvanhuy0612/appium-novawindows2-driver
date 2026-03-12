@@ -19,72 +19,8 @@ import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';
 
-// Maps lowercase dot-prefix to the PascalCase UIA pattern class name
-const PATTERN_MAP: Record<string, string> = {
-    'value':           'Value',
-    'window':          'Window',
-    'transform':       'Transform',
-    'toggle':          'Toggle',
-    'expandcollapse':  'ExpandCollapse',
-    'rangevalue':      'RangeValue',
-    'selection':       'Selection',
-    'selectionitem':   'SelectionItem',
-    'scroll':          'Scroll',
-    'grid':            'Grid',
-    'griditem':        'GridItem',
-    'table':           'Table',
-    'tableitem':       'TableItem',
-    'dock':            'Dock',
-    'multipleview':    'MultipleView',
-};
-
-// Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and MSAAHelper
-const LEGACY_ALIAS_MAP: Record<string, string> = {
-    'legacyname':             'Name',
-    'legacyvalue':            'Value',
-    'legacydescription':      'Description',
-    'legacyrole':             'Role',
-    'legacystate':            'State',
-    'legacyhelp':             'Help',
-    'legacykeyboardshortcut': 'KeyboardShortcut',
-    'legacydefaultaction':    'DefaultAction',
-    'legacychildid':          'ChildId',
-};
-
 export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
-    const el = new FoundAutomationElement(elementId);
-    const lowerKey = propertyName.toLowerCase();
-
-    // 1. Legacy shorthand alias (e.g. "LegacyName", "LegacyValue")
-    if (lowerKey in LEGACY_ALIAS_MAP) {
-        return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(LEGACY_ALIAS_MAP[lowerKey]));
-    }
-
-    // 2. LegacyIAccessible dot-notation (e.g. "LegacyIAccessible.Name")
-    if (lowerKey.startsWith('legacyiaccessible.')) {
-        const propName = propertyName.slice('LegacyIAccessible.'.length);
-        return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(propName));
-    }
-
-    // 3. UIA Pattern dot-notation (e.g. "Toggle.ToggleState", "Value.Value", "Window.CanMaximize")
-    const dotIdx = lowerKey.indexOf('.');
-    if (dotIdx !== -1) {
-        const prefix = lowerKey.slice(0, dotIdx);
-        if (prefix in PATTERN_MAP) {
-            const patternName = PATTERN_MAP[prefix];
-            const propName = propertyName.slice(dotIdx + 1);
-            return await this.sendPowerShellCommand(el.buildGetPatternPropertyCommand(patternName, propName));
-        }
-    }
-
-    // 4. Dump all properties
-    if (lowerKey === 'all') {
-        return await this.sendPowerShellCommand(el.buildGetAllPropertiesCommand());
-    }
-
-    // 5. UIA direct property (also handles 'runtimeid', 'controltype')
-    const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
-    return await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
+    return await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(propertyName));
 }
 
 export async function getAttribute(this: NovaWindows2Driver, propertyName: string, elementId: string) {
@@ -343,13 +279,6 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
         }
     } catch {
         // ignore if it fails, focus may fail if there is a forced popup window
-    }
-
-    try {
-        // Automatically scroll the element into view if possible by setting focus to it
-        await this.sendPowerShellCommand(element.buildSetFocusCommand());
-    } catch (e: any) {
-        this.log.debug(`[Click] Could not set focus to element: ${e.message}`);
     }
 
     const coordinates = {
