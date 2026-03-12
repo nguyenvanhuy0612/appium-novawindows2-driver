@@ -19,9 +19,9 @@
 $ip = "192.168.196.132"
 $user = "admin"
 $source = "D:/SecureAge/appium-novawindows2-driver"
+$zipPath = "$source/log/deploy_novawindows.zip"
 $dest = "C:/appium"
 $remoteDest = "$dest/appium-novawindows2-driver"
-$zipPath = "$source/log/deploy_novawindows.zip"
 $remoteZipPath = "$dest/deploy_novawindows.zip"
 
 # Items to include in the deployment package
