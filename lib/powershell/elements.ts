@@ -472,19 +472,21 @@ const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
     $el = ${0};
     if ($null -eq $el) { return };
 
-    # 1. Try ScrollItemPattern on element or nearest ancestor that supports it
-    #    (e.g. Text doesn't have it, but parent ListItem/DataItem does)
-    $curr = $el;
-    while ($null -ne $curr) {
-        try {
-            $pattern = $curr.GetCurrentPattern([ScrollItemPattern]::Pattern);
-            if ($null -ne $pattern) {
-                $pattern.ScrollIntoView();
-                return;
-            }
-        } catch { }
-        try { $curr = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($curr); } catch { break; }
-    }
+    # Skip scrolling if element is already visible
+    try { if (-not $el.Current.IsOffscreen) { return; } } catch { }
+
+    # 1. Try ScrollItemPattern on element itself
+    try {
+        $pattern = $el.GetCurrentPattern([ScrollItemPattern]::Pattern);
+        if ($null -ne $pattern) {
+            $pattern.ScrollIntoView();
+            return;
+        }
+    } catch { }
+
+    # TODO: Walk up ancestors for ScrollItemPattern to support child elements
+    #       (e.g. Text inside ListItem/DataItem). Disabled for now due to
+    #       unwanted horizontal scroll side-effects on visible elements.
 
     # 2. Try SetFocus directly (triggers native auto-scroll in many containers)
     try {
