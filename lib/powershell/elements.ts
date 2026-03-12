@@ -415,6 +415,42 @@ const GET_ELEMENT_TAG_NAME = pwsh$ /* ps1 */ `
 
 const SET_FOCUS_TO_ELEMENT = pwsh$ /* ps1 */ `${0}.SetFocus()`;
 
+const BRING_ELEMENT_TO_FRONT = pwsh$ /* ps1 */ `
+    $el = ${0};
+    if ($null -eq $el) { return };
+
+    if (-not ([System.Management.Automation.PSTypeName]'BringToFrontHelper').Type) {
+        Add-Type -TypeDefinition @"
+            using System;
+            using System.Runtime.InteropServices;
+            public static class BringToFrontHelper {
+                [DllImport("user32.dll")]
+                [return: MarshalAs(UnmanagedType.Bool)]
+                public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+                [DllImport("user32.dll")]
+                [return: MarshalAs(UnmanagedType.Bool)]
+                public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+            }
+"@
+    }
+
+    # Try to get native window handle from the element or its ancestors
+    $curr = $el;
+    while ($null -ne $curr) {
+        try {
+            $hwnd = [IntPtr]$curr.Current.NativeWindowHandle;
+            if ($hwnd -ne [IntPtr]::Zero) {
+                [void][BringToFrontHelper]::ShowWindow($hwnd, 5);  # SW_SHOW
+                [void][BringToFrontHelper]::SetForegroundWindow($hwnd);
+                return;
+            }
+        } catch { }
+        try { $curr = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($curr); } catch { break; }
+    }
+`;
+
+
 const GET_ELEMENT_TEXT = pwsh$ /* ps1 */ `
     try {
         return ${0}.GetCurrentPattern([TextPattern]::Pattern).DocumentRange.GetText(-1);
@@ -434,49 +470,59 @@ const EXPAND_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePa
 const COLLAPSE_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([ExpandCollapsePattern]::Pattern).Collapse()`;
 const SCROLL_ELEMENT_INTO_VIEW = pwsh$ /* ps1 */ `
     $el = ${0};
-    $runtimeIdStr = "${1}";
+    if ($null -eq $el) { return };
 
-    if ($null -eq $el -and $runtimeIdStr) {
-        # Attempt repair
-        $targetIdArray = [int32[]]@($runtimeIdStr.Split('.'));
-        $cond = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::RuntimeIdProperty, $targetIdArray);
-        $found = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond);
-
-        if ($null -ne $found) {
-            $foundRuntimeId = $found.GetRuntimeId() -join '.';
-            if (-not $elementTable.ContainsKey($foundRuntimeId)) {
-                $elementTable.Add($foundRuntimeId, $found);
-            }
-            $el = $found;
-        }
-    }
-
-    $el | Where-Object { $null -ne $_ } | ForEach-Object {
-        # 1. Try ScrollItem Pattern
+    # 1. Try ScrollItemPattern on element or nearest ancestor that supports it
+    #    (e.g. Text doesn't have it, but parent ListItem/DataItem does)
+    $curr = $el;
+    while ($null -ne $curr) {
         try {
-            $pattern = $_.GetCurrentPattern([ScrollItemPattern]::Pattern);
+            $pattern = $curr.GetCurrentPattern([ScrollItemPattern]::Pattern);
             if ($null -ne $pattern) {
                 $pattern.ScrollIntoView();
                 return;
             }
         } catch { }
+        try { $curr = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($curr); } catch { break; }
+    }
 
-        # 2. Try SetFocus
-        try {
-            $_.SetFocus();
+    # 2. Try SetFocus directly (triggers native auto-scroll in many containers)
+    try {
+        if ($el.Current.IsKeyboardFocusable) {
+            $el.SetFocus();
             return;
-        } catch { }
+        }
+    } catch { }
 
-        # 3. Try LegacyIAccessible Select
+    # 3. Try LegacyIAccessible TakeFocus on the element
+    try {
+        $legacy = $el.GetCurrentPattern([LegacyIAccessiblePattern]::Pattern);
+        if ($null -ne $legacy) {
+            $legacy.Select(3); # 3 = SELFLAG_TAKEFOCUS
+            return;
+        }
+    } catch { }
+
+    # 4. Walk up ancestors: try SetFocus or LegacyIAccessible
+    $curr = $el;
+    while ($null -ne $curr) {
+        try { $curr = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($curr); } catch { break; }
+        if ($null -eq $curr) { break; }
+
         try {
-            $legacy = $_.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
-            if ($null -ne $legacy) {
-                $legacy.Select(3); # 3 = TakeFocus
+            if ($curr.Current.IsKeyboardFocusable) {
+                $curr.SetFocus();
                 return;
             }
         } catch { }
 
-        throw "Failed to scroll into view.";
+        try {
+            $legacy = $curr.GetCurrentPattern([LegacyIAccessiblePattern]::Pattern);
+            if ($null -ne $legacy) {
+                $legacy.Select(3);
+                return;
+            }
+        } catch { }
     }
 `;
 const IS_MULTIPLE_SELECT_ELEMENT = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([SelectionPattern]::Pattern).Current.CanSelectMultiple`;
@@ -675,6 +721,10 @@ export class AutomationElement extends PSObject {
         return GET_ELEMENT_SCREENSHOT.format(this);
     }
 
+    buildBringToFrontCommand(): string {
+        return BRING_ELEMENT_TO_FRONT.format(this);
+    }
+
     buildSetFocusCommand(): string {
         return SET_FOCUS_TO_ELEMENT.format(this);
     }
@@ -726,7 +776,7 @@ export class FoundAutomationElement extends AutomationElement {
     }
 
     buildScrollIntoViewCommand(): string {
-        return SCROLL_ELEMENT_INTO_VIEW.format(this, this.runtimeId);
+        return SCROLL_ELEMENT_INTO_VIEW.format(this);
     }
 
     buildIsMultipleSelectCommand(): string {

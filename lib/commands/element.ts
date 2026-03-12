@@ -21,34 +21,34 @@ import { sleep } from '../util';
 
 // Maps lowercase dot-prefix to the PascalCase UIA pattern class name
 const PATTERN_MAP: Record<string, string> = {
-    'value':           'Value',
-    'window':          'Window',
-    'transform':       'Transform',
-    'toggle':          'Toggle',
-    'expandcollapse':  'ExpandCollapse',
-    'rangevalue':      'RangeValue',
-    'selection':       'Selection',
-    'selectionitem':   'SelectionItem',
-    'scroll':          'Scroll',
-    'grid':            'Grid',
-    'griditem':        'GridItem',
-    'table':           'Table',
-    'tableitem':       'TableItem',
-    'dock':            'Dock',
-    'multipleview':    'MultipleView',
+    'value': 'Value',
+    'window': 'Window',
+    'transform': 'Transform',
+    'toggle': 'Toggle',
+    'expandcollapse': 'ExpandCollapse',
+    'rangevalue': 'RangeValue',
+    'selection': 'Selection',
+    'selectionitem': 'SelectionItem',
+    'scroll': 'Scroll',
+    'grid': 'Grid',
+    'griditem': 'GridItem',
+    'table': 'Table',
+    'tableitem': 'TableItem',
+    'dock': 'Dock',
+    'multipleview': 'MultipleView',
 };
 
 // Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and MSAAHelper
 const LEGACY_ALIAS_MAP: Record<string, string> = {
-    'legacyname':             'Name',
-    'legacyvalue':            'Value',
-    'legacydescription':      'Description',
-    'legacyrole':             'Role',
-    'legacystate':            'State',
-    'legacyhelp':             'Help',
+    'legacyname': 'Name',
+    'legacyvalue': 'Value',
+    'legacydescription': 'Description',
+    'legacyrole': 'Role',
+    'legacystate': 'State',
+    'legacyhelp': 'Help',
     'legacykeyboardshortcut': 'KeyboardShortcut',
-    'legacydefaultaction':    'DefaultAction',
-    'legacychildid':          'ChildId',
+    'legacydefaultaction': 'DefaultAction',
+    'legacychildid': 'ChildId',
 };
 
 export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
@@ -326,30 +326,38 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
     const easingFunction = this.caps.smoothPointerMove;
     const element = new FoundAutomationElement(elementId);
 
-    const focusCondition = new AndCondition(
-        new PropertyCondition(Property.IS_KEYBOARD_FOCUSABLE, new PSBoolean(true)),
-        new OrCondition(
-            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
-            new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
-        ),
+    // 1. Bring application "on-top" by focusing the closest Window/Pane ancestor
+    //    Note: don't filter by IsKeyboardFocusable — some apps (e.g. SecureAge) report
+    //    their main window as not focusable, but SetFocus() still works on them.
+    const containerCondition = new OrCondition(
+        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.PANE)),
+        new PropertyCondition(Property.CONTROL_TYPE, new PSControlType(ControlType.WINDOW)),
     );
 
     try {
-        const focusableElementId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, focusCondition).buildCommand());
-        if (focusableElementId && focusableElementId.trim()) {
-            await this.sendPowerShellCommand(new FoundAutomationElement(focusableElementId.trim()).buildSetFocusCommand());
+        const ancestorId = await this.sendPowerShellCommand(element.findFirst(TreeScope.ANCESTORS_OR_SELF, containerCondition).buildCommand());
+        if (ancestorId && ancestorId.trim()) {
+            const id = ancestorId.trim();
+            this.log.info(`[Click] Bringing on-top by focusing ancestor: ${id}`);
+            try {
+                await this.sendPowerShellCommand(new FoundAutomationElement(id).buildSetFocusCommand());
+            } catch {
+                // SetFocus failed (window not focusable) — fallback to SetForegroundWindow via native handle
+                this.log.info(`[Click] SetFocus failed, trying SetForegroundWindow for ancestor: ${id}`);
+                await this.sendPowerShellCommand(new FoundAutomationElement(id).buildBringToFrontCommand());
+            }
         } else {
-            this.log.warn(`Could not find a focusable element ${elementId} in the ancestors or self of the element`);
+            this.log.warn(`[Click] Could not find a Window/Pane ancestor for element ${elementId}`);
         }
-    } catch {
-        // ignore if it fails, focus may fail if there is a forced popup window
+    } catch (e: any) {
+        this.log.debug(`[Click] Failed to bring ancestor on-top: ${e.message}`);
     }
 
+    // 2. Scroll element into view (tries ScrollItemPattern, SetFocus, LegacyIAccessible)
     try {
-        // Automatically scroll the element into view if possible by setting focus to it
-        await this.sendPowerShellCommand(element.buildSetFocusCommand());
+        await this.sendPowerShellCommand(element.buildScrollIntoViewCommand());
     } catch (e: any) {
-        this.log.debug(`[Click] Could not set focus to element: ${e.message}`);
+        this.log.debug(`[Click] ScrollIntoView failed for element ${elementId}: ${e.message}`);
     }
 
     const coordinates = {
