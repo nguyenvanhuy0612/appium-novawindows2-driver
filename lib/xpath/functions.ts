@@ -78,16 +78,11 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
 
             const [firstArgResult, secondArgResult] = await processArgs<string | boolean | AutomationElement>(args[0], args[1]);
 
-            if (firstArgResult.length > 1 || secondArgResult.length > 1) {
-                throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'each argument to have either one or zero elements'));
+            if (secondArgResult.length > 1) {
+                throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the second argument to have either one or zero elements'));
             }
 
-            const [lhs] = firstArgResult;
             const [rhs] = secondArgResult;
-
-            if (typeof lhs === 'boolean') {
-                throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be string, number or element'));
-            }
 
             if (typeof rhs === 'boolean') {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the second argument to be string, number or element'));
@@ -97,6 +92,21 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 [STARTS_WITH]: 'startsWith',
                 [CONTAINS]: 'includes',
             } as const satisfies Record<typeof name, keyof string>;
+
+            // @* wildcard: check if ANY attribute value satisfies the condition
+            if (firstArgResult.length > 1) {
+                const [rhsString] = convertProcessedExprNodesToStrings(secondArgResult);
+                return [firstArgResult.some((v) => {
+                    const vStr = typeof v === 'string' ? v : '';
+                    return (vStr as any)[stringMethodMap[name]](rhsString);
+                }) as T];
+            }
+
+            const [lhs] = firstArgResult;
+
+            if (typeof lhs === 'boolean') {
+                throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be string, number or element'));
+            }
 
             const [lhsString, rhsString] = convertProcessedExprNodesToStrings(firstArgResult, secondArgResult);
             return [lhsString[stringMethodMap[name]](rhsString) as T];
@@ -275,11 +285,9 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
 
             const [firstArg] = await processArgs(args[0]);
 
-            if (firstArg && firstArg.length > 1) {
-                throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to have either one or zero elements'));
-            }
-
-            return name === STRING ? [...convertProcessedExprNodesToStrings(firstArg ?? [context]) as T[]] : [...convertProcessedExprNodesToNumbers(firstArg ?? [context]) as T[]];
+            // @* wildcard may produce multiple values — use the first per XPath string() semantics
+            const singleArg = firstArg && firstArg.length > 1 ? [firstArg[0]] : (firstArg ?? [context]);
+            return name === STRING ? [...convertProcessedExprNodesToStrings(singleArg) as T[]] : [...convertProcessedExprNodesToNumbers(singleArg) as T[]];
         }
         case SUBSTRING_AFTER:
         case SUBSTRING_BEFORE: {

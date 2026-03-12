@@ -64,6 +64,7 @@ import {
     TreeScope,
     AndCondition,
     OrCondition,
+    NotCondition,
     Int32Property,
     PSInt32,
     PSString,
@@ -350,6 +351,36 @@ export class XPathExecutor {
             case LESS_THAN:
             case LESS_THAN_OR_EQUAL: {
                 if ((exprNode.lhs.type === RELATIVE_LOCATION_PATH) !== (exprNode.rhs.type === RELATIVE_LOCATION_PATH)) {
+                    // Handle @* = 'value' or @* != 'value' — match/exclude any string property (XPath wildcard attribute)
+                    if ((exprNode.type === EQUALITY || exprNode.type === INEQUALITY)
+                        && exprNode.lhs.type === RELATIVE_LOCATION_PATH
+                        && exprNode.lhs.steps.length === 1
+                        && exprNode.lhs.steps[0].axis === ATTRIBUTE
+                        && exprNode.lhs.steps[0].test.type === NODE_NAME_TEST
+                        && exprNode.lhs.steps[0].test.name === '*'
+                    ) {
+                        const [value] = await this.processExprNode(exprNode.rhs, context, undefined);
+                        const stringValue = String(value);
+                        const conditions = Object.values(StringProperty).map(prop => new PropertyCondition(prop, new PSString(stringValue)));
+                        const orCondition = new OrCondition(...conditions);
+                        return [exprNode.type === EQUALITY ? orCondition : new NotCondition(orCondition), relativeExprNodes];
+                    }
+
+                    // Handle 'value' = @* or 'value' != @* — same but reversed
+                    if ((exprNode.type === EQUALITY || exprNode.type === INEQUALITY)
+                        && exprNode.rhs.type === RELATIVE_LOCATION_PATH
+                        && exprNode.rhs.steps.length === 1
+                        && exprNode.rhs.steps[0].axis === ATTRIBUTE
+                        && exprNode.rhs.steps[0].test.type === NODE_NAME_TEST
+                        && exprNode.rhs.steps[0].test.name === '*'
+                    ) {
+                        const [value] = await this.processExprNode(exprNode.lhs, context, undefined);
+                        const stringValue = String(value);
+                        const conditions = Object.values(StringProperty).map(prop => new PropertyCondition(prop, new PSString(stringValue)));
+                        const orCondition = new OrCondition(...conditions);
+                        return [exprNode.type === EQUALITY ? orCondition : new NotCondition(orCondition), relativeExprNodes];
+                    }
+
                     if (exprNode.lhs.type === RELATIVE_LOCATION_PATH
                         && exprNode.lhs.steps[0].axis === ATTRIBUTE
                         && exprNode.lhs.steps[0].test.type === NODE_NAME_TEST
@@ -619,6 +650,18 @@ async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, con
 
             return [];
         case NODE_NAME_TEST:
+            if (nodeTest.name === '*') {
+                // @* wildcard — return all string property values for use in post-filter conditions
+                const results: string[] = [];
+                for (const el of els) {
+                    for (const prop of Object.values(StringProperty)) {
+                        const val = await sendPowerShellCommand(el.buildGetPropertyCommand(prop));
+                        if (val && val.trim()) results.push(val.trim());
+                    }
+                }
+                return results;
+            }
+
             if (extraProperties.includes(nodeTest.name.toLowerCase())) {
                 const results: string[] = [];
                 for (const el of els) {
@@ -725,17 +768,23 @@ export function predicateProcessableBeforeNode(exprNode: ExprNode): boolean {
                 if (exprNode.lhs.type === RELATIVE_LOCATION_PATH
                     && exprNode.lhs.steps[0].axis === ATTRIBUTE
                     && exprNode.lhs.steps[0].test.type === NODE_NAME_TEST
-                    && XPathAllowedProperties.includes(exprNode.lhs.steps[0].test.name?.toLowerCase() as XPathAllowedProperties)
                 ) {
-                    return true;
+                    if (exprNode.lhs.steps[0].test.name === '*'
+                        || XPathAllowedProperties.includes(exprNode.lhs.steps[0].test.name?.toLowerCase() as XPathAllowedProperties)
+                    ) {
+                        return true;
+                    }
                 }
 
                 if (exprNode.rhs.type === RELATIVE_LOCATION_PATH
                     && exprNode.rhs.steps[0].axis === ATTRIBUTE
                     && exprNode.rhs.steps[0].test.type === NODE_NAME_TEST
-                    && XPathAllowedProperties.includes(exprNode.rhs.steps[0].test.name?.toLowerCase() as XPathAllowedProperties)
                 ) {
-                    return true;
+                    if (exprNode.rhs.steps[0].test.name === '*'
+                        || XPathAllowedProperties.includes(exprNode.rhs.steps[0].test.name?.toLowerCase() as XPathAllowedProperties)
+                    ) {
+                        return true;
+                    }
                 }
             }
         }
