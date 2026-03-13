@@ -19,23 +19,43 @@ import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
 import { sleep } from '../util';
 
-// Maps lowercase dot-prefix to the PascalCase UIA pattern class name
+// Maps lowercase dot-prefix to the full UIA pattern class name
+// (used as [System.Windows.Automation.<className>]::Pattern in PowerShell).
+// Pattern2 variants use their actual class names which differ from the simple "${name}Pattern" convention.
+// Ref: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-controlpatternsoverview
 const PATTERN_MAP: Record<string, string> = {
-    'value': 'Value',
-    'window': 'Window',
-    'transform': 'Transform',
-    'toggle': 'Toggle',
-    'expandcollapse': 'ExpandCollapse',
-    'rangevalue': 'RangeValue',
-    'selection': 'Selection',
-    'selectionitem': 'SelectionItem',
-    'scroll': 'Scroll',
-    'grid': 'Grid',
-    'griditem': 'GridItem',
-    'table': 'Table',
-    'tableitem': 'TableItem',
-    'dock': 'Dock',
-    'multipleview': 'MultipleView',
+    // Standard patterns
+    'value':            'ValuePattern',
+    'window':           'WindowPattern',
+    'transform':        'TransformPattern',
+    'toggle':           'TogglePattern',
+    'expandcollapse':   'ExpandCollapsePattern',
+    'rangevalue':       'RangeValuePattern',
+    'selection':        'SelectionPattern',
+    'selectionitem':    'SelectionItemPattern',
+    'scroll':           'ScrollPattern',
+    'grid':             'GridPattern',
+    'griditem':         'GridItemPattern',
+    'table':            'TablePattern',
+    'tableitem':        'TableItemPattern',
+    'dock':             'DockPattern',
+    'multipleview':     'MultipleViewPattern',
+    'annotation':       'AnnotationPattern',
+    'drag':             'DragPattern',
+    'droptarget':       'DropTargetPattern',
+    'spreadsheet':      'SpreadsheetPattern',
+    'spreadsheetitem':  'SpreadsheetItemPattern',
+    'styles':           'StylesPattern',
+    'text':             'TextPattern',
+    'textchild':        'TextChildPattern',
+    // Pattern2 variants — class name does NOT follow "${name}Pattern" convention.
+    // Two keys per variant: short form (e.g. "transform2.x") and the programmatic-name
+    // form emitted by GetSupportedProperties() (e.g. "TransformPattern2.x"), so both work.
+    'transform2':           'TransformPattern2',
+    'transformpattern2':    'TransformPattern2',
+    'selection2':           'SelectionPattern2',
+    'selectionpattern2':    'SelectionPattern2',
+    'textpattern2':         'TextPattern2',   // "textpattern2.x" covers both forms
 };
 
 // Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and MSAAHelper
@@ -51,9 +71,31 @@ const LEGACY_ALIAS_MAP: Record<string, string> = {
     'legacychildid': 'ChildId',
 };
 
+// Maps any lowercase UIA property key (pattern or direct) to a LegacyIAccessible prop name.
+// Used as MSAA fallback when UIA returns empty for Win32 MSAA proxy elements.
+// Pattern keys contain a dot (e.g. "value.value"); direct keys do not (e.g. "name").
+// Ref: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-msaa
+const LEGACY_FALLBACK: Record<string, string> = {
+    'value.value':    'Value',            // ValuePattern.Value            <- accValue
+    'name':           'Name',             // UIA_NamePropertyId            <- accName
+    'helptext':       'Help',             // UIA_HelpTextPropertyId        <- accHelp
+    'accesskey':      'KeyboardShortcut', // UIA_AccessKeyPropertyId       <- accKeyboardShortcut
+    'acceleratorkey': 'KeyboardShortcut', // UIA_AcceleratorKeyPropertyId  <- accKeyboardShortcut
+};
+
 export async function getProperty(this: NovaWindows2Driver, propertyName: string, elementId: string): Promise<string> {
     const el = new FoundAutomationElement(elementId);
     const lowerKey = propertyName.toLowerCase();
+
+    // If result is empty, fall back to the LegacyIAccessible equivalent (Win32 MSAA proxy elements
+    // may return empty for UIA properties where the MSAA value is correctly populated).
+    const withLegacyFallback = async (result: string): Promise<string> => {
+        const legacyProp = LEGACY_FALLBACK[lowerKey];
+        if (!result?.trim() && legacyProp) {
+            return await this.sendPowerShellCommand(el.buildGetLegacyPropertyCommand(legacyProp));
+        }
+        return result;
+    };
 
     // 1. Legacy shorthand alias (e.g. "LegacyName", "LegacyValue")
     if (lowerKey in LEGACY_ALIAS_MAP) {
@@ -71,20 +113,22 @@ export async function getProperty(this: NovaWindows2Driver, propertyName: string
     if (dotIdx !== -1) {
         const prefix = lowerKey.slice(0, dotIdx);
         if (prefix in PATTERN_MAP) {
-            const patternName = PATTERN_MAP[prefix];
+            const patternClass = PATTERN_MAP[prefix];
             const propName = propertyName.slice(dotIdx + 1);
-            return await this.sendPowerShellCommand(el.buildGetPatternPropertyCommand(patternName, propName));
+            const result = await this.sendPowerShellCommand(el.buildGetPatternPropertyCommand(patternClass, propName));
+            return withLegacyFallback(result);
         }
     }
 
-    // 4. Dump all properties
+    // 4. Dump all properties as JSON
     if (lowerKey === 'all') {
         return await this.sendPowerShellCommand(el.buildGetAllPropertiesCommand());
     }
 
-    // 5. UIA direct property (also handles 'runtimeid', 'controltype')
+    // 5. UIA direct property (e.g. "Name", "AutomationId", "ClassName", "RuntimeId", "ControlType")
     const normalizedProp = propertyName.charAt(0).toUpperCase() + propertyName.slice(1);
-    return await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
+    const result = await this.sendPowerShellCommand(el.buildGetPropertyCommand(normalizedProp));
+    return withLegacyFallback(result);
 }
 
 export async function getAttribute(this: NovaWindows2Driver, propertyName: string, elementId: string) {

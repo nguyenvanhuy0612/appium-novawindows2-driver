@@ -1,0 +1,80 @@
+How found:	Selected from tree...
+Name:	"Name"
+ControlType:	UIA_ComboBoxControlTypeId (0xC353)
+LocalizedControlType:	"combo box"
+BoundingRectangle:	{l:516 t:390 r:761 b:411}
+IsEnabled:	true
+IsOffscreen:	false
+IsKeyboardFocusable:	true
+HasKeyboardFocus:	false
+AccessKey:	""
+ProcessId:	6460
+RuntimeId:	[2A.1048A]
+AutomationId:	"1369"
+FrameworkId:	"Win32"
+ClassName:	"ComboBox"
+NativeWindowHandle:	0x1048A
+IsContentElement:	true
+ProviderDescription:	"[pid:4736,providerId:0x1048A Main:Nested [pid:6460,providerId:0x1048A Annotation(parent link):Microsoft: Annotation Proxy (unmanaged:uiautomationcore.dll); Main:Microsoft: MSAA Proxy (unmanaged:uiautomationcore.dll)]; Hwnd(parent link):Microsoft: HWND Proxy (unmanaged:uiautomationcore.dll)]"
+IsPassword:	false
+HelpText:	""
+IsDialog:	false
+ExpandCollapse.ExpandCollapseState:	Collapsed (0)
+LegacyIAccessible.ChildId:	0
+LegacyIAccessible.DefaultAction:	""
+LegacyIAccessible.Description:	""
+LegacyIAccessible.Help:	""
+LegacyIAccessible.KeyboardShortcut:	""
+LegacyIAccessible.Name:	"Name"
+LegacyIAccessible.Role:	combo box (0x2E)
+LegacyIAccessible.State:	collapsed,focusable (0x100400)
+LegacyIAccessible.Value:	"address1"
+Value.IsReadOnly:	false
+Value.Value:	"address1"
+IsAnnotationPatternAvailable:	false
+IsDragPatternAvailable:	false
+IsDockPatternAvailable:	false
+IsDropTargetPatternAvailable:	false
+IsExpandCollapsePatternAvailable:	true
+IsGridItemPatternAvailable:	false
+IsGridPatternAvailable:	false
+IsInvokePatternAvailable:	false
+IsItemContainerPatternAvailable:	false
+IsLegacyIAccessiblePatternAvailable:	true
+IsMultipleViewPatternAvailable:	false
+IsObjectModelPatternAvailable:	false
+IsRangeValuePatternAvailable:	false
+IsScrollItemPatternAvailable:	false
+IsScrollPatternAvailable:	false
+IsSelectionItemPatternAvailable:	false
+IsSelectionPatternAvailable:	false
+IsSpreadsheetItemPatternAvailable:	false
+IsSpreadsheetPatternAvailable:	false
+IsStylesPatternAvailable:	false
+IsSynchronizedInputPatternAvailable:	false
+IsTableItemPatternAvailable:	false
+IsTablePatternAvailable:	false
+IsTextChildPatternAvailable:	false
+IsTextEditPatternAvailable:	false
+IsTextPatternAvailable:	false
+IsTextPattern2Available:	false
+IsTogglePatternAvailable:	false
+IsTransformPatternAvailable:	false
+IsTransform2PatternAvailable:	false
+IsValuePatternAvailable:	true
+IsVirtualizedItemPatternAvailable:	false
+IsWindowPatternAvailable:	false
+IsCustomNavigationPatternAvailable:	false
+IsSelectionPattern2Available:	false
+FirstChild:	"Name" text
+LastChild:	"Open" button
+Next:	"New Name" button
+Previous:	"Name" text
+Other Props:	Object has no additional properties
+Children:	"Name" text
+	"Open" button
+Ancestors:	"SecureAge - Address Book" dialog
+	"SecureAge Profile - qa" dialog
+	"SecureAge 8.0.35 - qa" dialog
+	"Desktop 1" pane
+	[ No Parent ]

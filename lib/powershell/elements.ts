@@ -286,7 +286,7 @@ const GET_ELEMENT_PATTERN_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0};
     if ($null -eq $el) { return $null };
     try {
-        $pattern = $el.GetCurrentPattern([System.Windows.Automation.${1}Pattern]::Pattern);
+        $pattern = $el.GetCurrentPattern([System.Windows.Automation.${1}]::Pattern);
         if ($null -ne $pattern) {
             $val = $pattern.Current.${2};
             if ($null -ne $val) { return $val.ToString() };
@@ -377,6 +377,23 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
             }
         }
     } catch { }
+
+    # 3. MSAA fallback: populate missing/empty UIA properties from their LegacyIAccessible equivalents.
+    #    Win32 MSAA proxy elements may return empty for UIA properties where the MSAA value exists.
+    #    Mappings sourced from: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-msaa
+    #    UIA property key -> LegacyIAccessible key (MSAA accXxx source)
+    $msaaFallbacks = [ordered]@{
+        'Value.Value'    = 'LegacyIAccessible.Value'          # UIA_ValueValuePropertyId          <- accValue
+        'Name'           = 'LegacyIAccessible.Name'           # UIA_NamePropertyId                <- accName
+        'HelpText'       = 'LegacyIAccessible.Help'           # UIA_HelpTextPropertyId            <- accHelp
+        'AccessKey'      = 'LegacyIAccessible.KeyboardShortcut'  # UIA_AccessKeyPropertyId        <- accKeyboardShortcut
+        'AcceleratorKey' = 'LegacyIAccessible.KeyboardShortcut'  # UIA_AcceleratorKeyPropertyId   <- accKeyboardShortcut
+    }
+    foreach ($entry in $msaaFallbacks.GetEnumerator()) {
+        if ((-not $out.Contains($entry.Key) -or [string]::IsNullOrEmpty($out[$entry.Key])) -and $out.Contains($entry.Value)) {
+            $out[$entry.Key] = $out[$entry.Value];
+        }
+    }
 
     return $out | ConvertTo-Json -Depth 2 -Compress;
 `;
