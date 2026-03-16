@@ -62,7 +62,7 @@ interface MouseEvent extends Event {
     },
 }
 
-interface Point {
+export interface Point {
     x: number,
     y: number,
 }
@@ -900,4 +900,10 @@ export function sendKeyboardEvents(inputs: (KeyboardEvent['u']['ki'])[]): number
         type: InputType.INPUT_KEYBOARD,
         u: { ki },
     })), sizeof(INPUT));
+}
+
+export function getCursorPosition(): Point {
+    const point = { x: 0, y: 0 };
+    GetCursorPos(point);
+    return point;
 }

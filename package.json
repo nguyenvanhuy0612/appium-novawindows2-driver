@@ -1,6 +1,6 @@
 {
   "name": "appium-novawindows2-driver",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -18,7 +18,7 @@
     "build": "tsc -b",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
-    "test": "mocha -r ts-node/register test/unit/**/*.spec.ts"
+    "test": "mocha -r ts-node/register tests/unit/**/*.spec.ts"
   },
   "author": "nguyenvanhuy0612",
   "license": "Apache-2.0",
@@ -35,9 +35,11 @@
   "dependencies": {
     "@appium/base-driver": "^10.1.0",
     "bezier-easing": "^2.1.0",
-    "ffmpeg-static": "^5.3.0",
     "koffi": "^2.14.1",
     "xpath-analyzer": "^3.0.1"
+  },
+  "optionalDependencies": {
+    "ffmpeg-static": "^5.3.0"
   },
   "appium": {
     "driverName": "novawindows2",

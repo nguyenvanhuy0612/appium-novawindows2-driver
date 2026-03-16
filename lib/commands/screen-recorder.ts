@@ -37,15 +37,10 @@ async function requireFfmpegPath(): Promise<string> {
     if (bundled) {
         return bundled;
     }
-    const ffmpegBinary = `ffmpeg${system.isWindows() ? '.exe' : ''}`;
-    try {
-        return await fs.which(ffmpegBinary);
-    } catch {
-        throw new Error(
-            `${ffmpegBinary} has not been found in PATH and the bundled ffmpeg is missing. ` +
-            'Please reinstall the driver or install ffmpeg manually.',
-        );
-    }
+    throw new Error(
+        'The bundled ffmpeg-static binary is missing or not supported on this architecture. ' +
+        'Screen recording is not available.'
+    );
 }
 
 export async function uploadRecordedMedia(

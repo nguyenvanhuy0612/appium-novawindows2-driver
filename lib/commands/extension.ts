@@ -13,7 +13,8 @@ import {
     sendKeyboardEvents,
     findWindowHandle,
     showWindow,
-    trySetForegroundWindow
+    trySetForegroundWindow,
+    getCursorPosition
 } from '../winapi/user32';
 import { KeyEventFlags, VirtualKey } from '../winapi/types';
 import {
@@ -450,7 +451,7 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
     durationMs?: number,
     times?: number,
     interClickDelayMs?: number
-}) {
+} = {}) {
     const {
         elementId,
         x, y,
@@ -462,7 +463,11 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
     } = clickArgs;
 
     if (!elementId && (x == null || y == null)) {
-        throw new errors.InvalidArgumentError('Either elementId or both x and y must be provided.');
+        if (x != null || y != null) {
+            throw new errors.InvalidArgumentError('Both x and y must be provided if one is provided.');
+        } else {
+            this.log.info('No coordinates or element provided. Using current cursor position for click.');
+        }
     }
 
     let pos: [number, number];
@@ -483,9 +488,11 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
             rect.x + (x ?? Math.trunc(rect.width / 2)),
             rect.y + (y ?? Math.trunc(rect.height / 2)),
         ];
+    } else if (x != null && y != null) {
+        pos = [x, y];
     } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        pos = [x!, y!];
+        const currentPos = getCursorPosition();
+        pos = [currentPos.x, currentPos.y];
     }
 
     const clickTypeToButtonMapping: { [key in ClickType]: number } = {
@@ -551,7 +558,7 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
     endY?: number,
     modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
     durationMs?: number,
-}) {
+} = {}) {
     const {
         startElementId,
         startX, startY,
@@ -562,11 +569,11 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
     } = hoverArgs;
 
     if (!startElementId && (startX == null || startY == null)) {
-        throw new errors.InvalidArgumentError('Either startElementId or both startX and startY must be provided.');
-    }
-
-    if (!endElementId && (endX == null || endY == null)) {
-        throw new errors.InvalidArgumentError('Either endElementId or both endX and endY must be provided.');
+        if (startX != null || startY != null) {
+            throw new errors.InvalidArgumentError('Both startX and startY must be provided if one is provided.');
+        } else {
+            this.log.info('No start coordinates or element provided. Using current cursor position for hover start.');
+        }
     }
 
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
@@ -588,12 +595,15 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
             rect.x + (startX ?? Math.trunc(rect.width / 2)),
             rect.y + (startY ?? Math.trunc(rect.height / 2))
         ];
+    } else if (startX != null && startY != null) {
+        startPos = [startX, startY];
     } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        startPos = [startX!, startY!];
+        const currentPos = getCursorPosition();
+        startPos = [currentPos.x, currentPos.y];
     }
 
-    let endPos: [number, number];
+    const hasEndTarget = endElementId || (endX != null && endY != null);
+    let endPos: [number, number] | undefined;
     if (endElementId) {
         if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) === 'True') {
             const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(endElementId.split('.').map(Number)));
@@ -611,12 +621,14 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
             rect.x + (endX ?? Math.trunc(rect.width / 2)),
             rect.y + (endY ?? Math.trunc(rect.height / 2))
         ];
-    } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        endPos = [endX!, endY!];
+    } else if (endX != null && endY != null) {
+        endPos = [endX, endY];
     }
 
-    await mouseMoveAbsolute(startPos[0], startPos[1], 0);
+    if (hasEndTarget) {
+        // Legacy multi-point hover: jump to start position first (without modifiers)
+        await mouseMoveAbsolute(startPos[0], startPos[1], 0);
+    }
 
     if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
         keyDown(Key.CONTROL);
@@ -631,8 +643,13 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
         keyDown(Key.META);
     }
 
-    // Execute smooth or immediate pointer move to end position
-    await mouseMoveAbsolute(endPos[0], endPos[1], durationMs, this.caps.smoothPointerMove);
+    if (hasEndTarget) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        await mouseMoveAbsolute(endPos![0], endPos![1], durationMs, this.caps.smoothPointerMove);
+    } else {
+        // Single-point hover: move smoothly from current position to start
+        await mouseMoveAbsolute(startPos[0], startPos[1], durationMs, this.caps.smoothPointerMove);
+    }
 
     if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
         keyUp(Key.CONTROL);
@@ -655,7 +672,7 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     deltaX?: number,
     deltaY?: number,
     modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[], // TODO: add types
-}) {
+} = {}) {
     const {
         elementId,
         x, y,
@@ -664,7 +681,11 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     } = scrollArgs;
 
     if (!elementId && (x == null || y == null)) {
-        throw new errors.InvalidArgumentError('Either elementId or both x and y must be provided.');
+        if (x != null || y != null) {
+            throw new errors.InvalidArgumentError('Both x and y must be provided if one is provided.');
+        } else {
+            this.log.info('No coordinates or element provided. Using current cursor position for scroll.');
+        }
     }
 
     const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
@@ -681,14 +702,16 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
         const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
-        // Scroll at the center of the element
+        // Calculate absolute position. Default to center of element if x/y are not provided.
         pos = [
-            rect.x + Math.trunc(rect.width / 2),
-            rect.y + Math.trunc(rect.height / 2)
+            rect.x + (x ?? Math.trunc(rect.width / 2)),
+            rect.y + (y ?? Math.trunc(rect.height / 2)),
         ];
+    } else if (x != null && y != null) {
+        pos = [x, y];
     } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        pos = [x!, y!];
+        const currentPos = getCursorPosition();
+        pos = [currentPos.x, currentPos.y];
     }
 
     await mouseMoveAbsolute(pos[0], pos[1], 0);
@@ -787,11 +810,19 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     } = clickAndDragArgs;
 
     if (!startElementId && (startX == null || startY == null)) {
-        throw new errors.InvalidArgumentError('Either startElementId or both startX and startY must be provided.');
+        if (startX != null || startY != null) {
+            throw new errors.InvalidArgumentError('Both startX and startY must be provided if one is provided.');
+        } else {
+            this.log.info('No start coordinates or element provided. Using current cursor position for drag start.');
+        }
     }
 
     if (!endElementId && (endX == null || endY == null)) {
-        throw new errors.InvalidArgumentError('Either endElementId or both endX and endY must be provided.');
+        if (endX != null || endY != null) {
+            throw new errors.InvalidArgumentError('Both endX and endY must be provided if one is provided.');
+        } else {
+            this.log.info('No end coordinates or element provided. Using current cursor position for drag end.');
+        }
     }
 
     const clickTypeToButtonMapping: { [key in ClickType]: number } = {
@@ -827,9 +858,11 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
             rect.x + (startX ?? Math.trunc(rect.width / 2)),
             rect.y + (startY ?? Math.trunc(rect.height / 2))
         ];
+    } else if (startX != null && startY != null) {
+        startPos = [startX, startY];
     } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        startPos = [startX!, startY!];
+        const currentPos = getCursorPosition();
+        startPos = [currentPos.x, currentPos.y];
     }
 
     // Calculate End Position
@@ -850,9 +883,11 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
             rect.x + (endX ?? Math.trunc(rect.width / 2)),
             rect.y + (endY ?? Math.trunc(rect.height / 2))
         ];
+    } else if (endX != null && endY != null) {
+        endPos = [endX, endY];
     } else {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        endPos = [endX!, endY!];
+        const currentPos = getCursorPosition();
+        endPos = [currentPos.x, currentPos.y];
     }
 
     // Perform Action
