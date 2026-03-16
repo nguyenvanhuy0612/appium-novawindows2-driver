@@ -16,11 +16,13 @@ print(f"\nConnecting to Appium at http://172.16.10.37:4723 with options...")
 driver = webdriver.Remote('http://172.16.10.37:4723', options=options)
 print("Connected successfully!")
 
-elements = driver.find_elements(AppiumBy.XPATH, "//List[@Name='Items View']")
+print(driver.find_element(AppiumBy.XPATH, "//Pane/Window[1]/Window/Window/ComboBox").get_attribute("all"))
+
+elements = driver.find_elements(AppiumBy.XPATH, "//List")
 
 print(len(elements))
 
 for element in elements:
-    print(element.get_attribute('all'))
+    print(f'Element: {element} Attributes: {element.get_attribute("all")}')
 
 driver.quit()
