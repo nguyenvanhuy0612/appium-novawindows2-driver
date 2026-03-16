@@ -40,8 +40,11 @@ appium driver install --source=npm appium-novawindows2-driver
 ```
 
 ### Prerequisites
-- **Host OS**: Windows 10 or later.
+- **Host OS**: Windows 10 or later (x64, ARM64 supported).
 - No Developer Mode or extra dependencies required.
+
+> [!NOTE]
+> **ARM Support**: The driver is compatible with ARM-based Windows. However, the **Screen Recording** feature is currently only supported on x64 due to `ffmpeg-static` limitations.
 
 ---
 
@@ -161,9 +164,9 @@ This is a shortcut for a single mouse click gesture.
 
 | Name | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `elementId` | `string` | no | Hexadecimal identifier of the element to click on. If this parameter is missing then given coordinates will be parsed as absolute ones. Otherwise they are parsed as relative to the top left corner of this element. | `123e4567-e89b...` |
-| `x` | `number` | no | Integer horizontal coordinate of the click point. Both x and y coordinates must be provided or none of them if elementId is present. | `100` |
-| `y` | `number` | no | Integer vertical coordinate of the click point. Both x and y coordinates must be provided or none of them if elementId is present. | `100` |
+| `elementId` | `string` | no | Hexadecimal identifier of the element to click on. If this parameter and coordinates are missing, the command uses the current cursor position. If `elementId` is present without coordinates, it clicks the center of the element. | `123e4567-e89b...` |
+| `x` | `number` | no | Integer horizontal coordinate of the click point. If omitted (along with `elementId`), the current cursor position is used. | `100` |
+| `y` | `number` | no | Integer vertical coordinate of the click point. If omitted (along with `elementId`), the current cursor position is used. | `100` |
 | `button` | `string` | no | Name of the mouse button to be clicked. Supported button names are: `left`, `middle`, `right`, `back`, `forward`. The default value is `left`. | `right` |
 | `modifierKeys` | `string[]` \| `string` | no | List of possible keys or a single key name to depress while the click is being performed. Supported key names are: `Shift`, `Ctrl`, `Alt`, `Win`. | `['ctrl', 'alt']` |
 | `durationMs` | `number` | no | The number of milliseconds to wait between pressing and releasing the mouse button. By default no delay is applied. | `500` |
@@ -666,6 +669,9 @@ Starts screen recording using ffmpeg.
 | `preset` | `string` | no | ffmpeg preset. Default is `veryfast`. | `ultrafast` |
 | `captureCursor` | `boolean` | no | Whether to capture mouse cursor. | `true` |
 | `captureClicks` | `boolean` | no | Whether to capture mouse clicks. | `true` |
+
+> [!IMPORTANT]
+> This feature requires `ffmpeg-static`. It is currently **not supported** on ARM architecture.
 
 #### `windows: stopRecordingScreen`
 Stops screen recording and returns the video as base64 string.
