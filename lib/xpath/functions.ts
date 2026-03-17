@@ -76,17 +76,25 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'exactly 2 arguments'));
             }
 
-            const [firstArgResult, secondArgResult] = await processArgs<string | boolean | AutomationElement>(args[0], args[1]);
-
+            // Optimization: Evaluate the search string (rhs) first. 
+            // If it is empty, standard XPath 1.0 logic dictates it matches anything (is always true).
+            // This prevents expensive @* wildcard retrieval when it's not needed.
+            const secondArgResult = await executor.processExprNode(args[1], context, contextState);
             if (secondArgResult.length > 1) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the second argument to have either one or zero elements'));
             }
 
             const [rhs] = secondArgResult;
-
             if (typeof rhs === 'boolean') {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the second argument to be string, number or element'));
             }
+
+            const [rhsString] = convertProcessedExprNodesToStrings(secondArgResult);
+            if (rhsString === '') {
+                return [true as T];
+            }
+
+            const [firstArgResult] = await processArgs<string | boolean | AutomationElement>(args[0]);
 
             const stringMethodMap = {
                 [STARTS_WITH]: 'startsWith',
@@ -95,7 +103,6 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
 
             // @* wildcard: check if ANY attribute value satisfies the condition
             if (firstArgResult.length > 1) {
-                const [rhsString] = convertProcessedExprNodesToStrings(secondArgResult);
                 return [firstArgResult.some((v) => {
                     const vStr = typeof v === 'string' ? v : '';
                     return (vStr as any)[stringMethodMap[name]](rhsString);
@@ -108,7 +115,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be string, number or element'));
             }
 
-            const [lhsString, rhsString] = convertProcessedExprNodesToStrings(firstArgResult, secondArgResult);
+            const [lhsString] = convertProcessedExprNodesToStrings(firstArgResult);
             return [lhsString[stringMethodMap[name]](rhsString) as T];
         }
         case COUNT: {

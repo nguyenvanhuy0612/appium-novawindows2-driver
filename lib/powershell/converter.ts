@@ -103,29 +103,35 @@ class WindowsAutomationSelectorSyntaxError extends errors.InvalidSelectorError {
 }
 
 export function convertStringToCondition(selector: string): Condition {
+    if (PROCESSED_ITEMS_REGEX.test(selector)) {
+        throw new WindowsAutomationSelectorSyntaxError(selector, 'Selector contains restricted characters in the Unicode Private Use Area (\\uEE00-\\uEFFF).');
+    }
+
     const processedItems: PSObject[] = [];
     let processedSelector = selector;
 
+    // Handle double-quoted strings first
     processedSelector = processedSelector.replaceAll(DOUBLE_QUOTE_STRINGS_REGEX, (match) => {
         const placeholderMap = {
-            '``': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0),
-            '`0': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 1),
-            '`a': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 2),
-            '`b': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 3),
-            '`f': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 4),
-            '`n': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 5),
-            '`r': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 6),
-            '`t': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 7),
-            '`v': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 8),
+            '``': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1000), // temp range
+            '`0': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1001),
+            '`a': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1002),
+            '`b': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1003),
+            '`f': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1004),
+            '`n': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1005),
+            '`r': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1006),
+            '`t': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1007),
+            '`v': String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + 0x1008),
         };
 
         let value = match.slice(1, match.length - 1);
 
         // removing the ` that is not an escape sequence
-        value = value.replaceAll(RegExp(`(\`)[^${Object.keys(placeholderMap).map((x) => x.charAt(1)).join('')}]`, 'g'), '');
+        const escapeChars = Object.keys(placeholderMap).map((x) => x.charAt(1)).join('');
+        value = value.replaceAll(RegExp(`(\`)[^${escapeChars}]`, 'g'), '');
 
         for (const entry in placeholderMap) {
-            value = value.replaceAll(entry, placeholderMap[entry]);
+            value = value.replaceAll(entry, placeholderMap[entry as keyof typeof placeholderMap]);
         }
 
         value = value.replaceAll(placeholderMap['``'], '`');
@@ -138,7 +144,9 @@ export function convertStringToCondition(selector: string): Condition {
         value = value.replaceAll(placeholderMap['`t'], '\t');
         value = value.replaceAll(placeholderMap['`v'], '\v');
 
-        return value;
+        const replacementChar = String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + processedItems.length);
+        processedItems.push(new PSString(value));
+        return replacementChar;
     });
 
     // it's important to process the strings first as they can contain other tokens that may be matched later

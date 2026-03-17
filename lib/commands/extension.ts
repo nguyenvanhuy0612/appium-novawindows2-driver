@@ -491,8 +491,7 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
     } else if (x != null && y != null) {
         pos = [x, y];
     } else {
-        const currentPos = getCursorPosition();
-        pos = [currentPos.x, currentPos.y];
+        pos = getCursorPosition();
     }
 
     const clickTypeToButtonMapping: { [key in ClickType]: number } = {
@@ -598,8 +597,7 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
     } else if (startX != null && startY != null) {
         startPos = [startX, startY];
     } else {
-        const currentPos = getCursorPosition();
-        startPos = [currentPos.x, currentPos.y];
+        startPos = getCursorPosition();
     }
 
     const hasEndTarget = endElementId || (endX != null && endY != null);
@@ -710,8 +708,7 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     } else if (x != null && y != null) {
         pos = [x, y];
     } else {
-        const currentPos = getCursorPosition();
-        pos = [currentPos.x, currentPos.y];
+        pos = getCursorPosition();
     }
 
     await mouseMoveAbsolute(pos[0], pos[1], 0);
@@ -861,8 +858,7 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     } else if (startX != null && startY != null) {
         startPos = [startX, startY];
     } else {
-        const currentPos = getCursorPosition();
-        startPos = [currentPos.x, currentPos.y];
+        startPos = getCursorPosition();
     }
 
     // Calculate End Position
@@ -886,8 +882,7 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     } else if (endX != null && endY != null) {
         endPos = [endX, endY];
     } else {
-        const currentPos = getCursorPosition();
-        endPos = [currentPos.x, currentPos.y];
+        endPos = getCursorPosition();
     }
 
     // Perform Action

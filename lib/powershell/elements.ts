@@ -630,8 +630,15 @@ export const AutomationElementMode = Object.freeze({
 export type AutomationElementMode = Enum<typeof AutomationElementMode>;
 
 export class AutomationElement extends PSObject {
+    private psFilter?: string;
+
     constructor(command: string) {
         super(command);
+    }
+
+    setPsFilter(filter: string): this {
+        this.psFilter = filter;
+        return this;
     }
 
     static get automationRoot(): AutomationElement {
@@ -747,7 +754,39 @@ export class AutomationElement extends PSObject {
     }
 
     buildCommand(): string {
-        return SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID.format(this);
+        const cmd = this.toString();
+        if (this.psFilter) {
+            return SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID.format(`${cmd} | Where-Object { ${this.psFilter} }`);
+        }
+        return SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID.format(cmd);
+    }
+
+    /**
+     * Maps common property names to PowerShell CurrentX property accessors.
+     */
+    static getPropertyAccessor(property: string): string | undefined {
+        const map: Record<string, string> = {
+            'name': '$_.CurrentName',
+            'automationid': '$_.CurrentAutomationId',
+            'classname': '$_.CurrentClassName',
+            'controltype': '$_.CurrentControlType',
+            'isenabled': '$_.CurrentIsEnabled',
+            'isoffscreen': '$_.CurrentIsOffscreen',
+            'ispassword': '$_.CurrentIsPassword',
+            'haskeyboardfocus': '$_.CurrentHasKeyboardFocus',
+            'iskeyboardfocusable': '$_.CurrentIsKeyboardFocusable',
+            'helptext': '$_.CurrentHelpText',
+            'itemstatus': '$_.CurrentItemStatus',
+            'itemtype': '$_.CurrentItemType',
+            'localizedcontroltype': '$_.CurrentLocalizedControlType',
+            'accesskey': '$_.CurrentAccessKey',
+            'acceleratorkey': '$_.CurrentAcceleratorKey',
+            'frameworkid': '$_.CurrentFrameworkId',
+            'isrequiredforform': '$_.CurrentIsRequiredForForm',
+            'iscontrolelement': '$_.CurrentIsControlElement',
+            'iscontentelement': '$_.CurrentIsContentElement',
+        };
+        return map[property.toLowerCase()];
     }
 }
 

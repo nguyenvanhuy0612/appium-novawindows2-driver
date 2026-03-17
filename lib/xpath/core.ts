@@ -28,6 +28,8 @@ import XPathAnalyzer, {
     RELATIVE_LOCATION_PATH,
     SUBTRACTIVE,
     UNION,
+    CONTAINS,
+    STARTS_WITH,
     StepNode,
     PROCESSING_INSTRUCTION_TEST,
     NodeTestNode,
@@ -565,13 +567,26 @@ export class XPathExecutor {
                 throw new errors.InvalidArgumentError(); // should not be reached, attribute is handled before that
         }
 
+        const validEls: FoundAutomationElement[] = [];
+
+        // Optimization: Try to offload simple functional filters (contains, starts-with) to PowerShell
+        // This reduces N round-trips to JS-side post-filtering down to 1.
+        const remainingExprNodes: ExprNode[] = [];
+        for (const exprNode of relativeExprNodes) {
+            const psFilter = convertExprNodeToPowerShellFilter(exprNode);
+            if (psFilter) {
+                find.setPsFilter(psFilter);
+            } else {
+                remainingExprNodes.push(exprNode);
+            }
+        }
+
         const result = await this.sendPowerShellCommand(find.buildCommand());
         const els = result.split('\n').map((id) => id.trim()).filter(Boolean).map((id) => new FoundAutomationElement(id));
-        const validEls: FoundAutomationElement[] = [];
 
         for (const [index, el] of els.entries()) {
             let isValid = true;
-            for (const exprNode of relativeExprNodes) {
+            for (const exprNode of remainingExprNodes) {
                 const [isTrue] = await handleFunctionCall(BOOLEAN, el, this, [index + 1, els.length], exprNode);
                 if (!isTrue) {
                     isValid = false;
@@ -793,4 +808,31 @@ export function predicateProcessableBeforeNode(exprNode: ExprNode): boolean {
             return false;
         }
     }
+}
+
+function convertExprNodeToPowerShellFilter(exprNode: ExprNode): string | undefined {
+    if (exprNode.type === FUNCTION_CALL && (exprNode.name === CONTAINS || exprNode.name === STARTS_WITH)) {
+        if (exprNode.args.length !== 2) return undefined;
+
+        const lhs = exprNode.args[0];
+        const rhs = exprNode.args[1];
+
+        // Optimize simple property checks: contains(@Name, 'foo')
+        if (lhs.type === RELATIVE_LOCATION_PATH && lhs.steps.length === 1 && lhs.steps[0].axis === ATTRIBUTE && rhs.type === LITERAL) {
+            const propName = lhs.steps[0].test.name;
+            const psAccessor = AutomationElement.getPropertyAccessor(propName || '');
+            if (!psAccessor) return undefined;
+
+            const value = (rhs as any).value || (rhs as any).string || '';
+            // Escape single quotes for PowerShell
+            const escapedValue = String(value).replace(/'/g, "''");
+
+            if (exprNode.name === CONTAINS) {
+                return `${psAccessor} -like '*${escapedValue}*'`;
+            } else {
+                return `${psAccessor} -like '${escapedValue}*'`;
+            }
+        }
+    }
+    return undefined;
 }

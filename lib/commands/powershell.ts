@@ -1,4 +1,4 @@
-import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, ChildProcessWithoutNullStreams, execSync } from 'node:child_process';
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE, FIND_DESCENDANTS_FUNCTIONS } from './functions';
@@ -67,6 +67,20 @@ function ensureSessionReady(driver: NovaWindows2Driver): void {
 }
 
 /**
+ * Forcefully kills a process and all its children on Windows.
+ * This is critical because certain COM/UIA calls can hang the PowerShell thread
+ * in a way that a normal SIGTERM/SIGKILL doesn't clean up children.
+ */
+function killProcessTree(pid: number, log: any): void {
+    try {
+        log.debug(`Forcefully killing process tree for PID ${pid}`);
+        execSync(`taskkill /F /T /PID ${pid}`);
+    } catch (e: any) {
+        log.warn(`Failed to kill process tree for PID ${pid}: ${e.message}`);
+    }
+}
+
+/**
  * Waits for command completion marker in PowerShell output
  */
 function waitForCommandCompletion(
@@ -89,12 +103,12 @@ function waitForCommandCompletion(
             cleanup();
             driver.log.warn(`PowerShell command timed out after ${timeoutMs}ms`);
             try {
-                if (driver.powerShell === powerShell) {
-                    powerShell.kill();
+                if (driver.powerShell === powerShell && powerShell.pid) {
+                    killProcessTree(powerShell.pid, driver.log);
                     driver.powerShell = undefined;
                 }
             } catch (e) {
-                driver.log.warn(`Failed to kill PowerShell: ${e}`);
+                driver.log.warn(`Failed to cleanup PowerShell after timeout: ${e}`);
             }
             reject(new errors.TimeoutError(`PowerShell command timed out after ${timeoutMs}ms`));
         }, timeoutMs);
