@@ -116,11 +116,28 @@ Appium Windows Driver supports the same location strategies [the WinAppDriver su
 ### Attribute Retrieval
 Retrieve comprehensive details about UI elements using standard or bulk methods.
 
-- **Bulk Retrieval**: Use the `"all"` keyword to get 80+ properties in a single JSON object.
-- **Dotted Names**: Access pattern-specific properties directly (e.g., `Window.CanMaximize`, `LegacyIAccessible.Name`).
+#### Supported Attributes
+- **Standard UIA Properties**: `AutomationId`, `Name`, `ClassName`, `RuntimeId`, `ControlType`, `IsEnabled`, `IsOffscreen`, and all other direct UIA properties.
+- **Pattern-Specific Properties**: Use dot-notation (`Pattern.Property`) to access pattern members, for example:
+    - `Value.Value`, `Value.IsReadOnly`
+    - `Window.CanMaximize`, `Window.CanMinimize`, `Window.WindowVisualState`
+    - `Toggle.ToggleState`
+    - `ExpandCollapse.ExpandCollapseState`
+    - `Selection.Selection`, `Selection.CanSelectMultiple`
+    - *Includes support for 20+ UIA patterns.*
+- **Legacy Properties (MSAA Fallback)**:
+    - **Shorthand Aliases**: `legacyname`, `legacyvalue`, `legacyrole`, `legacystate`, `legacydescription`, `legacyhelp`, `legacykeyboardshortcut`, `legacydefaultaction`, `legacychildid`.
+    - **Dot-Notation**: `LegacyIAccessible.Name`, `LegacyIAccessible.Role`, etc.
+- **Special Keywords**:
+    - `"all"`: Returns all attributes.
+- **Enhanced Type Names**:
+    - `ControlType` returns a human-readable short name (e.g., `Button`, `ListItem`, `Text`) instead of the UIA constant.
 
 ```python
-# getAttributes returns all properties as a JSON string
+# List specific attribute
+value = element.get_attribute("Value.Value")
+
+# Get all attributes as a JSON string
 all_attributes = element.get_attribute("all")
 ```
 
@@ -165,8 +182,8 @@ This is a shortcut for a single mouse click gesture.
 | Name | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
 | `elementId` | `string` | no | Hexadecimal identifier of the element to click on. If this parameter and coordinates are missing, the command uses the current cursor position. If `elementId` is present without coordinates, it clicks the center of the element. | `123e4567-e89b...` |
-| `x` | `number` | no | Integer horizontal coordinate of the click point. If omitted (along with `elementId`), the current cursor position is used. | `100` |
-| `y` | `number` | no | Integer vertical coordinate of the click point. If omitted (along with `elementId`), the current cursor position is used. | `100` |
+| `x` | `number` | no | Integer horizontal coordinate of the click point. If omitted (along with `elementId`), the current cursor position is used. If `elementId` is present, `x` is an offset from the element's top-left corner. | `100` |
+| `y` | `number` | no | Integer vertical coordinate of the click point. If omitted (along with `elementId`), the current cursor position is used. If `elementId` is present, `y` is an offset from the element's top-left corner. | `100` |
 | `button` | `string` | no | Name of the mouse button to be clicked. Supported button names are: `left`, `middle`, `right`, `back`, `forward`. The default value is `left`. | `right` |
 | `modifierKeys` | `string[]` \| `string` | no | List of possible keys or a single key name to depress while the click is being performed. Supported key names are: `Shift`, `Ctrl`, `Alt`, `Win`. | `['ctrl', 'alt']` |
 | `durationMs` | `number` | no | The number of milliseconds to wait between pressing and releasing the mouse button. By default no delay is applied. | `500` |
@@ -207,12 +224,12 @@ Performs a click-and-drag gesture.
 
 | Name | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `startElementId` | `string` | no | Hexadecimal identifier of the start element. Either this OR both `startX` and `startY` must be provided. | `123e4567-e89b...` |
-| `startX` | `number` | no | Horizontal coordinate of the start point. Required if `startElementId` is missing. | `100` |
-| `startY` | `number` | no | Vertical coordinate of the start point. Required if `startElementId` is missing. | `100` |
-| `endElementId` | `string` | no | Hexadecimal identifier of the end element. Either this OR both `endX` and `endY` must be provided. | `123e4567-e89b...` |
-| `endX` | `number` | no | Horizontal coordinate of the end point. Required if `endElementId` is missing. | `200` |
-| `endY` | `number` | no | Vertical coordinate of the end point. Required if `endElementId` is missing. | `200` |
+| `startElementId` | `string` | no | Hexadecimal identifier of the start element. If this and start coordinates are missing, the current cursor position is used. | `123e4567-e89b...` |
+| `startX` | `number` | no | Horizontal coordinate of the start point. If omitted (along with `startElementId`), the current cursor position is used. | `100` |
+| `startY` | `number` | no | Vertical coordinate of the start point. If omitted (along with `startElementId`), the current cursor position is used. | `100` |
+| `endElementId` | `string` | no | Hexadecimal identifier of the end element. If this and end coordinates are missing, the current cursor position is used. | `123e4567-e89b...` |
+| `endX` | `number` | no | Horizontal coordinate of the end point. If omitted (along with `endElementId`), the current cursor position is used. | `200` |
+| `endY` | `number` | no | Vertical coordinate of the end point. If omitted (along with `endElementId`), the current cursor position is used. | `200` |
 | `durationMs` | `number` | no | Duration of the drag in milliseconds. Default is `1000`. | `2000` |
 | `button` | `string` | no | Mouse button to use (`left`, `right`, `middle`). Default is `left`. | `right` |
 | `smoothPointerMove` | `string` | no | CSS-like easing function (e.g., `linear`, `ease-out`) for smooth movement. Default is `None`. | `linear` |
@@ -257,9 +274,9 @@ This is a shortcut for a mouse wheel scroll gesture. The API is a thin wrapper o
 
 | Name | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `elementId` | `string` | no | Same as in `windows: click`. | `123e4567-e89b...` |
-| `x` | `number` | no | Same as in `windows: click`. | `100` |
-| `y` | `number` | no | Same as in `windows: click`. | `100` |
+| `elementId` | `string` | no | Same as in `windows: click`. Falls back to the current cursor position if omitted along with coordinates. | `123e4567-e89b...` |
+| `x` | `number` | no | Same as in `windows: click`. Falls back to the current cursor position if omitted along with `elementId`. | `100` |
+| `y` | `number` | no | Same as in `windows: click`. Falls back to the current cursor position if omitted along with `elementId`. | `100` |
 | `deltaX` | `number` | no | The amount of horizontal wheel movement measured in wheel clicks. Positive = right, Negative = left. | `-5` |
 | `deltaY` | `number` | no | The amount of vertical wheel movement. Positive = forward (away), Negative = backward (toward). | `5` |
 | `modifierKeys` | `string[]` \| `string` | no | Same as in `windows: click`. | `win` |
@@ -278,9 +295,9 @@ This is a shortcut for a hover gesture.
 
 | Name | Type | Required | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
-| `startElementId` | `string` | no | Same as in `windows: click`. | `123e4567-e89b...` |
-| `startX` | `number` | no | Same as in `windows: click`. | `100` |
-| `startY` | `number` | no | Same as in `windows: click`. | `100` |
+| `startElementId` | `string` | no | Same as in `windows: click`. Falls back to current cursor position if omitted along with coordinates. | `123e4567-e89b...` |
+| `startX` | `number` | no | Same as in `windows: click`. Falls back to current cursor position if omitted along with `startElementId`. | `100` |
+| `startY` | `number` | no | Same as in `windows: click`. Falls back to current cursor position if omitted along with `startElementId`. | `100` |
 | `endElementId` | `string` | no | Same as in `windows: click`. | `123e4567-e89b...` |
 | `endX` | `number` | no | Same as in `windows: click`. | `200` |
 | `endY` | `number` | no | Same as in `windows: click`. | `200` |
