@@ -75,7 +75,8 @@ const FIND_PARENT = pwsh$ /* ps1 */ `
     $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
 
     foreach ($el in ${0}) {
-        return $treeWalker.GetParent($el).FindFirst([TreeScope]::Element, ${1});
+        $parent = $treeWalker.GetParent($el);
+        if ($null -ne $parent) { return $parent.FindFirst([TreeScope]::Element, ${1}); }
     }
 `;
 
@@ -105,11 +106,10 @@ const FIND_ALL_FOLLOWING = pwsh$ /* ps1 */ `
 
             if ($null -ne $nextSibling) {
                 $el = $nextSibling;
-                $els.Add($el);
-                foreach ($child in $el.FindAll([TreeScope]::Children, ${1})) { $els.Add($child); }
+                foreach ($match in $el.FindAll([TreeScope]::Subtree, ${1})) { $els.Add($match); }
+            } else {
+                $el = $treeWalker.GetParent($el);
             }
-
-            $el = $treeWalker.GetParent($el);
         }
     }
 
@@ -165,7 +165,7 @@ const FIND_PRECEDING = pwsh$ /* ps1 */ `
 `;
 
 const FIND_ALL_PRECEDING = pwsh$ /* ps1 */ `
-    $treeWalker = [TreeWalker]::new([AndCondition]::new($cacheRequest.TreeFilter, ${1}));
+    $treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter);
     $els = New-Object System.Collections.Generic.List[AutomationElement];
 
     foreach ($el in ${0}) {
@@ -174,11 +174,10 @@ const FIND_ALL_PRECEDING = pwsh$ /* ps1 */ `
 
             if ($null -ne $previousSibling) {
                 $el = $previousSibling;
-                $els.Add($el);
-                foreach ($child in $el.FindAll([TreeScope]::Children, ${1})) { $els.Add($child); }
+                foreach ($match in $el.FindAll([TreeScope]::Subtree, ${1})) { $els.Add($match); }
+            } else {
+                $el = $treeWalker.GetParent($el);
             }
-
-            $el = $treeWalker.GetParent($el);
         }
     }
 
@@ -312,8 +311,8 @@ const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
     $hwnd = 0;
     try { $hwnd = [int]$el.Current.NativeWindowHandle; } catch { }
     $rect = $el.Current.BoundingRectangle;
-    $centerX = [int]($rect.Left + $rect.Width / 2);
-    $centerY = [int]($rect.Top + $rect.Height / 2);
+    $centerX = 0; $centerY = 0;
+    try { $centerX = [int]($rect.Left + $rect.Width / 2); $centerY = [int]($rect.Top + $rect.Height / 2); } catch { }
 
     try {
         $val = [MSAAHelper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $centerX, $centerY, "${1}");
@@ -364,8 +363,8 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
     try {
         $hwnd = $el.Current.NativeWindowHandle;
         $rect = $el.Current.BoundingRectangle;
-        $cx = [int]($rect.Left + $rect.Width / 2);
-        $cy = [int]($rect.Top + $rect.Height / 2);
+        $cx = 0; $cy = 0;
+        try { $cx = [int]($rect.Left + $rect.Width / 2); $cy = [int]($rect.Top + $rect.Height / 2); } catch { }
 
         $msaaProps = [MSAAHelper]::GetLegacyPropsWithFallback([IntPtr]$hwnd, $cx, $cy);
         if ($null -ne $msaaProps) {
@@ -766,25 +765,25 @@ export class AutomationElement extends PSObject {
      */
     static getPropertyAccessor(property: string): string | undefined {
         const map: Record<string, string> = {
-            'name': '$_.CurrentName',
-            'automationid': '$_.CurrentAutomationId',
-            'classname': '$_.CurrentClassName',
-            'controltype': '$_.CurrentControlType',
-            'isenabled': '$_.CurrentIsEnabled',
-            'isoffscreen': '$_.CurrentIsOffscreen',
-            'ispassword': '$_.CurrentIsPassword',
-            'haskeyboardfocus': '$_.CurrentHasKeyboardFocus',
-            'iskeyboardfocusable': '$_.CurrentIsKeyboardFocusable',
-            'helptext': '$_.CurrentHelpText',
-            'itemstatus': '$_.CurrentItemStatus',
-            'itemtype': '$_.CurrentItemType',
-            'localizedcontroltype': '$_.CurrentLocalizedControlType',
-            'accesskey': '$_.CurrentAccessKey',
-            'acceleratorkey': '$_.CurrentAcceleratorKey',
-            'frameworkid': '$_.CurrentFrameworkId',
-            'isrequiredforform': '$_.CurrentIsRequiredForForm',
-            'iscontrolelement': '$_.CurrentIsControlElement',
-            'iscontentelement': '$_.CurrentIsContentElement',
+            'name': '$_.Current.Name',
+            'automationid': '$_.Current.AutomationId',
+            'classname': '$_.Current.ClassName',
+            'controltype': '$_.Current.ControlType',
+            'isenabled': '$_.Current.IsEnabled',
+            'isoffscreen': '$_.Current.IsOffscreen',
+            'ispassword': '$_.Current.IsPassword',
+            'haskeyboardfocus': '$_.Current.HasKeyboardFocus',
+            'iskeyboardfocusable': '$_.Current.IsKeyboardFocusable',
+            'helptext': '$_.Current.HelpText',
+            'itemstatus': '$_.Current.ItemStatus',
+            'itemtype': '$_.Current.ItemType',
+            'localizedcontroltype': '$_.Current.LocalizedControlType',
+            'accesskey': '$_.Current.AccessKey',
+            'acceleratorkey': '$_.Current.AcceleratorKey',
+            'frameworkid': '$_.Current.FrameworkId',
+            'isrequiredforform': '$_.Current.IsRequiredForForm',
+            'iscontrolelement': '$_.Current.IsControlElement',
+            'iscontentelement': '$_.Current.IsContentElement',
         };
         return map[property.toLowerCase()];
     }

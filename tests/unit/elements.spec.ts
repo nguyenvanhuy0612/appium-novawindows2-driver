@@ -31,6 +31,49 @@ describe('Automation Elements', () => {
              expect(cmd).to.contain('System.Collections.Generic.List[AutomationElement]');
              expect(cmd).to.contain('-bor [TreeScope]::Children');
         });
+
+        describe('FIND_PARENT — parent:: axis', () => {
+            it('stores parent in variable before null check', () => {
+                const cmd = decodePwsh(root.findFirst(TreeScope.PARENT, cond).buildCommand());
+                expect(cmd).to.contain('$parent = $treeWalker.GetParent($el)');
+            });
+
+            it('guards against null parent before calling FindFirst', () => {
+                const cmd = decodePwsh(root.findFirst(TreeScope.PARENT, cond).buildCommand());
+                expect(cmd).to.contain('if ($null -ne $parent)');
+            });
+        });
+
+        describe('FIND_ALL_FOLLOWING — following:: axis', () => {
+            it('uses Subtree scope to match sibling and all its descendants', () => {
+                const cmd = decodePwsh(root.findAll(TreeScope.FOLLOWING, cond).buildCommand());
+                expect(cmd).to.contain('[TreeScope]::Subtree');
+            });
+
+            it('only moves to parent when no next sibling found (else branch)', () => {
+                const cmd = decodePwsh(root.findAll(TreeScope.FOLLOWING, cond).buildCommand());
+                expect(cmd).to.contain('} else {');
+                expect(cmd).to.contain('$treeWalker.GetParent($el)');
+            });
+
+            it('does not add sibling unconditionally — uses FindAll with condition', () => {
+                const cmd = decodePwsh(root.findAll(TreeScope.FOLLOWING, cond).buildCommand());
+                expect(cmd).to.contain('$el.FindAll([TreeScope]::Subtree');
+            });
+        });
+
+        describe('FIND_ALL_PRECEDING — preceding:: axis', () => {
+            it('uses Subtree scope to match sibling and all its descendants', () => {
+                const cmd = decodePwsh(root.findAll(TreeScope.PRECEDING, cond).buildCommand());
+                expect(cmd).to.contain('[TreeScope]::Subtree');
+            });
+
+            it('only moves to parent when no previous sibling found (else branch)', () => {
+                const cmd = decodePwsh(root.findAll(TreeScope.PRECEDING, cond).buildCommand());
+                expect(cmd).to.contain('} else {');
+                expect(cmd).to.contain('$treeWalker.GetParent($el)');
+            });
+        });
     });
 
     describe('FoundAutomationElement (Actions)', () => {
@@ -90,6 +133,26 @@ describe('Automation Elements', () => {
             const cmd = decodePwsh(el.buildGetTagNameCommand());
             expect(cmd).to.contain("$type = $_.Split('.')[-1];");
             expect(cmd).to.contain("if ($type -eq 'DataGrid') {");
+        });
+    });
+
+    describe('AutomationElement.getPropertyAccessor (contains/starts-with psFilter)', () => {
+        it('uses $_.Current.Name not $_.CurrentName', () => {
+            expect(AutomationElement.getPropertyAccessor('Name')).to.equal('$_.Current.Name');
+        });
+
+        it('uses $_.Current.* form for all properties', () => {
+            const props = ['Name', 'AutomationId', 'ClassName', 'IsEnabled', 'IsOffscreen',
+                           'HelpText', 'FrameworkId', 'LocalizedControlType', 'AccessKey'];
+            for (const prop of props) {
+                const accessor = AutomationElement.getPropertyAccessor(prop);
+                expect(accessor, `accessor for ${prop}`).to.match(/^\$_\.Current\./);
+            }
+        });
+
+        it('returns undefined for unknown properties', () => {
+            expect(AutomationElement.getPropertyAccessor('RuntimeId')).to.be.undefined;
+            expect(AutomationElement.getPropertyAccessor('BoundingRectangle')).to.be.undefined;
         });
     });
 });

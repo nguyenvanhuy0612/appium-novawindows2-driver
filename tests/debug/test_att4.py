@@ -16,7 +16,7 @@ print(f"\nConnecting to Appium at http://172.16.10.37:4723 with options...")
 driver = webdriver.Remote('http://172.16.10.37:4723', options=options)
 print("Connected successfully!")
 
-elements = driver.find_elements(AppiumBy.XPATH, "//*")
+elements = driver.find_elements(AppiumBy.XPATH, "//Window[contains(@Name,'SecureAge')]//*")
 
 print(len(elements))
 
@@ -28,7 +28,7 @@ for element in elements:
         attrs = json.dumps(attrs, indent=4)
     except Exception:
         pass
-    print(f'Element: {element} \n Attributes: \n{attrs}')
+    print(f'Attributes: \n{attrs}')
 
     print(element.get_attribute("Name"))
     print(element.get_attribute("FrameworkId"))

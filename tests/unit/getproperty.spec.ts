@@ -157,6 +157,28 @@ describe('getProperty PS command builders', () => {
         });
     });
 
+    describe('NaN BoundingRectangle guard (offscreen elements)', () => {
+        it('buildGetLegacyPropertyCommand defaults centerX/centerY to 0', () => {
+            const cmd = decodePwsh(el.buildGetLegacyPropertyCommand('Name'));
+            expect(cmd).to.contain('$centerX = 0; $centerY = 0');
+        });
+
+        it('buildGetLegacyPropertyCommand wraps [int] cast in inner try-catch', () => {
+            const cmd = decodePwsh(el.buildGetLegacyPropertyCommand('Name'));
+            expect(cmd).to.contain('try { $centerX = [int]');
+        });
+
+        it('buildGetAllPropertiesCommand defaults cx/cy to 0', () => {
+            const cmd = decodePwsh(el.buildGetAllPropertiesCommand());
+            expect(cmd).to.contain('$cx = 0; $cy = 0');
+        });
+
+        it('buildGetAllPropertiesCommand wraps [int] cast in inner try-catch', () => {
+            const cmd = decodePwsh(el.buildGetAllPropertiesCommand());
+            expect(cmd).to.contain('try { $cx = [int]');
+        });
+    });
+
     describe('additional properties coverage', () => {
          it('buildGetPropertyCommand handles BoundingRectangle', () => {
               const cmd = decodePwsh(el.buildGetPropertyCommand('BoundingRectangle'));
