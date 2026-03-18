@@ -33,19 +33,11 @@ export class ConstructorRegexMatcher extends RegexItem {
     constructor(fullyQualifiedName: string, ...params: RegexItem[]) {
         assertCorrectNamespace(fullyQualifiedName);
 
-        const sections = fullyQualifiedName.toLowerCase().split('.');
-        const mainClass = sections.pop() ?? '';
-        const parentClass = sections.pop() ?? '';
-        sections.reverse(); // mutates the actual array
+        const mainClass = fullyQualifiedName.toLowerCase().split('.').pop() ?? '';
 
-        let regexString = BEGIN_OF_STATEMENT_REGEX +
-            `(?:(?:(?:(?:\\bnew\\s*)?)(?:(?:\\b${MAGIC_UNICODE_REPLACEMENT_CHAR}${parentClass}\\.)?(?:${mainClass})))` +
-            `|(?:(?:(?:\\bnew-object\\s*)?)(?:\\[(?:${MAGIC_UNICODE_REPLACEMENT_CHAR}${parentClass}\\]::)?(?:${mainClass})))` +
-            `|(?:(?:(?:\\[(?:(?:${MAGIC_UNICODE_REPLACEMENT_CHAR}${parentClass}\\.)?${mainClass}\\]::new)))))`;
+        const regexString = `${BEGIN_OF_STATEMENT_REGEX}(?:(?:\\bnew\\s+)?(?:${mainClass}))`;
 
-        sections.forEach((section) => regexString = regexString.replaceAll(MAGIC_UNICODE_REPLACEMENT_CHAR, `(?:${MAGIC_UNICODE_REPLACEMENT_CHAR}${section}\\.)?`));
-
-        super(`${regexString.replaceAll(MAGIC_UNICODE_REPLACEMENT_CHAR, '')}\\(\\s*${params.map((param) => param.build()).join('\\s*,\\s*')}\\s*\\)`);
+        super(`${regexString}\\(\\s*${params.map((param) => param.build()).join('\\s*,\\s*')}\\s*\\)`);
     }
 }
 
@@ -53,14 +45,11 @@ export class PropertyRegexMatcher extends RegexItem {
     constructor(namespace: string, ...properties: string[]) {
         assertCorrectNamespace(namespace);
 
-        const sections = namespace.toLowerCase().split('.');
-        const mainClass = sections.pop() ?? '';
-        sections.reverse(); // mutates the actual array
+        const propertiesRegex = properties.length > 0
+            ? `(?<![a-z-.])(?:(?:${properties.join(')|(?:')}))(?![a-z-.])`
+            : '(?:\\b[a-z]+)';
 
-        let regexString = `${BEGIN_OF_STATEMENT_REGEX}(?:\\b(?:(?:(?:${MAGIC_UNICODE_REPLACEMENT_CHAR}${mainClass}\\.)))|(?:(?:\\[${MAGIC_UNICODE_REPLACEMENT_CHAR}${mainClass}\\]::)))?`;
-        sections.forEach((section) => regexString = regexString.replaceAll(MAGIC_UNICODE_REPLACEMENT_CHAR, `(?:${MAGIC_UNICODE_REPLACEMENT_CHAR}${section}\\.)?`));
-
-        super(`${regexString.replaceAll(MAGIC_UNICODE_REPLACEMENT_CHAR, '')}(${properties.length > 0 ? `(?<![a-z-.])(?:(?:${properties.join(')|(?:')}))(?![a-z-.])` : '(?:\\b[a-z]+)'}(?![.-]))`.toLowerCase());
+        super(`${BEGIN_OF_STATEMENT_REGEX}(${propertiesRegex}(?![.-]))`.toLowerCase());
     }
 }
 

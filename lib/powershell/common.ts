@@ -95,7 +95,7 @@ export class PSControlType extends PSObject {
 export class PSPoint extends PSObject {
     constructor(value: Position) {
         const requiredFields = ['x', 'y'];
-        if (!(Object.keys(value).every(requiredFields.includes) && typeof value.x === 'number' && typeof value.y === 'number')) {
+        if (!(Object.keys(value).every((k) => requiredFields.includes(k)) && typeof value.x === 'number' && typeof value.y === 'number')) {
             throw new errors.InvalidArgumentError('PSPoint accepts a Position object { x: number, y: number } in the constructor.');
         }
 
@@ -106,7 +106,7 @@ export class PSPoint extends PSObject {
 export class PSRect extends PSObject {
     constructor(value: Rect) {
         const requiredFields = ['x', 'y', 'width', 'height'];
-        if (!(Object.keys(value).every(requiredFields.includes) && typeof value.x === 'number' && typeof value.y === 'number' && typeof value.width === 'number' && typeof value.height === 'number')) {
+        if (!(Object.keys(value).every((k) => requiredFields.includes(k)) && typeof value.x === 'number' && typeof value.y === 'number' && typeof value.width === 'number' && typeof value.height === 'number')) {
             throw new errors.InvalidArgumentError('PSRect accepts a Rect object { x: number, y: number, width: number, height: number } in the constructor.');
         }
 

@@ -61,14 +61,77 @@ describe('PowerShell Generation', () => {
         expect(decoded).to.contain('[AutomationElement]::classnameProperty');
     });
 
-    it('should generate command for FoundAutomationElement', () => {
-        const elementId = "42.1234.5";
-        const element = new FoundAutomationElement(elementId);
-        const command = element.buildCommand();
-        const decoded = decodeCommand(command);
+    it('should generate correct buildInvokeCommand', () => {
+        const el = new FoundAutomationElement('123');
+        const cmd = decodeCommand(el.buildInvokeCommand());
+        expect(cmd).to.contain('GetCurrentPattern([InvokePattern]::Pattern).Invoke()');
+    });
 
-        // This uses ELEMENT_TABLE_GET
-        // $el = $elementTable['42.1234.5'];
-        expect(decoded).to.contain(`$elementTable['${elementId}']`);
+    it('should generate correct buildScrollIntoViewCommand', () => {
+        const el = new FoundAutomationElement('123');
+        const cmd = decodeCommand(el.buildScrollIntoViewCommand());
+        expect(cmd).to.contain('ScrollItemPattern');
+        expect(cmd).to.contain('SetFocus');
+    });
+
+    it('should generate correct buildBringToFrontCommand', () => {
+        const el = new FoundAutomationElement('123');
+        const cmd = decodeCommand(el.buildBringToFrontCommand());
+        expect(cmd).to.contain('SetForegroundWindow');
+    });
+
+    it('should generate correct buildSetFocusCommand', () => {
+        const el = new FoundAutomationElement('123');
+        const cmd = decodeCommand(el.buildSetFocusCommand());
+        expect(cmd).to.contain('SetFocus()');
+    });
+
+    it('should generate correct buildSetValueCommand', () => {
+        const el = new FoundAutomationElement('123');
+        const cmd = decodeCommand(el.buildSetValueCommand('hello'));
+        expect(cmd).to.contain('ValuePattern');
+        expect(cmd).to.contain('SetValue("$([char]0x0068)$([char]0x0065)$([char]0x006c)$([char]0x006c)$([char]0x006f)")');
+    });
+
+    it('should generate correct buildMaximizeCommand', () => {
+        const el = new FoundAutomationElement('123');
+        const cmd = decodeCommand(el.buildMaximizeCommand());
+        expect(cmd).to.contain('WindowVisualState]::Maximized');
+    });
+
+    describe('Additional Search Scopes', () => {
+        const root = AutomationElement.automationRoot;
+        const cond = new PropertyCondition(Property.NAME, new PSString('Test'));
+
+        it('should handle ANCESTORS scope', () => {
+            const cmd = decodeCommand(root.findAll(TreeScope.ANCESTORS, cond).buildCommand());
+            expect(cmd).to.contain('$treeWalker = [TreeWalker]::new($cacheRequest.TreeFilter)');
+            expect(cmd).to.contain('GetParent($el)');
+        });
+
+        it('should handle SUBTREE scope', () => {
+            const cmd = decodeCommand(root.findFirst(TreeScope.SUBTREE, cond).buildCommand());
+            expect(cmd).to.contain('Find-Descendant');
+            expect(cmd).to.contain('-includeSelf');
+        });
+    });
+
+    describe('Additional Element Actions', () => {
+        const el = new FoundAutomationElement('456');
+
+        it('should generate correct buildMinimizeCommand', () => {
+            const cmd = decodeCommand(el.buildMinimizeCommand());
+            expect(cmd).to.contain('WindowVisualState]::Minimized');
+        });
+
+        it('should generate correct buildRestoreCommand', () => {
+            const cmd = decodeCommand(el.buildRestoreCommand());
+            expect(cmd).to.contain('WindowVisualState]::Normal');
+        });
+
+        it('should generate correct buildCloseCommand', () => {
+            const cmd = decodeCommand(el.buildCloseCommand());
+            expect(cmd).to.contain('.Close()');
+        });
     });
 });

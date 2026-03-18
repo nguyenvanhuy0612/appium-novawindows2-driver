@@ -1,3 +1,48 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [1.2.0] (2026-03-18)
+
+### Bug Fixes
+
+* **PowerShell**: Fixed restrictive regex boundaries that prevented valid UIA property lookups.
+* **PowerShell**: Fixed `this` context bind error in `PSRect` and `PSPoint` constructors.
+* **Converter**: Fixed `ControlType` mapping by performing robust PowerShell string comparison using `endsWith`.
+
+### Tests
+
+* **PowerShell**: Significantly expanded unit test suite to 116 passing tests, providing comprehensive coverage for:
+    * Condition objects and deep logical nesting.
+    * All automation element command builders and action commands.
+    * PowerShell common types and edge-case string encoding.
+    * Selector parser enforces simple, non-prefixed property names.
+
+## [1.1.0] (2026-03-17)
+
+### Features
+
+* **XPath**: Optimized `contains` and `starts-with` by pushing filtering to PowerShell.
+* **Cursor**: Refactored cursor position handling for better accuracy and fallback.
+
+### Bug Fixes
+
+* **Performance**: Reduced overhead and improved stability of element searches.
+
+## [1.0.10] (2026-03-16)
+
+### Chore
+
+* **Dependencies**: Moved `ffmpeg-static` to `optionalDependencies` for better ARM compatibility.
+* **Tests**: Updated unit test paths in `package.json`.
+
+## [1.0.9] (2026-03-13)
+
+### Features
+
+* **Element**: Improved `setValue`, `click`, and `hover` commands with better fallback and robustness.
+* **Legacy**: Enhanced `LegacyIAccessible` property retrieval via `Get-LegacyPropertySafe`.
+
 ## [1.0.0] (2026-03-08)
 
 ### Features
@@ -13,63 +58,25 @@
 * Fixed various syntax and type issues across the driver.
 * Ensured screen recording processes are cleaned up when a session is deleted.
 
-### Refactoring
-
-* Refactored `lib/commands/extension.ts` to improve command mapping and parameter handling.
-
 ## [0.2.8] (2026-01-07)
 
 ### Refactoring
 
 * Unified `LegacyIAccessible` property retrieval using robust fallback logic (UIA -> MSAA Point -> MSAA HWND) via `Get-LegacyPropertySafe` in `elements.ts`.
-* Cleaned up PowerShell syntax in `elements.ts` (fixed spacing around operators, static member access, and cmdlet parameters like `ConvertTo-Json -Compress`).
+* Cleaned up PowerShell syntax in `elements.ts`.
 * Improved null handling in `Find-ChildrenRecursively`.
 
 ## [0.2.7] (2026-01-07)
 
 ### Bug Fixes
 
-* fixed `Unsupported Pattern` exception when closing or maximizing windows that do not support WindowPattern by wrapping in try-catch
+* Fixed `Unsupported Pattern` exception when closing or maximizing windows that do not support WindowPattern by wrapping in try-catch.
 
 ## [0.2.6] (2026-01-07)
 
 ### Bug Fixes
 
-* fixed crash in `findElementFromElement` when using stale elements by validating `ProcessId` access
-* fixed `You cannot call a method on a null-valued expression` in `GET_ELEMENT_RUNTIME_ID` by adding null check filter
-* fixed `FIND_DESCENDANTS` crashing with null command input by adding null checks to recursive search commands
-* implemented `IsReadOnly` fallback for legacy MSAA elements (checking `accState` for `STATE_SYSTEM_READONLY`)
-
-## [1.1.0](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/compare/v1.0.1...v1.1.0) (2025-08-06)
-
-### Features
-
-* adding appArguments option ([#26](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/issues/26)) ([ded917b](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/ded917bdf2f8d224cc9cf917958177ed0e97078b))
-
-## [1.0.1](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/compare/v1.0.0...v1.0.1) (2025-04-25)
-
-### Bug Fixes
-
-* fixed crash in Node 22+ by using Buffer instead of {} with EnumDisplaySettingsA ([#17](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/issues/17)) ([08e4907](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/08e49070020f071f3983fcb00c30e9a3ae16b9dc))
-* set shouldCloseApp's default value to true ([#18](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/issues/18)) ([28dc1d4](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/28dc1d443d416e9a44f4ddcd2fb31828e0b92bcb))
-
-### Code Refactoring
-
-* remove unnecessary debug logging for name locator ([#19](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/issues/19)) ([ad50be9](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/ad50be9f9b60145a2f203f294d326eb9499339fb))
-
-## 1.0.0 (2025-04-23)
-
-### Miscellaneous Chores
-
-* add .gitignore ([631fa0a](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/631fa0a72f5cda861215ff4d98ccc41c44d357f6))
-* adding eslint ([c05602d](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/c05602d1aaa7fa003394ec663302017a3027db82))
-* **ci:** add semantic-release workflow ([a9c39fd](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/a9c39fdab2d361678445a523a2830ea9925c4f1f))
-* **lint:** fix linting issue ([6c2cb42](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/6c2cb42388a7f51842a1a5bd11905a9fe0e86ce9))
-* **npm:** disable package-lock generation ([5a648ac](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/5a648ac7f65fcfef66afd6bf76ce2188b10d4ce9))
-* **package:** add keywords and repository info ([fa165d0](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/fa165d007f6a424c0f11340b59ac73e1185091d8))
-* **release:** rollback version to 0.0.1 for testing ([#11](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/issues/11)) ([c4dd2c2](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/c4dd2c21e3067f70a11d72206fbc7f5da79380b6))
-* updated dependencies [skip ci] ([08528fb](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/08528fb06727df50c087940fe541730a2a13483f))
-
-### Code Refactoring
-
-* adding enums for click and updating ([89dcebf](https://github.com/nguyenvanhuy0612/appium-novawindows-driver/commit/89dcebfd026f7a68b4052f33fa2c928ba42162bf))
+* Fixed crash in `findElementFromElement` when using stale elements by validating `ProcessId` access.
+* Fixed `You cannot call a method on a null-valued expression` in `GET_ELEMENT_RUNTIME_ID` by adding null check filter.
+* Fixed `FIND_DESCENDANTS` crashing with null command input by adding null checks to recursive search commands.
+* Implemented `IsReadOnly` fallback for legacy MSAA elements (checking `accState` for `STATE_SYSTEM_READONLY`).

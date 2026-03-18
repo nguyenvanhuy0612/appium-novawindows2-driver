@@ -321,12 +321,12 @@ export function convertStringToCondition(selector: string): Condition {
             processedItems.push(new PropertyCondition(Property.LOCALIZED_CONTROL_TYPE, new PSString(propertyValue.toString())));
         } else if (property === Property.CONTROL_TYPE && propertyValue instanceof PSControlType) {
             const val = propertyValue.toString().toLowerCase();
-            if (val === 'list') {
+            if (val.endsWith('::list')) {
                 processedItems.push(new OrCondition(
                     new PropertyCondition(Property.CONTROL_TYPE, new PSControlType('List')),
                     new PropertyCondition(Property.CONTROL_TYPE, new PSControlType('DataGrid'))
                 ));
-            } else if (val === 'listitem') {
+            } else if (val.endsWith('::listitem')) {
                 processedItems.push(new OrCondition(
                     new PropertyCondition(Property.CONTROL_TYPE, new PSControlType('ListItem')),
                     new PropertyCondition(Property.CONTROL_TYPE, new PSControlType('DataItem'))
