@@ -157,6 +157,23 @@ describe('getProperty PS command builders', () => {
         });
     });
 
+    describe('buildGetSourceCommand (element XML source)', () => {
+        it('calls Get-PageSource with the element', () => {
+            const cmd = decodePwsh(el.buildGetSourceCommand());
+            expect(cmd).to.contain('Get-PageSource $el');
+        });
+
+        it('returns OuterXml of the source', () => {
+            const cmd = decodePwsh(el.buildGetSourceCommand());
+            expect(cmd).to.contain('$source.OuterXml');
+        });
+
+        it('guards against null element', () => {
+            const cmd = decodePwsh(el.buildGetSourceCommand());
+            expect(cmd).to.contain('if ($null -eq $el)');
+        });
+    });
+
     describe('NaN BoundingRectangle guard (offscreen elements)', () => {
         it('buildGetLegacyPropertyCommand defaults centerX/centerY to 0', () => {
             const cmd = decodePwsh(el.buildGetLegacyPropertyCommand('Name'));

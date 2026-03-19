@@ -120,7 +120,12 @@ export async function getProperty(this: NovaWindows2Driver, propertyName: string
         }
     }
 
-    // 4. Dump all properties as JSON
+    // 4. XML source for this element and its subtree
+    if (lowerKey === 'source') {
+        return await this.sendPowerShellCommand(el.buildGetSourceCommand());
+    }
+
+    // 5. Dump all properties as JSON
     if (lowerKey === 'all') {
         return await this.sendPowerShellCommand(el.buildGetAllPropertiesCommand());
     }

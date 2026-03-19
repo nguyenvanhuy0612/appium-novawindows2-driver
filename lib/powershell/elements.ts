@@ -397,6 +397,13 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
     return $out | ConvertTo-Json -Depth 2 -Compress;
 `;
 
+const GET_ELEMENT_SOURCE = pwsh$ /* ps1 */ `
+    $el = ${0};
+    if ($null -eq $el) { return $null };
+    $source = Get-PageSource $el;
+    if ($null -ne $source) { $source.OuterXml } else { $null }
+`;
+
 const GET_ELEMENT_RUNTIME_ID = pwsh$ /* ps1 */ `
     try {
         ${0}.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
@@ -734,6 +741,10 @@ export class AutomationElement extends PSObject {
 
     buildGetAllPropertiesCommand(): string {
         return GET_ALL_ELEMENT_PROPERTIES.format(this);
+    }
+
+    buildGetSourceCommand(): string {
+        return GET_ELEMENT_SOURCE.format(this);
     }
 
     buildGetElementRectCommand(): string {

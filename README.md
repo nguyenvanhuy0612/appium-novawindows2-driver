@@ -130,6 +130,7 @@ Retrieve comprehensive details about UI elements using standard or bulk methods.
     - **Dot-Notation**: `LegacyIAccessible.Name`, `LegacyIAccessible.Role`, etc.
 - **Special Keywords**:
     - `"all"`: Returns all attributes.
+    - `"source"`: Returns the XML source for the element and its subtree.
 - **Enhanced Type Names**:
     - `ControlType` returns a human-readable short name (e.g., `Button`, `ListItem`, `Text`) instead of the UIA constant.
 
@@ -139,6 +140,9 @@ value = element.get_attribute("Value.Value")
 
 # Get all attributes as a JSON string
 all_attributes = element.get_attribute("all")
+
+# Get XML source for this element and its subtree
+element_source = element.get_attribute("source")
 ```
 
 ### PowerShell Execution
