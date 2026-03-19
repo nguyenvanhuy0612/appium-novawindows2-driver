@@ -16,7 +16,7 @@
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-$ip = "192.168.196.132"
+$ip = "192.168.196.128"
 $user = "admin"
 $source = "D:/SecureAge/appium-novawindows2-driver"
 $zipPath = "$source/log/deploy_novawindows.zip"
