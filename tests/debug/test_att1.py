@@ -16,7 +16,7 @@ print(f"\nConnecting to Appium at http://172.16.10.37:4723 with options...")
 driver = webdriver.Remote('http://172.16.10.37:4723', options=options)
 print("Connected successfully!")
 
-print(driver.find_element(AppiumBy.NAME, "SecureAge 8.0.35 - qa").get_attribute("all"))
+print(driver.find_element(AppiumBy.XPATH, "//Window[contains(@Name,'a')]").get_attribute("all"))
 
 
 driver.quit()

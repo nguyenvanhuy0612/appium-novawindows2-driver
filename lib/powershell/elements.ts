@@ -349,7 +349,11 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
                         $name = "$patternName.$rawName";
                     }
 
-                    if ($val -is [Array]) {
+                    if ($val -is [System.Windows.Automation.AutomationElement]) {
+                        try { $out[$name] = $val.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.'; } catch { }
+                    } elseif ($val -is [Array] -and $val.Count -gt 0 -and $val[0] -is [System.Windows.Automation.AutomationElement]) {
+                        $out[$name] = ($val | ForEach-Object { try { $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.' } catch { '' } }) -join ',';
+                    } elseif ($val -is [Array]) {
                         $out[$name] = $val -join ",";
                     } else {
                         $out[$name] = $val.ToString();
@@ -359,7 +363,23 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
         }
     } catch { }
 
-    # 2. MSAA fallback for LegacyIAccessible props not already captured by UIA
+    # 2. Pattern availability properties (Is*PatternAvailable) - NOT returned by GetSupportedProperties().
+    #    These are static fields on AutomationElement itself; we discover them via reflection.
+    try {
+        $flags = [System.Reflection.BindingFlags]::Static -bor [System.Reflection.BindingFlags]::Public;
+        [System.Windows.Automation.AutomationElement].GetFields($flags) |
+            Where-Object { $_.Name -like 'Is*PatternAvailableProperty' } |
+            ForEach-Object {
+                try {
+                    $propId = $_.GetValue($null);
+                    $name = $_.Name -replace 'Property$', '';
+                    $val = $el.GetCurrentPropertyValue($propId);
+                    if ($null -ne $val) { $out[$name] = $val.ToString() }
+                } catch { }
+            }
+    } catch { }
+
+    # 4. MSAA fallback for LegacyIAccessible props not already captured by UIA
     try {
         $hwnd = $el.Current.NativeWindowHandle;
         $rect = $el.Current.BoundingRectangle;
@@ -377,7 +397,7 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
         }
     } catch { }
 
-    # 3. MSAA fallback: populate missing/empty UIA properties from their LegacyIAccessible equivalents.
+    # 5. MSAA fallback: populate missing/empty UIA properties from their LegacyIAccessible equivalents.
     #    Win32 MSAA proxy elements may return empty for UIA properties where the MSAA value exists.
     #    Mappings sourced from: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-msaa
     #    UIA property key -> LegacyIAccessible key (MSAA accXxx source)

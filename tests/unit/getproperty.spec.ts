@@ -42,6 +42,22 @@ describe('getProperty PS command builders', () => {
             expect(cmd).to.contain('ConvertTo-Json');
         });
 
+        it('buildGetAllPropertiesCommand outputs RuntimeId for AutomationElement refs', () => {
+            const cmd = decodePwsh(el.buildGetAllPropertiesCommand());
+            expect(cmd).to.contain('$val -is [System.Windows.Automation.AutomationElement]');
+            expect(cmd).to.contain('RuntimeIdProperty');
+        });
+
+        it('buildGetAllPropertiesCommand handles AutomationElement arrays via RuntimeId', () => {
+            const cmd = decodePwsh(el.buildGetAllPropertiesCommand());
+            expect(cmd).to.contain('$val[0] -is [System.Windows.Automation.AutomationElement]');
+        });
+
+        it('buildGetAllPropertiesCommand includes Is*PatternAvailable properties', () => {
+            const cmd = decodePwsh(el.buildGetAllPropertiesCommand());
+            expect(cmd).to.contain('Is*PatternAvailableProperty');
+        });
+
         it('does NOT use GetCurrentPattern for standard properties', () => {
             const cmd = decodePwsh(el.buildGetPropertyCommand('IsEnabled'));
             expect(cmd).to.not.contain('GetCurrentPattern');

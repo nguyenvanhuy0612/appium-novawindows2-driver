@@ -67,6 +67,5 @@ for element in elements:
     print(element.get_attribute("LegacyDescription"))
     print(element.get_attribute("LegacyValue"))
     print(element.get_attribute("Value.Value"))
-    
 
 driver.quit()
