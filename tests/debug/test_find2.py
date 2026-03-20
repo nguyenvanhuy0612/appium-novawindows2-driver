@@ -14,14 +14,19 @@ options.load_capabilities({
 driver = webdriver.Remote('http://172.16.10.37:4723', options=options)
 print("Connected successfully!")
 
+# Xpath with Index + condition
 start = time.time()
-for el in driver.find_elements(AppiumBy.XPATH, "//Button"):
-    print(el.get_attribute("all"))
+print(len(driver.find_elements(AppiumBy.XPATH, "//ListItem[./Text[6][contains(@Name,'[sign]')]]")))
 print(f"Time1: {time.time() - start} seconds")
 
+# Xpath with condition only
 start = time.time()
-for el in driver.find_elements(AppiumBy.XPATH, "//Button[contains(@Name,'')]"):
-    print(el.get_attribute("all"))
+print(len(driver.find_elements(AppiumBy.XPATH, "//ListItem[./Text[contains(@Name,'[sign]')]]")))
 print(f"Time2: {time.time() - start} seconds")
+
+# Xpath with index only
+start = time.time()
+print(len(driver.find_elements(AppiumBy.XPATH, "//ListItem[./Text[6]]")))
+print(f"Time3: {time.time() - start} seconds")
 
 driver.quit()
