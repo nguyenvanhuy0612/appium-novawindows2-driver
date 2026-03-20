@@ -2,21 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.0] (2026-03-18)
+## [1.2.0] (2026-03-20)
 
 ### Bug Fixes
 
+* **XPath**: Fixed predicate ordering — `[N][contains()]` now correctly picks position from the full set first, then tests the function predicate. Previously `contains`/`starts-with` was applied before position filtering, causing `//ListItem[./Text[6][contains(@Name,'[sign]')]]` to return 0 instead of 1.
+* **XPath**: Fixed `!=` (INEQUALITY) on named properties (`@Name`, `@IsEnabled`, `@ProcessId`, etc.) — now correctly wraps `PropertyCondition` in `NotCondition`. Previously `!=` behaved identically to `=`.
+* **XPath**: Fixed `substring()` to use correct XPath 1.0 one-indexed formula with rounding. Previously used wrong offset causing `substring("12345",2,3)` to return `"345"` instead of `"234"`.
+* **XPath**: Fixed `substring()` crash when called with 2 arguments (no count) — `countArg` destructuring failed on `undefined`.
+* **XPath**: Fixed `substring-after()` off-by-one with multi-char delimiters — `substring-after("abcdef","cd")` returned `"def"` instead of `"ef"`.
+* **XPath**: Fixed `sum()` crash on empty node set — `Array.reduce()` without initial value threw on empty array. Now returns 0 per XPath 1.0 spec.
+* **XPath**: Fixed `convertProcessedExprNodesToNumbers` inverted ternary — valid number strings were converted to `NaN` and vice versa, breaking all arithmetic, negation, and comparison operators.
 * **PowerShell**: Fixed restrictive regex boundaries that prevented valid UIA property lookups.
 * **PowerShell**: Fixed `this` context bind error in `PSRect` and `PSPoint` constructors.
 * **Converter**: Fixed `ControlType` mapping by performing robust PowerShell string comparison using `endsWith`.
 
 ### Tests
 
-* **PowerShell**: Significantly expanded unit test suite to 116 passing tests, providing comprehensive coverage for:
-    * Condition objects and deep logical nesting.
-    * All automation element command builders and action commands.
-    * PowerShell common types and edge-case string encoding.
-    * Selector parser enforces simple, non-prefixed property names.
+* **XPath**: Added comprehensive XPath test suite (241 tests across 24 groups) covering parsing, predicate ordering, PS filter optimization, condition generation, all XPath functions (substring, sum, contains, starts-with, concat, translate, floor, ceiling, round, etc.), INEQUALITY operator, boolean/comparison operators, complex nested predicates, axes, unions, wildcards, and edge cases.
+* **PowerShell**: Significantly expanded unit test suite — total 445 passing tests.
 
 ## [1.1.0] (2026-03-17)
 

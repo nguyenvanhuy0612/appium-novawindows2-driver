@@ -390,24 +390,20 @@ export class XPathExecutor {
                     ) {
                         const propertyName = exprNode.lhs.steps[0].test.name?.toLowerCase() as Property;
                         const [value] = await this.processExprNode(exprNode.rhs, context, undefined);
+                        let cond: Condition | undefined;
                         if (propertyName === Property.RUNTIME_ID) {
-                            return [new PropertyCondition(propertyName, new PSInt32Array(String(value).split('.').map(Number))), relativeExprNodes];
+                            cond = new PropertyCondition(propertyName, new PSInt32Array(String(value).split('.').map(Number)));
+                        } else if (propertyName === Property.ORIENTATION) {
+                            cond = new PropertyCondition(propertyName, new PSOrientationType(String(value)));
+                        } else if (Object.values(Int32Property).includes(propertyName as Int32Property)) {
+                            cond = new PropertyCondition(propertyName, new PSInt32(Number(value)));
+                        } else if (Object.values(StringProperty).includes(propertyName as StringProperty)) {
+                            cond = new PropertyCondition(propertyName, new PSString(String(value)));
+                        } else if (Object.values(BooleanProperty).includes(propertyName as BooleanProperty)) {
+                            cond = new PropertyCondition(propertyName, new PSBoolean(Boolean(value)));
                         }
-
-                        if (propertyName === Property.ORIENTATION) {
-                            return [new PropertyCondition(propertyName, new PSOrientationType(String(value))), relativeExprNodes];
-                        }
-
-                        if (Object.values(Int32Property).includes(propertyName as Int32Property)) {
-                            return [new PropertyCondition(propertyName, new PSInt32(Number(value))), relativeExprNodes];
-                        }
-
-                        if (Object.values(StringProperty).includes(propertyName as StringProperty)) {
-                            return [new PropertyCondition(propertyName, new PSString(String(value))), relativeExprNodes];
-                        }
-
-                        if (Object.values(BooleanProperty).includes(propertyName as BooleanProperty)) {
-                            return [new PropertyCondition(propertyName, new PSBoolean(Boolean(value))), relativeExprNodes];
+                        if (cond) {
+                            return [exprNode.type === INEQUALITY ? new NotCondition(cond) : cond, relativeExprNodes];
                         }
                     }
 
@@ -418,24 +414,20 @@ export class XPathExecutor {
                     ) {
                         const propertyName = exprNode.rhs.steps[0].test.name?.toLowerCase() as Property;
                         const [value] = await this.processExprNode(exprNode.lhs, context, undefined);
+                        let cond: Condition | undefined;
                         if (propertyName === Property.RUNTIME_ID) {
-                            return [new PropertyCondition(propertyName, new PSInt32Array(String(value).split('.').map(Number))), relativeExprNodes];
+                            cond = new PropertyCondition(propertyName, new PSInt32Array(String(value).split('.').map(Number)));
+                        } else if (propertyName === Property.ORIENTATION) {
+                            cond = new PropertyCondition(propertyName, new PSOrientationType(String(value)));
+                        } else if (Object.values(Int32Property).includes(propertyName as Int32Property)) {
+                            cond = new PropertyCondition(propertyName, new PSInt32(Number(value)));
+                        } else if (Object.values(StringProperty).includes(propertyName as StringProperty)) {
+                            cond = new PropertyCondition(propertyName, new PSString(String(value)));
+                        } else if (Object.values(BooleanProperty).includes(propertyName as BooleanProperty)) {
+                            cond = new PropertyCondition(propertyName, new PSBoolean(Boolean(value)));
                         }
-
-                        if (propertyName === Property.ORIENTATION) {
-                            return [new PropertyCondition(propertyName, new PSOrientationType(String(value))), relativeExprNodes];
-                        }
-
-                        if (Object.values(Int32Property).includes(propertyName as Int32Property)) {
-                            return [new PropertyCondition(propertyName, new PSInt32(Number(value))), relativeExprNodes];
-                        }
-
-                        if (Object.values(StringProperty).includes(propertyName as StringProperty)) {
-                            return [new PropertyCondition(propertyName, new PSString(String(value))), relativeExprNodes];
-                        }
-
-                        if (Object.values(BooleanProperty).includes(propertyName as BooleanProperty)) {
-                            return [new PropertyCondition(propertyName, new PSBoolean(Boolean(value))), relativeExprNodes];
+                        if (cond) {
+                            return [exprNode.type === INEQUALITY ? new NotCondition(cond) : cond, relativeExprNodes];
                         }
                     }
                 } else if ((exprNode.lhs.type === FUNCTION_CALL && exprNode.lhs.name === POSITION) !== (exprNode.rhs.type === FUNCTION_CALL && exprNode.rhs.name === POSITION)) {
@@ -510,18 +502,33 @@ export class XPathExecutor {
     }
 
     private async executeStep(step: StepNode, context: AutomationElement): Promise<AutomationElementGroup> {
-        const predicateConditions: Condition[] = [];
-        const relativeExprNodes: ExprNode[] = [];
+        // XPath predicate ordering: predicates are applied left-to-right in sequence.
+        // Predicates before the first positional predicate filter the full set.
+        // Predicates after a positional predicate are applied to the position-filtered result.
+        // Example: Text[6][contains(@Name,'x')] → pick 6th Text, then test contains.
+        //          Text[contains(@Name,'x')][6] → filter by contains, then pick 6th.
+        const prePositionConditions: Condition[] = [];
+        const prePositionRelativeExprs: ExprNode[] = [];
+        const postPositionRelativeExprs: ExprNode[] = [];
         const positions: Set<number> = new Set();
+        let seenPosition = false;
         for (const predicate of step.predicates) {
+            const sizeBeforeAdd = positions.size;
             const [condition, exprNodes] = await this.processExprNodeAsPredicate(predicate, context, positions);
-            predicateConditions.push(condition);
-            if (exprNodes) {
-                relativeExprNodes.push(...exprNodes);
+            const addedPosition = positions.size > sizeBeforeAdd;
+            if (addedPosition) {
+                seenPosition = true;
+                prePositionConditions.push(condition);
+            } else if (!seenPosition) {
+                prePositionConditions.push(condition);
+                if (exprNodes) prePositionRelativeExprs.push(...exprNodes);
+            } else {
+                // This predicate follows a positional predicate — must apply after position filtering
+                if (exprNodes) postPositionRelativeExprs.push(...exprNodes);
             }
         }
 
-        const condition = predicateConditions.length > 0 ? new AndCondition(convertNodeTestToCondition(step.test), ...predicateConditions) : convertNodeTestToCondition(step.test);
+        const condition = prePositionConditions.length > 0 ? new AndCondition(convertNodeTestToCondition(step.test), ...prePositionConditions) : convertNodeTestToCondition(step.test);
 
         let find: AutomationElement;
         switch (step.axis) {
@@ -569,10 +576,10 @@ export class XPathExecutor {
 
         const validEls: FoundAutomationElement[] = [];
 
-        // Optimization: Try to offload simple functional filters (contains, starts-with) to PowerShell
-        // This reduces N round-trips to JS-side post-filtering down to 1.
+        // Optimization: Try to offload simple functional filters (contains, starts-with) to PowerShell.
+        // Only pre-position predicates can use this optimization — post-position predicates must wait.
         const remainingExprNodes: ExprNode[] = [];
-        for (const exprNode of relativeExprNodes) {
+        for (const exprNode of prePositionRelativeExprs) {
             const psFilter = convertExprNodeToPowerShellFilter(exprNode);
             if (psFilter) {
                 find.setPsFilter(psFilter);
@@ -600,12 +607,28 @@ export class XPathExecutor {
         }
 
         const positionsArray = Array.from(positions);
+        const positionFilteredEls = positionsArray.length === 0
+            ? validEls
+            : positionsArray.map((index) => index === 0x7FFFFFFF ? validEls[validEls.length - 1] : validEls[index - 1]).filter(Boolean);
 
-        if (positionsArray.length === 0) {
-            return new AutomationElementGroup(...validEls);
-        } else {
-            return new AutomationElementGroup(...positionsArray.map((index) => index === 0x7FFFFFFF ? validEls[validEls.length - 1] : validEls[index - 1]).filter(Boolean));
+        if (postPositionRelativeExprs.length === 0) {
+            return new AutomationElementGroup(...positionFilteredEls);
         }
+
+        // Apply predicates that follow the positional predicate, evaluated on position-filtered elements
+        const finalEls: FoundAutomationElement[] = [];
+        for (const [index, el] of positionFilteredEls.entries()) {
+            let isValid = true;
+            for (const exprNode of postPositionRelativeExprs) {
+                const [isTrue] = await handleFunctionCall(BOOLEAN, el, this, [index + 1, positionFilteredEls.length], exprNode);
+                if (!isTrue) {
+                    isValid = false;
+                    break;
+                }
+            }
+            if (isValid) finalEls.push(el);
+        }
+        return new AutomationElementGroup(...finalEls);
     }
 }
 

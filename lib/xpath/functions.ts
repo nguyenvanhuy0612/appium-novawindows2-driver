@@ -328,7 +328,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 return ['' as T];
             }
 
-            return name === SUBSTRING_BEFORE ? [firstString.slice(0, index) as T] : [firstString.slice(index + 1) as T];
+            return name === SUBSTRING_BEFORE ? [firstString.slice(0, index) as T] : [firstString.slice(index + secondString.length) as T];
         }
         case SUBSTRING: {
             if (args.length < 2) {
@@ -347,7 +347,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
 
             const [string] = convertProcessedExprNodesToStrings(stringArg);
             const [index] = fromArg;
-            const [count] = countArg;
+            const count = countArg?.[0];
 
             if (typeof index !== 'number') {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the second argument to be number'));
@@ -357,11 +357,17 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the second argument to be number'));
             }
 
-            if (count && count < 0) {
-                return ['' as T];
+            // XPath 1.0 spec: positions are 1-indexed, uses round() on start and length
+            const start = Math.round(index);
+            if (count !== undefined) {
+                const end = start + Math.round(count);
+                const sliceStart = Math.max(start - 1, 0);
+                const sliceEnd = Math.min(end - 1, string.length);
+                return [string.slice(sliceStart, Math.max(sliceEnd, sliceStart)) as T];
+            } else {
+                const sliceStart = Math.max(start - 1, 0);
+                return [string.slice(sliceStart) as T];
             }
-
-            return [string.slice(index + 1, count ? index + count : string.length) as T];
         }
         case SUM: {
             if (args.length !== 1) {
@@ -369,8 +375,9 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
             }
 
             const [arg] = await processArgs(args[0]);
+            if (!arg || arg.length === 0) return [0 as T];
             const argAsNumbers = convertProcessedExprNodesToNumbers(arg);
-            return [argAsNumbers.reduce((a, b) => a + b) as T];
+            return [argAsNumbers.reduce((a, b) => a + b, 0) as T];
         }
         default:
             throw new errors.InvalidSelectorError(`XPath function ${name}() not found.`);
@@ -385,5 +392,5 @@ function convertProcessedExprNodesToStrings<T>(...arrayOfProcessedExprNodes: T[]
 
 function convertProcessedExprNodesToNumbers<T>(...arrayOfProcessedExprNodes: T[]): number[] {
     const arrayOfStrings = convertProcessedExprNodesToStrings(...arrayOfProcessedExprNodes);
-    return arrayOfStrings.map((str) => /^\s*(?<![\d.+-])[+-]?(?:\d*[.])?\d+(?![\d.])\s*$/.test(str) ? NaN : Number(str));
+    return arrayOfStrings.map((str) => /^\s*(?<![\d.+-])[+-]?(?:\d*[.])?\d+(?![\d.])\s*$/.test(str) ? Number(str) : NaN);
 }
