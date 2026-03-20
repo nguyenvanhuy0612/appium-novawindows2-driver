@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.6] (2026-03-20)
+
+### Bug Fixes
+
+* **XPath**: Fixed OR expressions inside post-position predicates — `[6][contains(@Name,'a') or contains(@Name,'b')]` was evaluated as AND instead of OR because both sides were pushed individually to relativeExprNodes. Now the entire OR expression is kept as a single unit for JS-level evaluation.
+
 ## [1.1.5] (2026-03-20)
 
 ### Bug Fixes

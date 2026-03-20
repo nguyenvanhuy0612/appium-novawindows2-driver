@@ -336,11 +336,19 @@ export class XPathExecutor {
                     },
                     rhs: exprNode
                 }, context, positions, relativeExprNodes);
-            case OR:
-                return [new OrCondition(
-                    (await this.processExprNodeAsPredicate(exprNode.lhs, context, positions, relativeExprNodes))[0],
-                    (await this.processExprNodeAsPredicate(exprNode.rhs, context, positions, relativeExprNodes))[0]
-                ), relativeExprNodes];
+            case OR: {
+                // Use fresh arrays so relativeExprNodes from each side don't leak into the shared array.
+                // If either side has JS-level filters, the entire OR must be evaluated as one unit in JS.
+                const orLhsRel: ExprNode[] = [];
+                const orRhsRel: ExprNode[] = [];
+                const [orLhsCond] = await this.processExprNodeAsPredicate(exprNode.lhs, context, positions, orLhsRel);
+                const [orRhsCond] = await this.processExprNodeAsPredicate(exprNode.rhs, context, positions, orRhsRel);
+                if (orLhsRel.length > 0 || orRhsRel.length > 0) {
+                    relativeExprNodes.push(exprNode);
+                    return [new TrueCondition(), relativeExprNodes];
+                }
+                return [new OrCondition(orLhsCond, orRhsCond), relativeExprNodes];
+            }
             case AND:
                 return [new AndCondition(
                     (await this.processExprNodeAsPredicate(exprNode.lhs, context, positions, relativeExprNodes))[0],
