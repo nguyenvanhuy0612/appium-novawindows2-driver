@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.7] (2026-03-20)
+
+### Bug Fixes
+
+* **XPath**: Fixed multiple `contains`/`starts-with` psFilters overwriting each other — now combined with `-and` so all filters apply correctly in PowerShell.
+
+### Tests
+
+* **XPath**: Expanded comprehensive test suite to 311 tests (30 groups, 515 total). Added:
+    * G25: OR in post-position predicates (15 tests)
+    * G26: AND with mixed conditions (10 tests)
+    * G27: not() with complex expressions (10 tests)
+    * G28: Chained multiple predicates — 3+ predicates with mixed types (10 tests)
+    * G29: Complex real-world patterns from W3C XPath 1.0 spec (15 tests)
+    * G30: Boolean conversion edge cases per XPath 1.0 spec (10 tests)
+
 ## [1.1.6] (2026-03-20)
 
 ### Bug Fixes

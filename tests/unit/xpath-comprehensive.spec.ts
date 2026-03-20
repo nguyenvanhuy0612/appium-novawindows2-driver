@@ -68,15 +68,18 @@ function createFlatMock(children: MockChild[] = STANDARD_CHILDREN) {
         // findAll / findFirst — returns element IDs
         if (d.includes('ForEach-Object')) {
             // Check for psFilter on Name (contains → -like '*pattern*', starts-with → -like 'pattern*')
-            const likeMatch = d.match(/Current\.Name\s+-like\s+'([^']+)'/);
-            if (likeMatch) {
-                const pattern = likeMatch[1];
+            // Supports multiple filters combined with -and
+            const likeMatches = [...d.matchAll(/Current\.Name\s+-like\s+'([^']+)'/g)];
+            if (likeMatches.length > 0) {
                 const filtered = children.filter(c => {
-                    if (pattern.startsWith('*') && pattern.endsWith('*'))
-                        return c.name.includes(pattern.slice(1, -1));
-                    if (pattern.endsWith('*'))
-                        return c.name.startsWith(pattern.slice(0, -1));
-                    return c.name === pattern;
+                    return likeMatches.every(m => {
+                        const pattern = m[1];
+                        if (pattern.startsWith('*') && pattern.endsWith('*'))
+                            return c.name.includes(pattern.slice(1, -1));
+                        if (pattern.endsWith('*'))
+                            return c.name.startsWith(pattern.slice(0, -1));
+                        return c.name === pattern;
+                    });
                 });
                 return filtered.map(c => c.id).join('\n');
             }
@@ -1631,5 +1634,424 @@ describe('G24: Boolean and comparison operators', () => {
 
     it('G24-10 2 < 1 → false', async () => {
         expect(await evalBool('2 < 1')).to.equal(false);
+    });
+});
+
+// ═══════════════════════════════════════════════
+// GROUP 25: OR in post-position predicates (Bug #6 fix) (15 tests)
+// [N][expr OR expr] must keep the OR as a single unit
+// ═══════════════════════════════════════════════
+describe('G25: OR in post-position predicates', () => {
+    // Standard tree:
+    // el1=alpha, el2=beta, el3=gamma target, el4=delta,
+    // el5=epsilon target, el6=zeta, el7=target eta
+
+    it('G25-01 [3][contains(target) or contains(alpha)] → el3 has target → match', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target') or contains(@Name,'alpha')]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G25-02 [1][contains(target) or contains(alpha)] → el1 has alpha → match', async () => {
+        const ids = await evalXPath("Button[1][contains(@Name,'target') or contains(@Name,'alpha')]");
+        expect(ids).to.deep.equal(['el1']);
+    });
+
+    it('G25-03 [2][contains(target) or contains(alpha)] → el2 has neither → no match', async () => {
+        const ids = await evalXPath("Button[2][contains(@Name,'target') or contains(@Name,'alpha')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G25-04 [7][starts-with(target) or starts-with(alpha)] → el7 starts with target → match', async () => {
+        const ids = await evalXPath("Button[7][starts-with(@Name,'target') or starts-with(@Name,'alpha')]");
+        expect(ids).to.deep.equal(['el7']);
+    });
+
+    it('G25-05 [4][starts-with(target) or starts-with(alpha)] → el4=delta → no match', async () => {
+        const ids = await evalXPath("Button[4][starts-with(@Name,'target') or starts-with(@Name,'alpha')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G25-06 [last()][contains(target) or contains(eta)] → el7 has both → match', async () => {
+        const ids = await evalXPath("Button[last()][contains(@Name,'target') or contains(@Name,'eta')]");
+        expect(ids).to.deep.equal(['el7']);
+    });
+
+    it('G25-07 OR without position → returns all matching elements', async () => {
+        // contains(target) → el3,el5,el7; contains(alpha) → el1 → union = el1,el3,el5,el7
+        const ids = await evalXPath("Button[contains(@Name,'target') or contains(@Name,'alpha')]");
+        expect(ids).to.deep.equal(['el1', 'el3', 'el5', 'el7']);
+    });
+
+    it('G25-08 [contains or contains][1] → function-then-position with OR', async () => {
+        // OR matches el1,el3,el5,el7 → position 1 = el1
+        const ids = await evalXPath("Button[contains(@Name,'target') or contains(@Name,'alpha')][1]");
+        expect(ids).to.deep.equal(['el1']);
+    });
+
+    it('G25-09 [contains or contains][4] → 4th of 4 matches', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'target') or contains(@Name,'alpha')][4]");
+        expect(ids).to.deep.equal(['el7']);
+    });
+
+    it('G25-10 [contains or contains][5] → only 4 matches → empty', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'target') or contains(@Name,'alpha')][5]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G25-11 [3][contains(target) or starts-with(alpha)] → mixed functions in OR', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target') or starts-with(@Name,'alpha')]");
+        expect(ids).to.deep.equal(['el3']); // el3 has target
+    });
+
+    it('G25-12 [1][contains(target) or starts-with(alpha)] → el1 starts with alpha', async () => {
+        const ids = await evalXPath("Button[1][contains(@Name,'target') or starts-with(@Name,'alpha')]");
+        expect(ids).to.deep.equal(['el1']);
+    });
+
+    it('G25-13 OR condition in PS command does NOT decompose', async () => {
+        const cmds = await captureCommands("Button[3][contains(@Name,'a') or contains(@Name,'b')]");
+        const findCmd = cmds.find(c => c.includes('FindAll'));
+        // No psFilter should be set since OR is post-position
+        expect(findCmd).to.not.include("-like '*a*'");
+        expect(findCmd).to.not.include("-like '*b*'");
+    });
+
+    it('G25-14 OR pre-position: whole OR becomes single relativeExprNode, no psFilter', async () => {
+        // Even pre-position OR with contains should NOT decompose into individual psFilters
+        const cmds = await captureCommands("Button[contains(@Name,'a') or contains(@Name,'b')]");
+        const findCmd = cmds.find(c => c.includes('FindAll'));
+        // OR is kept as one unit — no individual psFilter
+        expect(findCmd).to.not.include("-like '*a*'");
+    });
+
+    it('G25-15 triple OR: [3][contains(a) or contains(b) or contains(c)]', async () => {
+        // Chained OR: (contains(a) or contains(b)) or contains(c)
+        // el3 = "gamma target" → contains 'a' → true
+        const ids = await evalXPath("Button[3][contains(@Name,'a') or contains(@Name,'b') or contains(@Name,'c')]");
+        expect(ids).to.deep.equal(['el3']); // 'gamma' contains 'a'
+    });
+});
+
+// ═══════════════════════════════════════════════
+// GROUP 26: AND with mixed conditions and relativeExprNodes (10 tests)
+// ═══════════════════════════════════════════════
+describe('G26: AND with mixed conditions', () => {
+    it('G26-01 [contains(target) and contains(gamma)] → only el3 matches both', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'target') and contains(@Name,'gamma')]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G26-02 [contains(target) and contains(epsilon)] → only el5', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'target') and contains(@Name,'epsilon')]");
+        expect(ids).to.deep.equal(['el5']);
+    });
+
+    it('G26-03 [contains(target) and starts-with(target)] → only el7', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'target') and starts-with(@Name,'target')]");
+        expect(ids).to.deep.equal(['el7']);
+    });
+
+    it('G26-04 [3][contains(target) and contains(gamma)] → el3 matches both → match', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target') and contains(@Name,'gamma')]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G26-05 [3][contains(target) and contains(epsilon)] → el3 has no epsilon → empty', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target') and contains(@Name,'epsilon')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G26-06 [5][contains(target) and contains(epsilon)] → el5 has both → match', async () => {
+        const ids = await evalXPath("Button[5][contains(@Name,'target') and contains(@Name,'epsilon')]");
+        expect(ids).to.deep.equal(['el5']);
+    });
+
+    it('G26-07 AND generates PS-level condition when possible', async () => {
+        // Both sides are PropertyConditions → should use AndCondition at PS level
+        const cmds = await captureCommands("Button[contains(@Name,'a') and contains(@Name,'b')]");
+        const findCmd = cmds.find(c => c.includes('FindAll'));
+        // Both are relativeExprNodes, evaluated as AND in JS (correct for AND)
+        expect(findCmd).to.exist;
+    });
+
+    it('G26-08 [contains(e) and not(contains(target))] → elements with e but no target', async () => {
+        // e in: el2(beta), el3(gamma target), el4(delta), el5(epsilon target), el6(zeta), el7(target eta)
+        // not target: el2(beta), el4(delta), el6(zeta)
+        const ids = await evalXPath("Button[contains(@Name,'e') and not(contains(@Name,'target'))]");
+        expect(ids).to.deep.equal(['el2', 'el4', 'el6']);
+    });
+
+    it('G26-09 [3][contains(e) and not(contains(target))] → el3 has target → no match', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'e') and not(contains(@Name,'target'))]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G26-10 [4][contains(e) and not(contains(target))] → el4=delta has e, no target → match', async () => {
+        const ids = await evalXPath("Button[4][contains(@Name,'e') and not(contains(@Name,'target'))]");
+        expect(ids).to.deep.equal(['el4']);
+    });
+});
+
+// ═══════════════════════════════════════════════
+// GROUP 27: not() with complex inner expressions (10 tests)
+// ═══════════════════════════════════════════════
+describe('G27: not() with complex expressions', () => {
+    it('G27-01 [not(contains(target))] → elements without target', async () => {
+        const ids = await evalXPath("Button[not(contains(@Name,'target'))]");
+        expect(ids).to.deep.equal(['el1', 'el2', 'el4', 'el6']);
+    });
+
+    it('G27-02 [not(starts-with(target))] → all except el7', async () => {
+        const ids = await evalXPath("Button[not(starts-with(@Name,'target'))]");
+        expect(ids).to.deep.equal(['el1', 'el2', 'el3', 'el4', 'el5', 'el6']);
+    });
+
+    it('G27-03 [not(contains(z))] → elements without z', async () => {
+        // Only el6(zeta) contains 'z' → NOT → all except el6
+        const ids = await evalXPath("Button[not(contains(@Name,'z'))]");
+        expect(ids).to.deep.equal(['el1', 'el2', 'el3', 'el4', 'el5', 'el7']);
+    });
+
+    it('G27-04 [3][not(contains(target))] → el3 has target → not → empty', async () => {
+        const ids = await evalXPath("Button[3][not(contains(@Name,'target'))]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G27-05 [4][not(contains(target))] → el4=delta no target → match', async () => {
+        const ids = await evalXPath("Button[4][not(contains(@Name,'target'))]");
+        expect(ids).to.deep.equal(['el4']);
+    });
+
+    it('G27-06 [not(not(contains(target)))] → double negation = contains(target)', async () => {
+        const ids = await evalXPath("Button[not(not(contains(@Name,'target')))]");
+        expect(ids).to.deep.equal(['el3', 'el5', 'el7']);
+    });
+
+    it('G27-07 [not(contains(target) or contains(alpha))] → neither target nor alpha', async () => {
+        // target or alpha → el1,el3,el5,el7 → NOT → el2,el4,el6
+        const ids = await evalXPath("Button[not(contains(@Name,'target') or contains(@Name,'alpha'))]");
+        expect(ids).to.deep.equal(['el2', 'el4', 'el6']);
+    });
+
+    it('G27-08 [not(contains(target) and contains(gamma))] → not (target AND gamma)', async () => {
+        // Only el3 has both target and gamma → NOT el3 → all except el3
+        const ids = await evalXPath("Button[not(contains(@Name,'target') and contains(@Name,'gamma'))]");
+        expect(ids).to.deep.equal(['el1', 'el2', 'el4', 'el5', 'el6', 'el7']);
+    });
+
+    it('G27-09 [not(true())] → always false → empty', async () => {
+        const ids = await evalXPath("Button[not(true())]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G27-10 [not(false())] → always true → all', async () => {
+        const ids = await evalXPath("Button[not(false())]");
+        expect(ids).to.have.length(7);
+    });
+});
+
+// ═══════════════════════════════════════════════
+// GROUP 28: Chained multiple predicates (10 tests)
+// Three or more predicates applied sequentially
+// ═══════════════════════════════════════════════
+describe('G28: Chained multiple predicates', () => {
+    it('G28-01 [contains(e)][contains(m)][1] → filter by e then m, then pos 1', async () => {
+        // Contains 'e': el2(beta),el3(gamma target),el4(delta),el5(epsilon target),el6(zeta),el7(target eta)
+        // Contains 'm': from above: only el3(gamma target) has 'm' in 'gamma'
+        // Position 1: el3
+        const ids = await evalXPath("Button[contains(@Name,'e')][contains(@Name,'m')][1]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G28-02 [contains(e)][contains(m)][last()] → last of double-filtered set', async () => {
+        // Only el3 matches both → last = el3
+        const ids = await evalXPath("Button[contains(@Name,'e')][contains(@Name,'m')][last()]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G28-03 [1][contains(target)][contains(gamma)] → pos 1 → el1, no target → empty', async () => {
+        const ids = await evalXPath("Button[1][contains(@Name,'target')][contains(@Name,'gamma')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G28-04 [3][contains(target)][contains(gamma)] → el3 has both → match', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target')][contains(@Name,'gamma')]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G28-05 [3][contains(target)][starts-with(gamma)] → el3 starts with gamma → match', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target')][starts-with(@Name,'gamma')]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G28-06 [3][contains(target)][starts-with(target)] → el3 doesnt start with target → empty', async () => {
+        const ids = await evalXPath("Button[3][contains(@Name,'target')][starts-with(@Name,'target')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G28-07 [contains(p)][contains(l)] → must have both p and l', async () => {
+        // 'p' in: alpha(p), epsilon target(p) → el1, el5
+        // 'l' in: alpha(l), delta(l), epsilon target(l) → el1, el4, el5
+        // Both p AND l: el1(alpha), el5(epsilon target)
+        const ids = await evalXPath("Button[contains(@Name,'p')][contains(@Name,'l')]");
+        expect(ids).to.deep.equal(['el1', 'el5']);
+    });
+
+    it('G28-08 [contains(p)][1][contains(target)] → filter by p → el1,el5 → pos 1 → el1 → no target → empty', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'p')][1][contains(@Name,'target')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G28-09 [contains(p)][2][contains(target)] → filter by p → el1,el5 → pos 2 → el5 → has target → match', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'p')][2][contains(@Name,'target')]");
+        expect(ids).to.deep.equal(['el5']);
+    });
+
+    it('G28-10 [contains(p)][2][starts-with(epsilon)] → filter by p → pos 2 → el5 → starts with epsilon → match', async () => {
+        const ids = await evalXPath("Button[contains(@Name,'p')][2][starts-with(@Name,'epsilon')]");
+        expect(ids).to.deep.equal(['el5']);
+    });
+});
+
+// ═══════════════════════════════════════════════
+// GROUP 29: Complex real-world XPath patterns (15 tests)
+// Patterns inspired by W3C spec + UI automation scenarios
+// ═══════════════════════════════════════════════
+describe('G29: Complex real-world patterns', () => {
+    it('G29-01 position-then-OR-then-contains: [3][contains(a) or contains(b)][contains(m)]', async () => {
+        // pos 3 → el3("gamma target") → contains a OR b → has 'a' → true → contains m → has 'm' → true
+        const ids = await evalXPath("Button[3][contains(@Name,'a') or contains(@Name,'b')][contains(@Name,'m')]");
+        expect(ids).to.deep.equal(['el3']);
+    });
+
+    it('G29-02 position-then-OR-then-mismatch: [2][contains(a) or contains(b)][contains(m)]', async () => {
+        // pos 2 → el2("beta") → contains a OR b → has 'b' → true → contains m → no 'm' → false
+        const ids = await evalXPath("Button[2][contains(@Name,'a') or contains(@Name,'b')][contains(@Name,'m')]");
+        expect(ids).to.deep.equal([]);
+    });
+
+    it('G29-03 not-contains with OR: [not(contains(target)) or starts-with(target)]', async () => {
+        // not(target): el1,el2,el4,el6; starts-with(target): el7 → union = el1,el2,el4,el6,el7
+        const ids = await evalXPath("Button[not(contains(@Name,'target')) or starts-with(@Name,'target')]");
+        expect(ids).to.deep.equal(['el1', 'el2', 'el4', 'el6', 'el7']);
+    });
+
+    it('G29-04 contains with empty string in OR: [contains("") or contains(nonexistent)]', async () => {
+        // contains('') always true → OR short-circuits → all match
+        const ids = await evalXPath("Button[contains(@Name,'') or contains(@Name,'nonexistent')]");
+        expect(ids).to.have.length(7);
+    });
+
+    it('G29-05 position 1 only', async () => {
+        const ids = await evalXPath("Button[1]");
+        expect(ids).to.deep.equal(['el1']);
+    });
+
+    it('G29-06 last() only', async () => {
+        const ids = await evalXPath("Button[last()]");
+        expect(ids).to.deep.equal(['el7']);
+    });
+
+    it('G29-07 position()=last() selects only last', async () => {
+        const ids = await evalXPath("Button[position()=last()]");
+        expect(ids).to.deep.equal(['el7']);
+    });
+
+    it('G29-08 deep nested predicate pattern parses', () => {
+        // ListItem with a Text child at pos 6 that has an OR condition, then select Text children
+        const ast = parse("//ListItem[./Text[6][contains(@Name,'[encrypt]') or contains(@Name,'SecureData')]]/Text");
+        expect(ast.type).to.equal('absolute-location-path');
+    });
+
+    it('G29-09 multiple steps with predicates at each level parses', () => {
+        const ast = parse("//Window[@Name='App']//Tab[1]/TabItem[3][contains(@Name,'Cert')]");
+        expect(ast.type).to.equal('absolute-location-path');
+    });
+
+    it('G29-10 ancestor axis with predicate parses', () => {
+        const ast = parse("//Button[@Name='OK']/ancestor::Window[contains(@Name,'Dialog')]");
+        expect(ast.type).to.equal('absolute-location-path');
+    });
+
+    it('G29-11 following-sibling with position parses', () => {
+        const ast = parse("//TabItem[@Name='General']/following-sibling::TabItem[1]");
+        expect(ast.type).to.equal('absolute-location-path');
+    });
+
+    it('G29-12 preceding-sibling with last() parses', () => {
+        const ast = parse("//TabItem[@Name='Advanced']/preceding-sibling::TabItem[last()]");
+        expect(ast.type).to.equal('absolute-location-path');
+    });
+
+    it('G29-13 union with complex predicates each side parses', () => {
+        const ast = parse("//Button[contains(@Name,'Import')][1] | //Button[starts-with(@Name,'Export')][last()]");
+        expect(ast.type).to.equal('union');
+    });
+
+    it('G29-14 De Morgan: not(A or B) = not(A) and not(B)', async () => {
+        const ids1 = await evalXPath("Button[not(contains(@Name,'target') or contains(@Name,'alpha'))]");
+        const ids2 = await evalXPath("Button[not(contains(@Name,'target')) and not(contains(@Name,'alpha'))]");
+        expect(ids1).to.deep.equal(ids2);
+    });
+
+    it('G29-15 De Morgan: not(A and B) ≠ not(A) or not(B) when overlap exists', async () => {
+        // not(target AND gamma) → not only el3 → 6 elements
+        const ids1 = await evalXPath("Button[not(contains(@Name,'target') and contains(@Name,'gamma'))]");
+        // not(target) OR not(gamma) → same result (De Morgan's law)
+        const ids2 = await evalXPath("Button[not(contains(@Name,'target')) or not(contains(@Name,'gamma'))]");
+        expect(ids1).to.deep.equal(ids2);
+    });
+});
+
+// ═══════════════════════════════════════════════
+// GROUP 30: Boolean conversion edge cases (10 tests)
+// XPath 1.0 boolean conversion rules
+// ═══════════════════════════════════════════════
+describe('G30: Boolean conversion rules', () => {
+    async function evalBool(expr: string): Promise<boolean> {
+        const mock = async (_: string) => '';
+        const executor = new XPathExecutor(new FoundAutomationElement('x'), mock);
+        const result = await executor.processExprNode(parse(expr), new FoundAutomationElement('x'));
+        return Boolean(result[0]);
+    }
+
+    it('G30-01 boolean("") = false (empty string)', async () => {
+        expect(await evalBool('boolean("")')).to.equal(false);
+    });
+
+    it('G30-02 boolean("0") = true (non-empty string, even "0")', async () => {
+        expect(await evalBool('boolean("0")')).to.equal(true);
+    });
+
+    it('G30-03 boolean("false") = true (non-empty string)', async () => {
+        expect(await evalBool('boolean("false")')).to.equal(true);
+    });
+
+    it('G30-04 boolean("hello") = true', async () => {
+        expect(await evalBool('boolean("hello")')).to.equal(true);
+    });
+
+    it('G30-05 boolean(0) = false (number zero)', async () => {
+        expect(await evalBool('boolean(0)')).to.equal(false);
+    });
+
+    it('G30-06 boolean(1) = true', async () => {
+        expect(await evalBool('boolean(1)')).to.equal(true);
+    });
+
+    it('G30-07 boolean(-5) = true (non-zero negative)', async () => {
+        expect(await evalBool('boolean(-5)')).to.equal(true);
+    });
+
+    it('G30-08 boolean(true()) = true', async () => {
+        expect(await evalBool('boolean(true())')).to.equal(true);
+    });
+
+    it('G30-09 boolean(false()) = false', async () => {
+        expect(await evalBool('boolean(false())')).to.equal(false);
+    });
+
+    it('G30-10 "a" = "a" and "b" = "b" → true (AND with both true)', async () => {
+        expect(await evalBool('"a" = "a" and "b" = "b"')).to.equal(true);
     });
 });

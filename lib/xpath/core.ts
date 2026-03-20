@@ -586,14 +586,19 @@ export class XPathExecutor {
 
         // Optimization: Try to offload simple functional filters (contains, starts-with) to PowerShell.
         // Only pre-position predicates can use this optimization — post-position predicates must wait.
+        // Multiple psFilters are combined with -and to avoid overwriting each other.
         const remainingExprNodes: ExprNode[] = [];
+        const psFilters: string[] = [];
         for (const exprNode of prePositionRelativeExprs) {
             const psFilter = convertExprNodeToPowerShellFilter(exprNode);
             if (psFilter) {
-                find.setPsFilter(psFilter);
+                psFilters.push(psFilter);
             } else {
                 remainingExprNodes.push(exprNode);
             }
+        }
+        if (psFilters.length > 0) {
+            find.setPsFilter(psFilters.length === 1 ? psFilters[0] : psFilters.map(f => `(${f})`).join(' -and '));
         }
 
         const result = await this.sendPowerShellCommand(find.buildCommand());
