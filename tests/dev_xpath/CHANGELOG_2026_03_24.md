@@ -2,9 +2,9 @@
 
 ## Summary
 
-- 7 bugs fixed across XPath engine and MSAA property fetching
+- 7 bugs fixed across XPath engine and Win32 property fetching
 - 463 unit tests covering full W3C XPath 1.0 spec
-- MSAA fallback protection against wrong-window data corruption
+- MSAA/Win32 fallback protection against wrong-window data corruption
 
 ---
 
@@ -64,22 +64,26 @@
 
 **Fix — three layers of protection:**
 
-**(a) Section 0: SetForegroundWindow (getProperty "all" only)**
-- Before querying properties, walks up the element's ancestor tree to find a window handle
-- Calls `ShowWindow` + `SetForegroundWindow` to bring the app to front
-- Ensures MSAA point-based fallback hits the correct element
+**(a) Section 0: Win32Helper.BringToForeground (getProperty "all" only)**
+- Before querying properties, walks up the element's ancestor tree to find a window handle.
+- Calls `[Win32Helper]::BringToForeground($hwnd)`, which implements an escalated activation strategy:
+    1. Restore if minimized.
+    2. `AttachThreadInput` to the foreground window's thread.
+    3. Retry loop with `SetForegroundWindow` + `BringWindowToTop`.
+    4. SendInput ALT key to bypass industrial foreground lock timeouts.
+    5. `SPI_SETFOREGROUNDLOCKTIMEOUT` modification for a "last resort" force.
 
 **(b) Section 3: UIA LegacyIAccessiblePattern**
-- Added as primary source for Legacy properties before raw MSAA fallback
-- Uses `$el.GetCurrentPattern([LegacyIAccessiblePattern]::Pattern)` which communicates through UIA's COM channel — no screen coordinates needed
-- Works regardless of window z-order
-- Fetches: Name, Value, Description, Role, State, Help, KeyboardShortcut, DefaultAction, ChildId
+- Added as primary source for Legacy properties before raw MSAA fallback.
+- Uses `$el.GetCurrentPattern([LegacyIAccessiblePattern]::Pattern)` which communicates through UIA's COM channel — no screen coordinates needed.
+- Works regardless of window z-order.
+- Fetches: Name, Value, Description, Role, State, Help, KeyboardShortcut, DefaultAction, ChildId.
 
 **(c) Section 4: PID validation on MSAA fallback**
-- Before calling `AccessibleObjectFromPoint`, validates that the window at the element's center coordinates belongs to the same process
-- Uses `WindowFromPoint` + `GetWindowThreadProcessId` (P/Invoke via PowerShell `Add-Type`)
-- If a different process owns that pixel, skips MSAA fallback -> returns `null` instead of wrong data
-- Applied to both `GET_ALL_ELEMENT_PROPERTIES` and `GET_ELEMENT_LEGACY_PROPERTY` templates
+- Before calling `AccessibleObjectFromPoint`, validates that the window at the element's center coordinates belongs to the same process.
+- Uses `[Win32Helper]::SetExpectedPid([uint32]$el.Current.ProcessId)` to set the context.
+- If a different process owns that pixel, `GetLegacyPropertyWithFallback` skips the check and returns `null` instead of wrong data.
+- Applied to both `GET_ALL_ELEMENT_PROPERTIES` and `GET_ELEMENT_LEGACY_PROPERTY` templates.
 
 ---
 
@@ -139,8 +143,8 @@ Key principles:
 
 ## Deployment Notes
 
-- MSAAHelper.dll is compiled at runtime on Windows from C# source embedded in `lib/powershell/msaa.ts`
-- If C# source changes, delete `build/lib/dll/MSAAHelper.dll` on the Windows machine before restarting appium so it recompiles
+- Win32Helper.dll is compiled at runtime on Windows from C# source embedded in `lib/powershell/win32.ts`
+- If C# source changes, delete `build/lib/dll/Win32Helper.dll` on the Windows machine before restarting appium so it recompiles
 - `btoa()` in `lib/powershell/core.ts` cannot handle non-ASCII characters — use ASCII-only in PowerShell template comments (e.g., `-` not `—`)
 - Deploy script: `./scripts/mac/build_deploy_restart.sh`
 - Debug test: `conda run -n py313 python tests/debug/test_att5.py`
