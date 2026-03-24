@@ -58,7 +58,7 @@ const PATTERN_MAP: Record<string, string> = {
     'textpattern2':         'TextPattern2',   // "textpattern2.x" covers both forms
 };
 
-// Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and MSAAHelper
+// Maps lowercase Legacy shorthand aliases to the canonical prop name used by LegacyIAccessiblePattern.Current and Win32Helper
 const LEGACY_ALIAS_MAP: Record<string, string> = {
     'legacyname': 'Name',
     'legacyvalue': 'Value',

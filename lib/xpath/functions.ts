@@ -123,7 +123,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'exactly 1 argument'));
             }
 
-            const resultArray = await processArgs(args[0]);
+            const [resultArray] = await processArgs(args[0]);
             return [resultArray.length as T];
         }
         case TRUE:
@@ -195,7 +195,7 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'no more than 1 argument'));
             }
 
-            const [argResult] = await processArgs<AutomationElement>(args[0]);
+            const [argResult] = args.length > 0 ? await processArgs<AutomationElement>(args[0]) : [];
 
             if (argResult && argResult.length > 1) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'each argument to have either one or zero elements'));
@@ -215,18 +215,20 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'no more than 1 argument'));
             }
 
-            const [argResult] = await processArgs<AutomationElement | string>(args[0]);
+            const [argResult] = args.length > 0 ? await processArgs<AutomationElement | string>(args[0]) : [];
 
             if (argResult && argResult.length > 1) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'each argument to have either one or zero elements'));
             }
 
-            if (!argResult[0] || argResult[0] instanceof AutomationElement) {
+            const arg = argResult ?? [context];
+
+            if (!arg[0] || arg[0] instanceof AutomationElement) {
                 return ['' as T];
             }
 
-            if (typeof argResult[0] === 'string') {
-                return [argResult[0].trim().replace(/\s+/g, ' ') as T];
+            if (typeof arg[0] === 'string') {
+                return [arg[0].trim().replace(/\s+/g, ' ') as T];
             }
 
             throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be string or element'));
@@ -236,18 +238,20 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'no more than 1 argument'));
             }
 
-            const [argResult] = await processArgs<AutomationElement | string>(args[0]);
+            const [argResult] = args.length > 0 ? await processArgs<AutomationElement | string>(args[0]) : [];
 
             if (argResult && argResult.length > 1) {
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to have either one or zero elements'));
             }
 
-            if (!argResult[0] || argResult[0] instanceof AutomationElement) {
+            const arg = argResult ?? [context];
+
+            if (!arg[0] || arg[0] instanceof AutomationElement) {
                 return [0 as T];
             }
 
-            if (typeof argResult[0] === 'string') {
-                return [argResult[0].length as T];
+            if (typeof arg[0] === 'string') {
+                return [arg[0].length as T];
             }
 
             throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be string or element'));
@@ -290,11 +294,11 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'no more than 1 argument'));
             }
 
-            const [firstArg] = await processArgs(args[0]);
+            const [firstArg] = args.length > 0 ? await processArgs(args[0]) : [];
 
             // @* wildcard may produce multiple values — use the first per XPath string() semantics
             const singleArg = firstArg && firstArg.length > 1 ? [firstArg[0]] : (firstArg ?? [context]);
-            return name === STRING ? [...convertProcessedExprNodesToStrings(singleArg) as T[]] : [...convertProcessedExprNodesToNumbers(singleArg) as T[]];
+            return name === STRING ? [...convertProcessedExprNodesToStrings(...singleArg) as T[]] : [...convertProcessedExprNodesToNumbers(...singleArg) as T[]];
         }
         case SUBSTRING_AFTER:
         case SUBSTRING_BEFORE: {
@@ -391,6 +395,11 @@ function convertProcessedExprNodesToStrings<T>(...arrayOfProcessedExprNodes: T[]
 }
 
 function convertProcessedExprNodesToNumbers<T>(...arrayOfProcessedExprNodes: T[]): number[] {
-    const arrayOfStrings = convertProcessedExprNodesToStrings(...arrayOfProcessedExprNodes);
-    return arrayOfStrings.map((str) => /^\s*(?<![\d.+-])[+-]?(?:\d*[.])?\d+(?![\d.])\s*$/.test(str) ? Number(str) : NaN);
+    return arrayOfProcessedExprNodes.map((item) => {
+        if (typeof item === 'number') return item; // preserves NaN, Infinity, -Infinity
+        if (typeof item === 'boolean') return item ? 1 : 0; // W3C: true→1, false→0
+        if (item instanceof AutomationElement) return NaN;
+        const str = item === undefined || item === null ? '' : String(item);
+        return /^\s*(?<![\d.+-])[+-]?(?:\d*[.])?\d+(?![\d.])\s*$/.test(str) ? Number(str) : NaN;
+    });
 }

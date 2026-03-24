@@ -11,20 +11,20 @@ export const GET_LEGACY_PROPERTY_SAFE = pwsh /* ps1 */ `
 
         if ($null -eq $element) { return $null };
 
-        $val = $null;
+        # 1. Try PowerShell: UIA LegacyIAccessiblePattern
         try {
             $val = $element.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern).Current.$propName;
+            if ($null -ne $val) { return $val };
         } catch {};
 
-        if ($null -ne $val) { return $val };
-
+        # 2. Try C#: Win32 MSAA with PID validation
         try {
-            $hwnd = $element.Current.NativeWindowHandle;
+            $hwnd = 0; try { $hwnd = [int]$element.Current.NativeWindowHandle; } catch { }
             $rect = $element.Current.BoundingRectangle;
-            $cx = [int]($rect.Left + $rect.Width / 2);
-            $cy = [int]($rect.Top + $rect.Height / 2);
-
-            return [MSAAHelper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $cx, $cy, $accPropName);
+            $cx = 0; $cy = 0;
+            try { $cx = [int]($rect.Left + $rect.Width / 2); $cy = [int]($rect.Top + $rect.Height / 2); } catch { }
+            try { [Win32Helper]::SetExpectedPid([uint32]$element.Current.ProcessId); } catch { }
+            return [Win32Helper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $cx, $cy, $accPropName);
         } catch {};
 
         return $null;

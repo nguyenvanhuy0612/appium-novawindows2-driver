@@ -235,13 +235,42 @@ export class XPathExecutor {
                 return [-await handleFunctionCall<T>(NUMBER, context, this, contextState, exprNode.lhs) as T];
             case EQUALITY:
             case INEQUALITY: {
-                const [lhs] = await handleFunctionCall<string>(STRING, context, this, contextState, exprNode.lhs);
-                const [rhs] = await handleFunctionCall<string>(STRING, context, this, contextState, exprNode.rhs);
-                if (isNaN(Number(lhs)) || isNaN(Number(rhs))) {
+                // W3C §3.4: Get raw values first to determine types for coercion
+                const [lhsRaw] = await this.processExprNode(exprNode.lhs, context, contextState);
+                const [rhsRaw] = await this.processExprNode(exprNode.rhs, context, contextState);
+
+                // W3C §3.4: "If at least one object is a boolean, compare as booleans"
+                if (typeof lhsRaw === 'boolean' || typeof rhsRaw === 'boolean') {
+                    const lhsBool = typeof lhsRaw === 'boolean' ? lhsRaw : Boolean(lhsRaw);
+                    const rhsBool = typeof rhsRaw === 'boolean' ? rhsRaw : Boolean(rhsRaw);
+                    return [exprNode.type === EQUALITY ? (lhsBool === rhsBool) as T : (lhsBool !== rhsBool) as T];
+                }
+
+                // W3C §3.4: "If at least one object is a number, compare as numbers"
+                if (typeof lhsRaw === 'number' || typeof rhsRaw === 'number') {
+                    const lhsNum = typeof lhsRaw === 'number' ? lhsRaw : Number(String(lhsRaw));
+                    const rhsNum = typeof rhsRaw === 'number' ? rhsRaw : Number(String(rhsRaw));
+                    return [exprNode.type === EQUALITY ? (lhsNum === rhsNum) as T : (lhsNum !== rhsNum) as T];
+                }
+
+                // Otherwise, compare as strings
+                const lhs = String(lhsRaw ?? '');
+                const rhs = String(rhsRaw ?? '');
+                const lhsNum = Number(lhs);
+                const rhsNum = Number(rhs);
+
+                // Numeric special values (from arithmetic): use numeric comparison for IEEE 754 semantics
+                if (lhs === 'NaN' || rhs === 'NaN' || lhs === 'Infinity' || rhs === 'Infinity' || lhs === '-Infinity' || rhs === '-Infinity') {
+                    return [exprNode.type === EQUALITY ? (lhsNum === rhsNum) as T : (lhsNum !== rhsNum) as T];
+                }
+
+                // Non-numeric strings: compare as strings
+                if (isNaN(lhsNum) || isNaN(rhsNum)) {
                     return [exprNode.type === EQUALITY ? (lhs === rhs) as T : (lhs !== rhs) as T];
                 }
 
-                return [exprNode.type === EQUALITY ? (Number(lhs) === Number(rhs)) as T : (Number(lhs) !== Number(rhs)) as T];
+                // Both are valid numbers: compare numerically
+                return [exprNode.type === EQUALITY ? (lhsNum === rhsNum) as T : (lhsNum !== rhsNum) as T];
             }
             case ADDITIVE:
             case DIVISIONAL:

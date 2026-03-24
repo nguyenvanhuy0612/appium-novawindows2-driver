@@ -298,7 +298,7 @@ const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
     $el = ${0};
     if ($null -eq $el) { return $null };
 
-    # 1. UIA LegacyIAccessiblePattern (most reliable - works for both Win32 and modern apps)
+    # 1. Try PowerShell: UIA LegacyIAccessiblePattern
     try {
         $pattern = $el.GetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern);
         if ($null -ne $pattern) {
@@ -307,15 +307,14 @@ const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
         }
     } catch { }
 
-    # 2. Raw MSAA: hwnd first, then center-point fallback
-    $hwnd = 0;
-    try { $hwnd = [int]$el.Current.NativeWindowHandle; } catch { }
-    $rect = $el.Current.BoundingRectangle;
-    $centerX = 0; $centerY = 0;
-    try { $centerX = [int]($rect.Left + $rect.Width / 2); $centerY = [int]($rect.Top + $rect.Height / 2); } catch { }
-
+    # 2. Try C#: Win32 MSAA with PID validation
     try {
-        $val = [MSAAHelper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $centerX, $centerY, "${1}");
+        $hwnd = 0; try { $hwnd = [int]$el.Current.NativeWindowHandle; } catch { }
+        $rect = $el.Current.BoundingRectangle;
+        $cx = 0; $cy = 0;
+        try { $cx = [int]($rect.Left + $rect.Width / 2); $cy = [int]($rect.Top + $rect.Height / 2); } catch { }
+        try { [Win32Helper]::SetExpectedPid([uint32]$el.Current.ProcessId); } catch { }
+        $val = [Win32Helper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $cx, $cy, "${1}");
         if ($null -ne $val) { return $val.ToString() };
     } catch { }
 
@@ -325,6 +324,21 @@ const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
 const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
     $el = ${0};
     if ($null -eq $el) { return };
+
+    # 0. Set C# context: PID + bring ancestor window to foreground for MSAA
+    try {
+        $elPid = [uint32]$el.Current.ProcessId;
+        $ancestorHwnd = [IntPtr]::Zero;
+        $curr = $el;
+        while ($null -ne $curr) {
+            try {
+                $h = [IntPtr]$curr.Current.NativeWindowHandle;
+                if ($h -ne [IntPtr]::Zero) { $ancestorHwnd = $h; break; }
+            } catch { }
+            try { $curr = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($curr); } catch { break; }
+        }
+        [void][Win32Helper]::SetExpectedPidAndForeground($elPid, $ancestorHwnd);
+    } catch { }
 
     $out = [ordered]@{};
 
@@ -355,6 +369,8 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
                         $out[$name] = ($val | ForEach-Object { try { $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.' } catch { '' } }) -join ',';
                     } elseif ($val -is [Array]) {
                         $out[$name] = $val -join ",";
+                    } elseif ($val -is [System.Windows.Automation.ControlType]) {
+                        $out[$name] = $val.ProgrammaticName.Split('.')[-1];
                     } else {
                         $out[$name] = $val.ToString();
                     }
@@ -379,14 +395,13 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
             }
     } catch { }
 
-    # 4. MSAA fallback for LegacyIAccessible props not already captured by UIA
+    # 3. C# MSAA fallback for LegacyIAccessible props (context set in step 0)
     try {
-        $hwnd = $el.Current.NativeWindowHandle;
+        $hwnd = 0; try { $hwnd = [int]$el.Current.NativeWindowHandle; } catch { }
         $rect = $el.Current.BoundingRectangle;
         $cx = 0; $cy = 0;
         try { $cx = [int]($rect.Left + $rect.Width / 2); $cy = [int]($rect.Top + $rect.Height / 2); } catch { }
-
-        $msaaProps = [MSAAHelper]::GetLegacyPropsWithFallback([IntPtr]$hwnd, $cx, $cy);
+        $msaaProps = [Win32Helper]::GetLegacyPropsWithFallback([IntPtr]$hwnd, $cx, $cy);
         if ($null -ne $msaaProps) {
             foreach($entry in $msaaProps.GetEnumerator()) {
                 $key = "LegacyIAccessible." + $entry.Key;
@@ -397,7 +412,7 @@ const GET_ALL_ELEMENT_PROPERTIES = pwsh$ /* ps1 */ `
         }
     } catch { }
 
-    # 5. MSAA fallback: populate missing/empty UIA properties from their LegacyIAccessible equivalents.
+    # 4. MSAA fallback: populate missing/empty UIA properties from their LegacyIAccessible equivalents.
     #    Win32 MSAA proxy elements may return empty for UIA properties where the MSAA value exists.
     #    Mappings sourced from: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-msaa
     #    UIA property key -> LegacyIAccessible key (MSAA accXxx source)
@@ -460,30 +475,13 @@ const BRING_ELEMENT_TO_FRONT = pwsh$ /* ps1 */ `
     $el = ${0};
     if ($null -eq $el) { return };
 
-    if (-not ([System.Management.Automation.PSTypeName]'BringToFrontHelper').Type) {
-        Add-Type -TypeDefinition @"
-            using System;
-            using System.Runtime.InteropServices;
-            public static class BringToFrontHelper {
-                [DllImport("user32.dll")]
-                [return: MarshalAs(UnmanagedType.Bool)]
-                public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-                [DllImport("user32.dll")]
-                [return: MarshalAs(UnmanagedType.Bool)]
-                public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-            }
-"@
-    }
-
-    # Try to get native window handle from the element or its ancestors
+    # Walk ancestors to find a window handle, then use Win32Helper to bring to foreground
     $curr = $el;
     while ($null -ne $curr) {
         try {
             $hwnd = [IntPtr]$curr.Current.NativeWindowHandle;
             if ($hwnd -ne [IntPtr]::Zero) {
-                [void][BringToFrontHelper]::ShowWindow($hwnd, 5);  # SW_SHOW
-                [void][BringToFrontHelper]::SetForegroundWindow($hwnd);
+                [void][Win32Helper]::BringToForeground($hwnd);
                 return;
             }
         } catch { }

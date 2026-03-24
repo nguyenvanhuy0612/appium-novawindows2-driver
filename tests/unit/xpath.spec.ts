@@ -40,6 +40,14 @@ describe('XPath predicate ordering — position then function', () => {
     const makePredicateOrderMock = () => async (command: string): Promise<string> => {
         const decoded = decodePwsh(command);
 
+        // Bulk lookup intercept
+        if (decoded.includes('|#|')) {
+            if (decoded.includes("'el3'") && decoded.includes('NameProperty')) {
+                return 'el3|#|target value';
+            }
+            return '';
+        }
+
         // findAll with psFilter embedded — simulates PS actually filtering
         if (decoded.includes('FindAll') && decoded.includes('Current.Name') && decoded.includes('target')) {
             return 'el3'; // only the element whose Name matches

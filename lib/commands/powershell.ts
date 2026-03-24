@@ -2,7 +2,7 @@ import { spawn, ChildProcessWithoutNullStreams, execSync } from 'node:child_proc
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
 import { FIND_CHILDREN_RECURSIVELY, PAGE_SOURCE, FIND_DESCENDANTS_FUNCTIONS } from './functions';
-import { MSAA_HELPER_SCRIPT } from '../powershell/msaa';
+import { WIN32_HELPER_SCRIPT } from '../powershell/win32';
 import { decodePwsh } from '../powershell/core';
 
 const SET_UTF8_ENCODING = /* ps1 */ `$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8`;
@@ -253,7 +253,7 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         USE_UI_AUTOMATION_CLIENT,
         SET_UTF8_ENCODING,
         ADD_NECESSARY_ASSEMBLIES,
-        MSAA_HELPER_SCRIPT,
+        WIN32_HELPER_SCRIPT,
         INIT_CACHE_REQUEST,
         INIT_ELEMENT_TABLE,
         PAGE_SOURCE,
