@@ -1,0 +1,7 @@
+{
+    "require": "ts-node/register",
+    "timeout": 120000,
+    "slow": 5000,
+    "reporter": "spec",
+    "spec": "tests/e2e/**/*.e2e.spec.ts"
+}

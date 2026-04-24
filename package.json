@@ -18,7 +18,8 @@
     "build": "tsc -b",
     "watch": "tsc -b --watch",
     "lint": "eslint .",
-    "test": "mocha -r ts-node/register tests/unit/**/*.spec.ts"
+    "test": "mocha -r ts-node/register tests/unit/**/*.spec.ts",
+    "test:e2e:xpath": "mocha --config tests/e2e/.mocharc.json tests/e2e/xpath.e2e.spec.ts"
   },
   "author": "nguyenvanhuy0612",
   "license": "Apache-2.0",

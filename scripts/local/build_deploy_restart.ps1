@@ -16,8 +16,8 @@
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-$ip = "192.168.196.128"
-$user = "admin"
+$ip = if ($env:TARGET_IP) { $env:TARGET_IP } else { "192.168.196.128" }
+$user = if ($env:TARGET_USER) { $env:TARGET_USER } else { "admin" }
 $source = "D:/SecureAge/appium-novawindows2-driver"
 $zipPath = "$source/log/deploy_novawindows.zip"
 $dest = "C:/appium"
@@ -154,6 +154,25 @@ $extractBytes = [System.Text.Encoding]::Unicode.GetBytes($extractScript)
 $extractEncoded = [Convert]::ToBase64String($extractBytes)
 
 ssh $user@$ip "powershell -EncodedCommand $extractEncoded"
+
+# -----------------------------------------------------------------------------
+# Step 5b: Register driver with Appium (remove prior install, install from local)
+# -----------------------------------------------------------------------------
+Write-Host "[5b/6] Registering driver with Appium..." -ForegroundColor Cyan
+
+$installScript = @"
+    `$p = "`$env:USERPROFILE\.appium\node_modules"
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
+        "`$p\appium-novawindows2-driver", "`$p\.cache", "`$p\.package-lock.json"
+    & npm cache clean --force 2>`$null | Out-Null
+    & appium driver uninstall novawindows2 2>`$null | Out-Null
+    & appium driver install --source=local '$remoteDest'
+    & appium driver list --installed
+"@
+$installBytes = [System.Text.Encoding]::Unicode.GetBytes($installScript)
+$installEncoded = [Convert]::ToBase64String($installBytes)
+ssh $user@$ip "powershell -EncodedCommand $installEncoded"
+
 # -----------------------------------------------------------------------------
 # Step 6: Install Dependencies and Start Appium
 # -----------------------------------------------------------------------------

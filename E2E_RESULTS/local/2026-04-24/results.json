@@ -1,0 +1,10 @@
+{
+  "vm": "local",
+  "run_date": "2026-04-24",
+  "target_app": "C:\\Windows\\System32\\notepad.exe",
+  "total": 0,
+  "passed": 0,
+  "failed": 0,
+  "skipped": 0,
+  "cases": []
+}
