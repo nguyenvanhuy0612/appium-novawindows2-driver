@@ -12,12 +12,15 @@ import {
     TrueCondition,
     pwsh$
 } from '../powershell';
-import { sleep } from '../util';
+import { parseRectJson, sleep } from '../util';
 import { errors, W3C_ELEMENT_KEY } from '@appium/base-driver';
 import {
     getWindowAllHandlesForProcessIds,
+    keyDown,
+    keyUp,
     trySetForegroundWindow,
 } from '../winapi/user32';
+import { Key } from '../enums';
 
 const GET_PAGE_SOURCE_COMMAND = pwsh$ /* ps1 */ `
     $el = ${0};
@@ -57,7 +60,7 @@ export async function getScreenshot(this: NovaWindows2Driver): Promise<string> {
 
 export async function getWindowRect(this: NovaWindows2Driver): Promise<Rect> {
     const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
-    return JSON.parse(result.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString()));
+    return parseRectJson(result);
 }
 
 export async function getWindowHandle(this: NovaWindows2Driver): Promise<string> {
@@ -240,4 +243,98 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
     }
 
     throw new errors.UnknownError('Failed to locate window of the app.');
+}
+
+/**
+ * Resolves the current root window's element ID, or throws NoSuchWindowError.
+ * Used by W3C window-scoped commands (title, maximize, minimize, back, forward, close).
+ */
+async function getRootElementId(this: NovaWindows2Driver): Promise<string> {
+    const result = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildCommand());
+    const elementId = result.split('\n').map((id) => id.trim()).filter(Boolean)[0];
+    if (!elementId) {
+        throw new errors.NoSuchWindowError('No active window found for this session.');
+    }
+    return elementId;
+}
+
+export async function title(this: NovaWindows2Driver): Promise<string> {
+    await getRootElementId.call(this);
+    return await this.sendPowerShellCommand(
+        AutomationElement.automationRoot.buildGetPropertyCommand(Property.NAME)
+    );
+}
+
+export async function maximizeWindow(this: NovaWindows2Driver): Promise<void> {
+    const elementId = await getRootElementId.call(this);
+    try {
+        await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildMaximizeCommand());
+    } catch {
+        throw new errors.UnknownError('Failed to maximize the window.');
+    }
+}
+
+export async function minimizeWindow(this: NovaWindows2Driver): Promise<void> {
+    const elementId = await getRootElementId.call(this);
+    try {
+        await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildMinimizeCommand());
+    } catch {
+        throw new errors.UnknownError('Failed to minimize the window.');
+    }
+}
+
+export async function back(this: NovaWindows2Driver): Promise<void> {
+    await getRootElementId.call(this);
+    keyDown(Key.ALT);
+    keyDown(Key.LEFT);
+    keyUp(Key.LEFT);
+    keyUp(Key.ALT);
+}
+
+export async function forward(this: NovaWindows2Driver): Promise<void> {
+    await getRootElementId.call(this);
+    keyDown(Key.ALT);
+    keyDown(Key.RIGHT);
+    keyUp(Key.RIGHT);
+    keyUp(Key.ALT);
+}
+
+export async function closeApp(this: NovaWindows2Driver): Promise<void> {
+    const elementId = await getRootElementId.call(this);
+    await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildCloseCommand());
+    await this.sendPowerShellCommand(/* ps1 */ `$rootElement = $null`);
+}
+
+export async function launchApp(this: NovaWindows2Driver): Promise<void> {
+    if (!this.caps.app || ['root', 'none'].includes(this.caps.app.toLowerCase())) {
+        throw new errors.InvalidArgumentError('No app capability is set for this session.');
+    }
+    await this.changeRootElement(this.caps.app);
+}
+
+export async function setWindowRect(
+    this: NovaWindows2Driver,
+    x: number | null,
+    y: number | null,
+    width: number | null,
+    height: number | null
+): Promise<Rect> {
+    if (width !== null && width < 0) {
+        throw new errors.InvalidArgumentError('width must be a non-negative integer.');
+    }
+    if (height !== null && height < 0) {
+        throw new errors.InvalidArgumentError('height must be a non-negative integer.');
+    }
+
+    const elementId = await getRootElementId.call(this);
+    const el = new FoundAutomationElement(elementId);
+
+    if (x !== null && y !== null) {
+        await this.sendPowerShellCommand(el.buildMoveCommand(x, y));
+    }
+    if (width !== null && height !== null) {
+        await this.sendPowerShellCommand(el.buildResizeCommand(width, height));
+    }
+
+    return await this.getWindowRect();
 }

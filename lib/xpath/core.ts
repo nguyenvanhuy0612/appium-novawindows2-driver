@@ -1,5 +1,6 @@
 import { Element } from '@appium/types';
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
+import { parseRectJson } from '../util';
 
 import XPathAnalyzer, {
     ABSOLUTE_LOCATION_PATH,
@@ -746,7 +747,7 @@ async function convertAttributeNodeTestToStringArray(nodeTest: NodeTestNode, con
                 const results: string[] = [];
                 for (const el of els) {
                     const rectJson = await sendPowerShellCommand(el.buildGetElementRectCommand());
-                    results.push(JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString()))[nodeTest.name.toLowerCase()]);
+                    results.push(parseRectJson(rectJson)[nodeTest.name.toLowerCase()]);
                 }
 
                 return results;

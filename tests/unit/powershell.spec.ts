@@ -77,7 +77,12 @@ describe('PowerShell Generation', () => {
     it('should generate correct buildBringToFrontCommand', () => {
         const el = new FoundAutomationElement('123');
         const cmd = decodeCommand(el.buildBringToFrontCommand());
-        expect(cmd).to.contain('SetForegroundWindow');
+        // Invokes the Win32Helper::BringToForeground wrapper, which internally
+        // performs SetForegroundWindow + ShowWindow + BringWindowToTop with
+        // retries. The PS command visibly references BringToForeground; the
+        // SetForegroundWindow call itself is inside the C# helper source.
+        expect(cmd).to.contain('Win32Helper');
+        expect(cmd).to.contain('BringToForeground');
     });
 
     it('should generate correct buildSetFocusCommand', () => {

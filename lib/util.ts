@@ -1,4 +1,5 @@
 import { errors } from '@appium/base-driver';
+import { Rect } from '@appium/types';
 import path from 'node:path';
 
 /**
@@ -29,6 +30,15 @@ export function assertSupportedEasingFunction(value: string) {
 
 export function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, Math.max(ms, 0)));
+}
+
+/**
+ * Parses a rect-shaped JSON string emitted by PowerShell, replacing the
+ * `Infinity` sentinel PS uses for off-screen elements with INT32_MAX so
+ * the result is JSON-valid and numerically bounded.
+ */
+export function parseRectJson(raw: string): Rect {
+    return JSON.parse(raw.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
 }
 
 export function $(literals: TemplateStringsArray, ...substitutions: number[]) {

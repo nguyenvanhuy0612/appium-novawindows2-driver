@@ -13,7 +13,7 @@ import {
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { NovaWindows2Driver } from '../driver';
 import { keyDown, keyUp, mouseMoveRelative, mouseMoveAbsolute, mouseDown, mouseUp, mouseScroll } from '../winapi/user32';
-import { sleep } from '../util';
+import { parseRectJson, sleep } from '../util';
 import { AutomationElement, FoundAutomationElement } from '../powershell';
 import { Key } from '../enums';
 
@@ -115,7 +115,7 @@ export async function handleMouseMoveAction(this: NovaWindows2Driver, action: Po
             break;
         case 'viewport': {
             const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
-            const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+            const rootRect = parseRectJson(rootRectJson);
             await mouseMoveAbsolute(action.x + rootRect.x, action.y + rootRect.y, action.duration, easingFunction);
             break;
         }
@@ -123,11 +123,14 @@ export async function handleMouseMoveAction(this: NovaWindows2Driver, action: Po
             if (action.origin?.[W3C_ELEMENT_KEY]) {
                 const element = new FoundAutomationElement(action.origin[W3C_ELEMENT_KEY]);
                 const rectJson = await this.sendPowerShellCommand(element.buildGetElementRectCommand());
-                let rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+                let rect = parseRectJson(rectJson);
 
                 if (Object.values(rect).some((x) => x === 0x7FFFFFFF)) {
                     await this.sendPowerShellCommand(element.buildScrollIntoViewCommand());
-                    rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+                    // Re-query the rect — the first read returned off-screen sentinels,
+                    // so the scroll-into-view above should have moved the element on-screen.
+                    const rectJson2 = await this.sendPowerShellCommand(element.buildGetElementRectCommand());
+                    rect = parseRectJson(rectJson2);
                 }
 
                 await mouseMoveAbsolute(action.x === 0 ? rect.x + rect.width / 2 : action.x, action.y === 0 ? rect.y + rect.height / 2 : action.y, action.duration, easingFunction);

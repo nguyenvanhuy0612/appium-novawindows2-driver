@@ -17,7 +17,7 @@ import {
 import { W3C_ELEMENT_KEY } from '@appium/base-driver';
 import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
-import { sleep } from '../util';
+import { parseRectJson, sleep } from '../util';
 
 // Maps lowercase dot-prefix to the full UIA pattern class name
 // (used as [System.Windows.Automation.<className>]::Pattern in PowerShell).
@@ -198,12 +198,7 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         ctrl?: string;
         meta?: string;
         alt?: string;
-    } = {
-        shift: undefined,
-        ctrl: undefined,
-        meta: undefined,
-        alt: undefined,
-    };
+    } = {};
     let keysToSend: string[] = [];
 
     const sendKeysAndResetArray = async () => {
@@ -212,139 +207,92 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
         keysToSend = [];
     };
 
-    for (const char of chars) {
-        switch (char) {
-            case Key.SHIFT:
-            case Key.R_SHIFT:
-                await sendKeysAndResetArray();
-                if (metaKeyStates.shift) {
-                    await this.handleKeyActionSequence({
-                        type: 'key',
-                        id: 'default keyboard',
-                        actions: [{ type: 'keyUp', value: char }]
-                    });
-                    metaKeyStates.shift = undefined;
-                    break;
-                }
+    // Toggle a modifier's held state. When closing a held modifier, release
+    // the *originally-pressed* variant (e.g. L_SHIFT) — not whatever variant
+    // triggered the close (e.g. R_SHIFT) — otherwise the real held key leaks.
+    const toggleModifier = async (
+        key: 'shift' | 'ctrl' | 'meta' | 'alt',
+        char: string,
+    ): Promise<void> => {
+        await sendKeysAndResetArray();
+        const held = metaKeyStates[key];
+        if (held) {
+            await this.handleKeyActionSequence({
+                type: 'key',
+                id: 'default keyboard',
+                actions: [{ type: 'keyUp', value: held }],
+            });
+            metaKeyStates[key] = undefined;
+            return;
+        }
+        metaKeyStates[key] = char;
+        await this.handleKeyActionSequence({
+            type: 'key',
+            id: 'default keyboard',
+            actions: [{ type: 'keyDown', value: char }],
+        });
+    };
 
-                metaKeyStates.shift = char;
-                await this.handleKeyActionSequence({
-                    type: 'key',
-                    id: 'default keyboard',
-                    actions: [{ type: 'keyDown', value: char }]
-                });
-                break;
-            case Key.CONTROL:
-            case Key.R_CONTROL:
-                await sendKeysAndResetArray();
-                if (metaKeyStates.ctrl) {
-                    await this.handleKeyActionSequence({
-                        type: 'key',
-                        id: 'default keyboard',
-                        actions: [{ type: 'keyUp', value: char }]
-                    });
-                    metaKeyStates.ctrl = undefined;
+    try {
+        for (const char of chars) {
+            switch (char) {
+                case Key.SHIFT:
+                case Key.R_SHIFT:
+                    await toggleModifier('shift', char);
                     break;
-                }
-
-                metaKeyStates.ctrl = char;
-                await this.handleKeyActionSequence({
-                    type: 'key',
-                    id: 'default keyboard',
-                    actions: [{ type: 'keyDown', value: char }]
-                });
-                break;
-            case Key.META:
-            case Key.R_META:
-                await sendKeysAndResetArray();
-                if (metaKeyStates.meta) {
-                    await this.handleKeyActionSequence({
-                        type: 'key',
-                        id: 'default keyboard',
-                        actions: [{ type: 'keyUp', value: char }]
-                    });
-                    metaKeyStates.meta = undefined;
+                case Key.CONTROL:
+                case Key.R_CONTROL:
+                    await toggleModifier('ctrl', char);
                     break;
-                }
-
-                metaKeyStates.meta = char;
-                await this.handleKeyActionSequence({
-                    type: 'key',
-                    id: 'default keyboard',
-                    actions: [{ type: 'keyDown', value: char }]
-                });
-                break;
-            case Key.ALT:
-            case Key.R_ALT:
-                await sendKeysAndResetArray();
-                if (metaKeyStates.alt) {
-                    await this.handleKeyActionSequence({
-                        type: 'key',
-                        id: 'default keyboard',
-                        actions: [{ type: 'keyUp', value: char }]
-                    });
-                    metaKeyStates.alt = undefined;
+                case Key.META:
+                case Key.R_META:
+                    await toggleModifier('meta', char);
                     break;
-                }
-
-                metaKeyStates.alt = char;
-                await this.handleKeyActionSequence({
-                    type: 'key',
-                    id: 'default keyboard',
-                    actions: [{ type: 'keyDown', value: char }]
-                });
-                break;
-            default:
-                if (char.charCodeAt(0) >= 0xE000) {
-                    await sendKeysAndResetArray();
-                    await this.handleKeyActionSequence({
-                        type: 'key',
-                        id: 'default keyboard',
-                        actions: [{ type: 'keyDown', value: char }, { type: 'keyUp', value: char }]
-                    });
-                    if (typeDelay) {
-                        await sleep(typeDelay);
-                    }
-                } else {
-                    keysToSend.push(char.replace(/[+^%~()]/g, '{$&}'));
-                    if (typeDelay) {
+                case Key.ALT:
+                case Key.R_ALT:
+                    await toggleModifier('alt', char);
+                    break;
+                default:
+                    if (char.charCodeAt(0) >= 0xE000) {
                         await sendKeysAndResetArray();
-                        await sleep(typeDelay);
+                        await this.handleKeyActionSequence({
+                            type: 'key',
+                            id: 'default keyboard',
+                            actions: [{ type: 'keyDown', value: char }, { type: 'keyUp', value: char }]
+                        });
+                        if (typeDelay) {
+                            await sleep(typeDelay);
+                        }
+                    } else {
+                        keysToSend.push(char.replace(/[+^%~()]/g, '{$&}'));
+                        if (typeDelay) {
+                            await sendKeysAndResetArray();
+                            await sleep(typeDelay);
+                        }
                     }
+            }
+        }
+
+        await sendKeysAndResetArray();
+    } finally {
+        // Release any modifiers still held — even if the loop threw, we
+        // don't want to leak modifier state into the next command.
+        if (this.caps.releaseModifierKeys) {
+            for (const key of ['shift', 'ctrl', 'meta', 'alt'] as const) {
+                const held = metaKeyStates[key];
+                if (held) {
+                    try {
+                        await this.handleKeyActionSequence({
+                            type: 'key',
+                            id: 'default keyboard',
+                            actions: [{ type: 'keyUp', value: held }],
+                        });
+                    } catch (e: any) {
+                        this.log.debug(`[setValue] Failed to release ${key}: ${e?.message}`);
+                    }
+                    metaKeyStates[key] = undefined;
                 }
-        }
-    }
-
-    await sendKeysAndResetArray();
-
-    if (this.caps.releaseModifierKeys) {
-        if (metaKeyStates.shift) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.shift }]
-            });
-        }
-        if (metaKeyStates.ctrl) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.ctrl }]
-            });
-        }
-        if (metaKeyStates.meta) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.meta }]
-            });
-        }
-        if (metaKeyStates.alt) {
-            await this.handleKeyActionSequence({
-                type: 'key',
-                id: 'default keyboard',
-                actions: [{ type: 'keyUp', value: metaKeyStates.alt }]
-            });
+            }
         }
     }
 }
@@ -352,8 +300,8 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
 export async function getElementRect(this: NovaWindows2Driver, elementId: string): Promise<Rect> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
     const rootRectJson = await this.sendPowerShellCommand(AutomationElement.automationRoot.buildGetElementRectCommand());
-    const rootRect = JSON.parse(rootRectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
-    const rect = JSON.parse(result.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+    const rootRect = parseRectJson(rootRectJson);
+    const rect = parseRectJson(result);
     rect.x -= rootRect.x;
     rect.y -= rootRect.y;
     rect.x = Math.min(0x7FFFFFFF, rect.x);
@@ -363,23 +311,23 @@ export async function getElementRect(this: NovaWindows2Driver, elementId: string
 
 export async function elementDisplayed(this: NovaWindows2Driver, elementId: string): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.IS_OFFSCREEN));
-    return result.toLowerCase() === 'true' ? false : true;
+    return result.toLowerCase() !== 'true';
 }
 
 // TODO: find better way to handle whether to use select or toggle
 export async function elementSelected(this: NovaWindows2Driver, elementId: string): Promise<boolean> {
     try {
         const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildIsSelectedCommand());
-        return result === 'True';
+        return result.toLowerCase() === 'true';
     } catch {
         const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetToggleStateCommand());
-        return result === 'On';
+        return result.toLowerCase() === 'on';
     }
 }
 
 export async function elementEnabled(this: NovaWindows2Driver, elementId: string): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.IS_ENABLED));
-    return result.toLowerCase() === 'true' ? true : false;
+    return result.toLowerCase() === 'true';
 }
 
 export async function click(this: NovaWindows2Driver, elementId: string): Promise<void> {
@@ -427,12 +375,12 @@ export async function click(this: NovaWindows2Driver, elementId: string): Promis
 
     try {
         const clickablePointJson = await this.sendPowerShellCommand(element.buildGetPropertyCommand(Property.CLICKABLE_POINT));
-        const clickablePoint = JSON.parse(clickablePointJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const clickablePoint = parseRectJson(clickablePointJson);
         coordinates.x = clickablePoint.x;
         coordinates.y = clickablePoint.y;
     } catch {
         const rectJson = await this.sendPowerShellCommand(element.buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         coordinates.x = rect.x + rect.width / 2;
         coordinates.y = rect.y + rect.height / 2;
     }

@@ -1,7 +1,7 @@
 import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { Element, Rect } from '@appium/types';
 import { NovaWindows2Driver } from '../driver';
-import { $, sleep } from '../util';
+import { $, parseRectJson, sleep } from '../util';
 import { POWER_SHELL_FEATURE } from '../constants';
 import {
     keyDown,
@@ -66,6 +66,8 @@ const EXTENSION_COMMANDS = Object.freeze({
     clickAndDrag: 'executeClickAndDrag',
     startRecordingScreen: 'startRecordingScreen',
     stopRecordingScreen: 'stopRecordingScreen',
+    launchApp: 'launchApp',
+    closeApp: 'closeApp',
 } as const);
 
 const ContentType = Object.freeze({
@@ -104,6 +106,85 @@ type KeyAction = {
     text?: string,
     virtualKeyCode?: number,
     down?: boolean,
+}
+
+export type ModifierKeyName = 'shift' | 'ctrl' | 'alt' | 'win';
+const MODIFIER_KEY_MAP: Record<ModifierKeyName, string> = {
+    ctrl: Key.CONTROL,
+    alt: Key.ALT,
+    shift: Key.SHIFT,
+    win: Key.META,
+};
+
+const CLICK_TYPE_BUTTON_MAP: Record<ClickType, number> = {
+    [ClickType.LEFT]: 0,
+    [ClickType.MIDDLE]: 1,
+    [ClickType.RIGHT]: 2,
+    [ClickType.BACK]: 3,
+    [ClickType.FORWARD]: 4,
+};
+
+/**
+ * Resolve an element id against the current PS session's element table.
+ * If the id isn't cached, look it up via RUNTIME_ID in the root subtree.
+ * Throws NoSuchElementError if the lookup fails.
+ *
+ * Shared by executeClick / executeHover / executeScroll / executeClickAndDrag
+ * (6 previously-duplicated call sites).
+ */
+async function ensureElementResolved(
+    driver: NovaWindows2Driver,
+    elementId: string,
+): Promise<void> {
+    const isNull = await driver.sendPowerShellCommand(
+        /* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`
+    );
+    if (isNull.toLowerCase() !== 'true') {
+        return;
+    }
+    const condition = new PropertyCondition(
+        Property.RUNTIME_ID,
+        new PSInt32Array(elementId.split('.').map(Number)),
+    );
+    const resolved = await driver.sendPowerShellCommand(
+        AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand()
+    );
+    if (resolved.trim() === '') {
+        throw new errors.NoSuchElementError();
+    }
+}
+
+/**
+ * Run `fn` with the listed modifier keys held down, then release them.
+ * Release happens in a `finally` block so a thrown `fn` can't leak modifier
+ * state into the next command. Duplicates are deduplicated; unknown names
+ * are ignored (matches the permissive behavior of the original code).
+ */
+async function withModifierKeys<T>(
+    modifierKeys: ModifierKeyName | ModifierKeyName[] | undefined,
+    fn: () => Promise<T> | T,
+): Promise<T> {
+    const rawKeys = modifierKeys == null
+        ? []
+        : (Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys]);
+    const pressed: string[] = [];
+    for (const raw of rawKeys) {
+        if (!raw) continue;
+        const mapped = MODIFIER_KEY_MAP[raw.toLowerCase() as ModifierKeyName];
+        if (mapped && !pressed.includes(mapped)) {
+            keyDown(mapped);
+            pressed.push(mapped);
+        }
+    }
+    try {
+        return await fn();
+    } finally {
+        // Release in reverse order, and swallow per-key release errors so
+        // one failure doesn't mask the original fn error.
+        for (let i = pressed.length - 1; i >= 0; i--) {
+            try { keyUp(pressed[i]); } catch { /* noop */ }
+        }
+    }
 }
 
 export async function execute(this: NovaWindows2Driver, script: string, args: any[]) {
@@ -169,27 +250,44 @@ export async function pushCacheRequest(this: NovaWindows2Driver, cacheRequest: C
     }
 
     if (cacheRequest.treeFilter) {
-        await this.sendPowerShellCommand(TREE_FILTER_COMMAND.format(convertStringToCondition(cacheRequest.treeFilter)));
+        let condition;
+        try {
+            condition = convertStringToCondition(cacheRequest.treeFilter);
+        } catch (e: any) {
+            // convertStringToCondition throws an InvalidSelectorError subclass.
+            // Rethrow as InvalidArgumentError for consistency with the sibling
+            // validations on treeScope / automationElementMode.
+            throw new errors.InvalidArgumentError(
+                `Invalid treeFilter '${cacheRequest.treeFilter}' for cache request: ${e?.message ?? e}`
+            );
+        }
+        await this.sendPowerShellCommand(TREE_FILTER_COMMAND.format(condition));
     }
 
     if (cacheRequest.treeScope) {
-        const treeScope = TREE_SCOPE_REGEX.exec(cacheRequest.treeScope)?.groups?.[0];
-        if (!treeScope || (Number(cacheRequest.treeScope) < 1 && Number(cacheRequest.treeScope) > 16)) {
+        // Accept either a known TreeScope name (case-insensitive) or a
+        // numeric bitflag in 1..16. The regex match exposes its capture at
+        // index [1]; .groups is undefined when there are no named captures.
+        const matchedName = TREE_SCOPE_REGEX.exec(cacheRequest.treeScope)?.[1];
+        const n = Number(cacheRequest.treeScope);
+        const validNumber = !isNaN(n) && n >= 1 && n <= 16;
+        if (!matchedName && !validNumber) {
             throw new errors.InvalidArgumentError(`Invalid value '${cacheRequest.treeScope}' passed to TreeScope for cache request.`);
         }
 
-        await this.sendPowerShellCommand(TREE_SCOPE_COMMAND.format(isNaN(Number(cacheRequest.treeScope)) ? /* ps1 */ `[TreeScope]::${cacheRequest.treeScope}` : cacheRequest.treeScope));
+        await this.sendPowerShellCommand(TREE_SCOPE_COMMAND.format(isNaN(n) ? /* ps1 */ `[TreeScope]::${cacheRequest.treeScope}` : cacheRequest.treeScope));
     }
 
     if (cacheRequest.automationElementMode) {
-        const treeScope = AUTOMATION_ELEMENT_MODE_REGEX.exec(cacheRequest.automationElementMode)?.groups?.[0];
-
-        if (!treeScope || (Number(cacheRequest.automationElementMode) < 0 && Number(cacheRequest.automationElementMode) > 1)) {
+        const matchedName = AUTOMATION_ELEMENT_MODE_REGEX.exec(cacheRequest.automationElementMode)?.[1];
+        const n = Number(cacheRequest.automationElementMode);
+        const validNumber = !isNaN(n) && n >= 0 && n <= 1;
+        if (!matchedName && !validNumber) {
             throw new errors.InvalidArgumentError(`Invalid value '${cacheRequest.automationElementMode}' passed to AutomationElementMode for cache request.`);
         }
 
         let automationElementMode: string;
-        if (isNaN(Number(cacheRequest.automationElementMode))) {
+        if (isNaN(n)) {
             automationElementMode = /* ps1 */ `[AutomationElementMode]::${cacheRequest.automationElementMode}`;
         } else {
             automationElementMode = cacheRequest.automationElementMode;
@@ -265,7 +363,7 @@ export async function scrollWithKeyboard(this: NovaWindows2Driver, automationEle
 
 export async function patternIsMultiple(this: NovaWindows2Driver, element: Element): Promise<boolean> {
     const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildIsMultipleSelectCommand());
-    return result.toLowerCase() === 'true' ? true : false;
+    return result.toLowerCase() === 'true';
 }
 
 export async function patternGetSelectedItem(this: NovaWindows2Driver, element: Element): Promise<Element> {
@@ -301,10 +399,24 @@ export async function patternToggle(this: NovaWindows2Driver, element: Element):
 }
 
 export async function patternSetValue(this: NovaWindows2Driver, element: Element, value: string): Promise<void> {
+    const el = new FoundAutomationElement(element[W3C_ELEMENT_KEY]);
     try {
-        await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSetValueCommand(value));
-    } catch {
-        await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSetRangeValueCommand(value));
+        await this.sendPowerShellCommand(el.buildSetValueCommand(value));
+    } catch (valueErr: any) {
+        // ValuePattern failed — log the original error for diagnostics,
+        // then try the RangeValuePattern fallback (useful for sliders etc).
+        this.log.debug(`[patternSetValue] ValuePattern failed, trying RangeValuePattern. Original: ${valueErr?.message}`);
+        try {
+            await this.sendPowerShellCommand(el.buildSetRangeValueCommand(value));
+        } catch (rangeErr: any) {
+            // Both patterns failed. Preserve both error messages so the user
+            // can tell whether the element supports neither pattern, the value
+            // is malformed, etc.
+            throw new errors.UnknownError(
+                `Failed to set value on element. ValuePattern error: ${valueErr?.message ?? valueErr}. ` +
+                `RangeValuePattern fallback error: ${rangeErr?.message ?? rangeErr}.`
+            );
+        }
     }
 }
 
@@ -447,7 +559,7 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
     x?: number,
     y?: number,
     button?: ClickType,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[], // TODO: add types
+    modifierKeys?: ModifierKeyName | ModifierKeyName[],
     durationMs?: number,
     times?: number,
     interClickDelayMs?: number
@@ -472,17 +584,10 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
 
     let pos: [number, number];
     if (elementId) {
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`)) === 'True') {
-            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(elementId.split('.').map(Number)));
-            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
-
-            if (elId.trim() === '') {
-                throw new errors.NoSuchElementError();
-            }
-        }
+        await ensureElementResolved(this, elementId);
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         // Calculate absolute position. Default to center of element if x/y are not provided.
         pos = [
             rect.x + (x ?? Math.trunc(rect.width / 2)),
@@ -494,53 +599,24 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
         pos = getCursorPosition();
     }
 
-    const clickTypeToButtonMapping: { [key in ClickType]: number } = {
-        [ClickType.LEFT]: 0,
-        [ClickType.MIDDLE]: 1,
-        [ClickType.RIGHT]: 2,
-        [ClickType.BACK]: 3,
-        [ClickType.FORWARD]: 4
-    };
-    const mouseButton: number = clickTypeToButtonMapping[button];
+    const mouseButton = CLICK_TYPE_BUTTON_MAP[button];
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
     await mouseMoveAbsolute(pos[0], pos[1], 0);
     for (let i = 0; i < times; i++) {
         if (i !== 0) {
             await sleep(interClickDelayMs);
         }
 
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-            keyDown(Key.CONTROL);
-        }
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-            keyDown(Key.ALT);
-        }
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-            keyDown(Key.SHIFT);
-        }
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-            keyDown(Key.META);
-        }
-
-        mouseDown(mouseButton);
-        if (durationMs > 0) {
-            await sleep(durationMs);
-        }
-        mouseUp(mouseButton);
-
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-            keyUp(Key.CONTROL);
-        }
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-            keyUp(Key.ALT);
-        }
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-            keyUp(Key.SHIFT);
-        }
-        if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-            keyUp(Key.META);
-        }
+        await withModifierKeys(modifierKeys, async () => {
+            mouseDown(mouseButton);
+            try {
+                if (durationMs > 0) {
+                    await sleep(durationMs);
+                }
+            } finally {
+                mouseUp(mouseButton);
+            }
+        });
     }
 
     if (this.caps.delayAfterClick) {
@@ -555,7 +631,7 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
     endElementId?: string,
     endX?: number,
     endY?: number,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
+    modifierKeys?: ModifierKeyName | ModifierKeyName[],
     durationMs?: number,
 } = {}) {
     const {
@@ -575,20 +651,12 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
         }
     }
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
     let startPos: [number, number];
     if (startElementId) {
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) === 'True') {
-            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(startElementId.split('.').map(Number)));
-            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
-
-            if (elId.trim() === '') {
-                throw new errors.NoSuchElementError();
-            }
-        }
+        await ensureElementResolved(this, startElementId);
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(startElementId).buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         // Calculate absolute start position. Default to center of element if startX/startY are not provided.
         startPos = [
             rect.x + (startX ?? Math.trunc(rect.width / 2)),
@@ -603,17 +671,10 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
     const hasEndTarget = endElementId || (endX != null && endY != null);
     let endPos: [number, number] | undefined;
     if (endElementId) {
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) === 'True') {
-            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(endElementId.split('.').map(Number)));
-            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
-
-            if (elId.trim() === '') {
-                throw new errors.NoSuchElementError();
-            }
-        }
+        await ensureElementResolved(this, endElementId);
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(endElementId).buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         // Calculate absolute end position. Default to center of element if endX/endY are not provided.
         endPos = [
             rect.x + (endX ?? Math.trunc(rect.width / 2)),
@@ -628,39 +689,15 @@ export async function executeHover(this: NovaWindows2Driver, hoverArgs: {
         await mouseMoveAbsolute(startPos[0], startPos[1], 0);
     }
 
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-        keyDown(Key.CONTROL);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-        keyDown(Key.ALT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-        keyDown(Key.SHIFT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-        keyDown(Key.META);
-    }
-
-    if (hasEndTarget) {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await mouseMoveAbsolute(endPos![0], endPos![1], durationMs, this.caps.smoothPointerMove);
-    } else {
-        // Single-point hover: move smoothly from current position to start
-        await mouseMoveAbsolute(startPos[0], startPos[1], durationMs, this.caps.smoothPointerMove);
-    }
-
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-        keyUp(Key.CONTROL);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-        keyUp(Key.ALT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-        keyUp(Key.SHIFT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-        keyUp(Key.META);
-    }
+    await withModifierKeys(modifierKeys, async () => {
+        if (hasEndTarget) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            await mouseMoveAbsolute(endPos![0], endPos![1], durationMs, this.caps.smoothPointerMove);
+        } else {
+            // Single-point hover: move smoothly from current position to start
+            await mouseMoveAbsolute(startPos[0], startPos[1], durationMs, this.caps.smoothPointerMove);
+        }
+    });
 }
 
 export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
@@ -669,7 +706,7 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     y?: number,
     deltaX?: number,
     deltaY?: number,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[], // TODO: add types
+    modifierKeys?: ModifierKeyName | ModifierKeyName[],
 } = {}) {
     const {
         elementId,
@@ -686,20 +723,12 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
         }
     }
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
     let pos: [number, number];
     if (elementId) {
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`)) === 'True') {
-            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(elementId.split('.').map(Number)));
-            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
-
-            if (elId.trim() === '') {
-                throw new errors.NoSuchElementError();
-            }
-        }
+        await ensureElementResolved(this, elementId);
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(elementId).buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         // Calculate absolute position. Default to center of element if x/y are not provided.
         pos = [
             rect.x + (x ?? Math.trunc(rect.width / 2)),
@@ -712,34 +741,9 @@ export async function executeScroll(this: NovaWindows2Driver, scrollArgs: {
     }
 
     await mouseMoveAbsolute(pos[0], pos[1], 0);
-
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-        keyDown(Key.CONTROL);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-        keyDown(Key.ALT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-        keyDown(Key.SHIFT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-        keyDown(Key.META);
-    }
-
-    mouseScroll(deltaX ?? 0, deltaY ?? 0);
-
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-        keyUp(Key.CONTROL);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-        keyUp(Key.ALT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-        keyUp(Key.SHIFT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-        keyUp(Key.META);
-    }
+    await withModifierKeys(modifierKeys, () => {
+        mouseScroll(deltaX ?? 0, deltaY ?? 0);
+    });
 }
 
 export async function activateProcess(this: NovaWindows2Driver, args: { process: string }) {
@@ -790,7 +794,7 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     endElementId?: string,
     endX?: number,
     endY?: number,
-    modifierKeys?: ('shift' | 'ctrl' | 'alt' | 'win') | ('shift' | 'ctrl' | 'alt' | 'win')[],
+    modifierKeys?: ModifierKeyName | ModifierKeyName[],
     durationMs?: number,
     button?: ClickType,
     smoothPointerMove?: string,
@@ -822,35 +826,18 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
         }
     }
 
-    const clickTypeToButtonMapping: { [key in ClickType]: number } = {
-        [ClickType.LEFT]: 0,
-        [ClickType.MIDDLE]: 1,
-        [ClickType.RIGHT]: 2,
-        [ClickType.BACK]: 3,
-        [ClickType.FORWARD]: 4
-    };
-
-    const mouseButton = clickTypeToButtonMapping[button];
+    const mouseButton = CLICK_TYPE_BUTTON_MAP[button];
     if (mouseButton === undefined) {
         throw new errors.InvalidArgumentError(`Invalid button '${button}'. Supported values are 'left', 'middle', 'right', 'back', 'forward'.`);
     }
 
-    const processesModifierKeys = Array.isArray(modifierKeys) ? modifierKeys : [modifierKeys];
-
     // Calculate Start Position
     let startPos: [number, number];
     if (startElementId) {
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(startElementId).toString()}`)) === 'True') {
-            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(startElementId.split('.').map(Number)));
-            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
-
-            if (elId.trim() === '') {
-                throw new errors.NoSuchElementError();
-            }
-        }
+        await ensureElementResolved(this, startElementId);
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(startElementId).buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         startPos = [
             rect.x + (startX ?? Math.trunc(rect.width / 2)),
             rect.y + (startY ?? Math.trunc(rect.height / 2))
@@ -864,17 +851,10 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
     // Calculate End Position
     let endPos: [number, number];
     if (endElementId) {
-        if ((await this.sendPowerShellCommand(/* ps1 */ `$null -eq ${new FoundAutomationElement(endElementId).toString()}`)) === 'True') {
-            const condition = new PropertyCondition(Property.RUNTIME_ID, new PSInt32Array(endElementId.split('.').map(Number)));
-            const elId = await this.sendPowerShellCommand(AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand());
-
-            if (elId.trim() === '') {
-                throw new errors.NoSuchElementError();
-            }
-        }
+        await ensureElementResolved(this, endElementId);
 
         const rectJson = await this.sendPowerShellCommand(new FoundAutomationElement(endElementId).buildGetElementRectCommand());
-        const rect = JSON.parse(rectJson.replaceAll(/(?:infinity)/gi, 0x7FFFFFFF.toString())) as Rect;
+        const rect = parseRectJson(rectJson);
         endPos = [
             rect.x + (endX ?? Math.trunc(rect.width / 2)),
             rect.y + (endY ?? Math.trunc(rect.height / 2))
@@ -885,47 +865,20 @@ export async function executeClickAndDrag(this: NovaWindows2Driver, clickAndDrag
         endPos = getCursorPosition();
     }
 
-    // Perform Action
+    // Perform Action — jump to start, then press-drag-release within the
+    // modifier-held scope so modifiers are always released, even on error.
     await mouseMoveAbsolute(startPos[0], startPos[1], 0);
-
-    // Modifiers Down
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-        keyDown(Key.CONTROL);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-        keyDown(Key.ALT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-        keyDown(Key.SHIFT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-        keyDown(Key.META);
-    }
-
-    mouseDown(mouseButton);
-
-    // Drag
-    // Drag to end position
-    await mouseMoveAbsolute(
-        endPos[0], endPos[1],
-        durationMs,
-        smoothPointerMove ?? this.caps.smoothPointerMove,
-        startPos[0], startPos[1]
-    );
-
-    mouseUp(mouseButton);
-
-    // Modifiers Up
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'ctrl')) {
-        keyUp(Key.CONTROL);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'alt')) {
-        keyUp(Key.ALT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'shift')) {
-        keyUp(Key.SHIFT);
-    }
-    if (processesModifierKeys.some((key) => key.toLowerCase() === 'win')) {
-        keyUp(Key.META);
-    }
+    await withModifierKeys(modifierKeys, async () => {
+        mouseDown(mouseButton);
+        try {
+            await mouseMoveAbsolute(
+                endPos[0], endPos[1],
+                durationMs,
+                smoothPointerMove ?? this.caps.smoothPointerMove,
+                startPos[0], startPos[1]
+            );
+        } finally {
+            mouseUp(mouseButton);
+        }
+    });
 }

@@ -127,9 +127,12 @@ describe('getProperty PS command builders', () => {
             expect(cmd).to.contain('.Current.Name');
         });
 
-        it('falls back to MSAAHelper for Name', () => {
+        it('falls back to Win32Helper MSAA bridge for Name', () => {
             const cmd = decodePwsh(el.buildGetLegacyPropertyCommand('Name'));
-            expect(cmd).to.contain('MSAAHelper');
+            // Win32Helper is the C# class exposed from win32.ts that wraps MSAA
+            // (accName/accValue/etc.) with PID validation and retry logic.
+            expect(cmd).to.contain('Win32Helper');
+            expect(cmd).to.contain('GetLegacyPropertyWithFallback');
             expect(cmd).to.contain('"Name"');
         });
 

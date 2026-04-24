@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] (2026-04-24)
+
+### Features
+
+* **W3C commands**: Added `title`, `maximizeWindow`, `minimizeWindow`, `back`, `forward`, `setWindowRect`, `closeApp`, `launchApp` at the driver level. Ported from upstream 1.3.0.
+* **TransformPattern**: Added `buildMoveCommand` / `buildResizeCommand` on `AutomationElement` (`MOVE_WINDOW` / `RESIZE_WINDOW` templates) — backs `setWindowRect`.
+* **Extension routing**: Wired `windows: launchApp` and `windows: closeApp` into `EXTENSION_COMMANDS` (previously documented but unimplemented).
+* **Util**: New `parseRectJson()` helper in `lib/util.ts`, used at 15 previously-duplicated sites across 5 files.
+* **Extension helpers**: New `withModifierKeys(modifierKeys, fn)` and `ensureElementResolved(driver, id)` helpers; applied to `executeClick` / `executeHover` / `executeScroll` / `executeClickAndDrag`, replacing ~80 lines of copy-paste modifier handling and ~54 lines of null-check-fallback duplication.
+
+### Bug Fixes
+
+* **Actions**: `handleMouseMoveAction` used to re-parse the stale off-screen rect JSON after `scrollIntoView` — mouse moved to the original off-screen coords. Now re-fetches the rect.
+* **setValue**: Pressing two different-hand modifiers of the same type (e.g. `L_SHIFT` then `R_SHIFT`) released the wrong variant, leaking the originally-held key. Fixed to release the variant that was actually pressed.
+* **setValue**: Modifier-release cleanup was outside any try/finally; if a PS command threw mid-loop, modifiers stayed held into the next command. Now wrapped in try/finally; per-modifier release errors are caught individually.
+* **Booleans**: `elementSelected` used strict-case `=== 'True'`/`=== 'On'` while sibling booleans used case-insensitive comparison. Now consistent across `elementDisplayed` / `elementEnabled` / `elementSelected` / `patternIsMultiple`.
+* **patternSetValue**: When both ValuePattern and RangeValuePattern failed, only the second error surfaced. Now composes both errors so the caller can diagnose.
+* **pushCacheRequest (pre-existing bug)**: `.groups?.[0]` on a regex without named captures always returned undefined, so named `treeScope`/`automationElementMode` values ("Descendants", "Full", etc.) never validated — only numeric bitflags worked. Additionally the range check used `&&` where `||` was intended (the range was never enforced). Both fixed.
+* **pushCacheRequest**: `treeFilter` selector-parse errors now surface as `InvalidArgumentError` (consistent with sibling validations) instead of `InvalidSelectorError`.
+
+### Refactoring
+
+* **Code quality**: Exported `ModifierKeyName` type (replaces 4 inline unions), added `MODIFIER_KEY_MAP` and `CLICK_TYPE_BUTTON_MAP` module constants (replaces 2 inline object literals).
+* **setValue**: Extracted 4 copy-paste modifier switch-arms (~60 lines) into a single `toggleModifier(key, char)` closure.
+* **Naming**: Renamed `$cx`/`$cy` to `$centerX`/`$centerY` in `GET_ELEMENT_LEGACY_PROPERTY`; kept short form in `GET_ALL_ELEMENT_PROPERTIES`.
+
+### Tests
+
+* **Suite growth**: 594 passing → **880 passing, 0 failing** (+287 tests).
+* **9 new spec files**: `util.spec.ts`, `core.spec.ts`, `regex.spec.ts`, `app.spec.ts`, `element.spec.ts`, `actions.spec.ts`, `extension.spec.ts`, `extension-routing.spec.ts`, `extension-validation.spec.ts`.
+* **Pre-existing failures fixed**: 4 tests in `getproperty.spec.ts` / `powershell.spec.ts` updated to match the `MSAAHelper → Win32Helper` / `SetForegroundWindow → BringToForeground` refactors and the variable-name distinction in the legacy property builder.
+* **Regression tests**: Each bug fix carries a focused regression test.
+
+### Docs
+
+* Added `PROJECT_COMPARISON.md` — purpose + feature overview, comparison vs upstream.
+* Added `UPSTREAM_MERGE_NOTES.md` — merged/skipped upstream changes with reasoning.
+* Added `CHANGES_1.2.0.md` — detailed release notes.
+
 ## [1.1.7] (2026-03-20)
 
 ### Bug Fixes

@@ -311,10 +311,10 @@ const GET_ELEMENT_LEGACY_PROPERTY = pwsh$ /* ps1 */ `
     try {
         $hwnd = 0; try { $hwnd = [int]$el.Current.NativeWindowHandle; } catch { }
         $rect = $el.Current.BoundingRectangle;
-        $cx = 0; $cy = 0;
-        try { $cx = [int]($rect.Left + $rect.Width / 2); $cy = [int]($rect.Top + $rect.Height / 2); } catch { }
+        $centerX = 0; $centerY = 0;
+        try { $centerX = [int]($rect.Left + $rect.Width / 2); $centerY = [int]($rect.Top + $rect.Height / 2); } catch { }
         try { [Win32Helper]::SetExpectedPid([uint32]$el.Current.ProcessId); } catch { }
-        $val = [Win32Helper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $cx, $cy, "${1}");
+        $val = [Win32Helper]::GetLegacyPropertyWithFallback([IntPtr]$hwnd, $centerX, $centerY, "${1}");
         if ($null -ne $val) { return $val.ToString() };
     } catch { }
 
@@ -590,6 +590,8 @@ const MAXIMIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]:
 const MINIMIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Minimized)`;
 const RESTORE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([WindowPattern]::Pattern).SetWindowVisualState([WindowVisualState]::Normal)`;
 const CLOSE_WINDOW = pwsh$ /* ps1 */ `try { ${0}.GetCurrentPattern([WindowPattern]::Pattern).Close(); } catch { } `;
+const MOVE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TransformPattern]::Pattern).Move(${1}, ${2})`;
+const RESIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TransformPattern]::Pattern).Resize(${1}, ${2})`;
 
 const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
     try {
@@ -921,6 +923,14 @@ export class FoundAutomationElement extends AutomationElement {
 
     buildCloseCommand(): string {
         return CLOSE_WINDOW.format(this);
+    }
+
+    buildMoveCommand(x: number, y: number): string {
+        return MOVE_WINDOW.format(this, x, y);
+    }
+
+    buildResizeCommand(width: number, height: number): string {
+        return RESIZE_WINDOW.format(this, width, height);
     }
 
     override buildCommand(): string {

@@ -129,6 +129,33 @@ describe('Automation Elements', () => {
              expect(decodePwsh(el.buildCloseCommand())).to.contain('Close()');
         });
 
+        it('buildMoveCommand uses TransformPattern.Move with the given coordinates', () => {
+            const cmd = decodePwsh(el.buildMoveCommand(100, 200));
+            expect(cmd).to.contain('[TransformPattern]::Pattern');
+            expect(cmd).to.contain('.Move(100, 200)');
+        });
+
+        it('buildMoveCommand handles zero and negative coordinates', () => {
+            const atOrigin = decodePwsh(el.buildMoveCommand(0, 0));
+            expect(atOrigin).to.contain('.Move(0, 0)');
+
+            const offscreen = decodePwsh(el.buildMoveCommand(-50, -100));
+            expect(offscreen).to.contain('.Move(-50, -100)');
+        });
+
+        it('buildResizeCommand uses TransformPattern.Resize with the given dimensions', () => {
+            const cmd = decodePwsh(el.buildResizeCommand(800, 600));
+            expect(cmd).to.contain('[TransformPattern]::Pattern');
+            expect(cmd).to.contain('.Resize(800, 600)');
+        });
+
+        it('buildResizeCommand emits each element id into the template', () => {
+            const elA = new FoundAutomationElement('abc-123');
+            const cmd = decodePwsh(elA.buildResizeCommand(1024, 768));
+            expect(cmd).to.contain("'abc-123'");
+            expect(cmd).to.contain('.Resize(1024, 768)');
+        });
+
         it('buildGetTagNameCommand handles special mappings', () => {
             const cmd = decodePwsh(el.buildGetTagNameCommand());
             expect(cmd).to.contain("$type = $_.Split('.')[-1];");
