@@ -102,7 +102,13 @@ export async function setWindow(this: NovaWindows2Driver, nameOrHandle: string):
         if (elementId.trim() !== '') {
             this.log.info(`Found window with name '${name}'. Setting it as the root element.`);
             await this.sendPowerShellCommand(/* ps1 */ `$rootElement = ${new FoundAutomationElement(elementId).buildCommand()}`);
-            trySetForegroundWindow(handle);
+            const nativeHandleStr = await this.sendPowerShellCommand(
+                new FoundAutomationElement(elementId).buildGetPropertyCommand(Property.NATIVE_WINDOW_HANDLE)
+            );
+            const nativeHandle = Number(nativeHandleStr.trim());
+            if (Number.isFinite(nativeHandle) && nativeHandle !== 0) {
+                trySetForegroundWindow(nativeHandle);
+            }
             return;
         }
 
@@ -132,7 +138,10 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
 
 
     const path = pathOrNativeWindowHandle;
-    if (path.includes('!') && path.includes('_') && !(path.includes('/') || path.includes('\\'))) {
+    // UWP AUMID format: "<PackageFamilyName>!<AppId>" where PackageFamilyName is "<Name>_<PublisherHash>".
+    // Examples: Microsoft.WindowsCalculator_8wekyb3d8bbwe!App
+    const UWP_AUMID_REGEX = /^[\w.-]+_[A-Za-z0-9]+![\w.-]+$/;
+    if (UWP_AUMID_REGEX.test(path)) {
         this.log.debug('Detected app path to be in the UWP format.');
         await this.sendPowerShellCommand(/* ps1 */ `Start-Process 'explorer.exe' 'shell:AppsFolder\\${path}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
         await sleep((this.caps['ms:waitForAppLaunch'] as number ?? 0) * 1000 || 500);
@@ -190,12 +199,35 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
         throw new errors.UnknownError('Failed to locate window of the app.');
     }
 
+    /**
+     * Probe a HWND for a UIA element that looks like the app's main window.
+     * Returns the element id if it has at least one UIA child (i.e. the
+     * window's tree is populated), else null. Modern apps (Win11 Notepad,
+     * WinUI 3) expose multiple HWNDs per process — main frame + XAML popup
+     * hosts. Picking the first HWND that resolves can yield a leaf element
+     * whose `FindAll` later crashes with E_UNEXPECTED. Requiring a
+     * non-empty child set filters those out.
+     */
+    const probeWindow = async (handle: number): Promise<string | null> => {
+        const id = await this.sendPowerShellCommand(
+            AutomationElement.rootElement.findFirst(
+                TreeScope.CHILDREN,
+                new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle)),
+            ).buildCommand(),
+        );
+        if (!id) return null;
+        const child = await this.sendPowerShellCommand(
+            new FoundAutomationElement(id).findFirst(TreeScope.CHILDREN, new TrueCondition()).buildCommand(),
+        );
+        return child.trim() ? id : null;
+    };
+
     let elementId = '';
+    let firstResolvedFallback = '';
+    let firstResolvedFallbackHandle = 0;
     // Iterate PIDs in order
     for (const [index, pid] of processIds.entries()) {
         // Grace period: strictly prioritize the newest process (index 0) for the first 6 attempts (approx. 3 sec).
-        // This prevents attaching to an old process's window that might be present while the new process is starting.
-        // If UWP app, we don't need this check because the processIds are typically just the one we found.
         if (index > 0 && attemptNumber <= 6) {
             continue;
         }
@@ -207,19 +239,17 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
 
         for (const handle of handles) {
             const handlePadded = `0x${handle.toString(16).padStart(8, '0')}`;
-            elementId = await this.sendPowerShellCommand(AutomationElement.rootElement.findFirst(TreeScope.CHILDREN, new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle))).buildCommand());
+            const probed = await probeWindow(handle);
 
-            if (elementId) {
+            if (probed) {
+                elementId = probed;
                 this.log.debug(`Attempt ${attemptNumber}: Element ID of the window from PID ${pid} with handle ${handlePadded}: ${elementId}`);
 
-                // 1. Try SetForegroundWindow (Win32)
                 if (trySetForegroundWindow(handle)) {
                     break;
-                } else {
-                    this.log.debug(`Attempt ${attemptNumber}: Failed to set foreground window for handle ${handlePadded}.`);
                 }
+                this.log.debug(`Attempt ${attemptNumber}: Failed to set foreground window for handle ${handlePadded}.`);
 
-                // 2. Try UIA SetFocus
                 try {
                     await this.focusElement({ [W3C_ELEMENT_KEY]: elementId } satisfies Element);
                     break;
@@ -227,13 +257,40 @@ export async function attachToApplicationWindow(this: NovaWindows2Driver, proces
                     this.log.debug(`Attempt ${attemptNumber}: Focus failed for handle ${handlePadded}: ${e.message}`);
                 }
             } else {
-                this.log.debug(`Attempt ${attemptNumber}: Window with handle ${handlePadded} not found in UIA yet.`);
+                // Handle resolved to a UIA element but it's a leaf (likely a popup
+                // host). Remember it as a last-resort fallback in case no HWND in
+                // the process exposes a populated tree this attempt.
+                if (!firstResolvedFallback) {
+                    const fallbackId = await this.sendPowerShellCommand(
+                        AutomationElement.rootElement.findFirst(
+                            TreeScope.CHILDREN,
+                            new PropertyCondition(Property.NATIVE_WINDOW_HANDLE, new PSInt32(handle)),
+                        ).buildCommand(),
+                    );
+                    if (fallbackId) {
+                        firstResolvedFallback = fallbackId;
+                        firstResolvedFallbackHandle = handle;
+                        this.log.debug(`Attempt ${attemptNumber}: Window with handle ${handlePadded} resolved but has no children; keeping as fallback.`);
+                    } else {
+                        this.log.debug(`Attempt ${attemptNumber}: Window with handle ${handlePadded} not found in UIA yet.`);
+                    }
+                }
             }
         }
 
         if (elementId) {
-            break; // Found a valid window for a prioritized PID
+            break;
         }
+    }
+
+    if (!elementId && firstResolvedFallback) {
+        // Last resort: every probed HWND was empty. Use the first resolved one
+        // anyway so the session can start; the next attempt of the outer caller
+        // will retry with fresh data.
+        elementId = firstResolvedFallback;
+        const handlePadded = `0x${firstResolvedFallbackHandle.toString(16).padStart(8, '0')}`;
+        this.log.warn(`Attempt ${attemptNumber}: No HWND exposed a populated UIA tree; falling back to ${handlePadded}.`);
+        trySetForegroundWindow(firstResolvedFallbackHandle);
     }
 
     if (elementId) {

@@ -38,6 +38,18 @@ export async function performActions(this: NovaWindows2Driver, actionSequences: 
     }
 };
 
+/**
+ * W3C `DELETE /session/:id/actions`. We don't track per-input device state
+ * across calls (each performActions is self-contained: pointer up/down and
+ * modifier-key release happen inside the sequence), so this is a no-op.
+ * Without it, clients like webdriverio call releaseActions() at the end of
+ * a tap and get "Method not implemented", which makes the test author look
+ * like the bug.
+ */
+export async function releaseActions(this: NovaWindows2Driver): Promise<void> {
+    // intentional no-op
+};
+
 export async function handleKeyActionSequence(this: NovaWindows2Driver, actionSequence: KeyActionSequence): Promise<void> {
     const actions = actionSequence.actions;
     for (const action of actions) {

@@ -8,16 +8,22 @@ The `NovaWindows2Driver` extends Appium's `BaseDriver` and communicates with Win
 
 ## Documentation Pages
 
+### Usage
+
 | Page | Description |
 |---|---|
 | [Capabilities](./capabilities.md) | All supported driver capabilities (`appium:xxx`) |
 | [Finding Elements](./finding-elements.md) | Supported locator strategies and examples |
-| [Element Commands](./element-commands.md) | Commands to interact with elements |
-| [App Commands](./app-commands.md) | Window management, page source, screenshots |
-| [Extension Commands](./extension-commands.md) | `windows:` custom commands (click, hover, scroll, patterns, etc.) |
-| [Action Sequences](./action-sequences.md) | W3C Actions API – keyboard, mouse, wheel |
-| [PowerShell Commands](./powershell-commands.md) | Executing raw PowerShell scripts |
-| [Screen Recording](./screen-recording.md) | Recording the screen during a test session |
+| [Commands](./commands.md) | W3C-protocol commands — app/window, element, action sequences |
+| [Extensions](./extensions.md) | `windows:*` extension commands, PowerShell escape hatch, screen recording |
+
+### Internals & Reference
+
+| Page | Description |
+|---|---|
+| [Project Overview](./project-overview.md) | Purpose, scope, comparison vs upstream, applied merges, migration guide |
+| [Reference](./reference.md) | Architecture overview + function-level inventory of every `lib/` module |
+| [Releases](./releases/) | Per-version detailed change notes |
 
 ## Quick Start
 

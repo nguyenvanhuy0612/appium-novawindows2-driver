@@ -43,7 +43,7 @@ export function parseRectJson(raw: string): Rect {
 
 export function $(literals: TemplateStringsArray, ...substitutions: number[]) {
     substitutions.forEach((index) => {
-        if (!Number.isInteger(index) && index < 0) {
+        if (!Number.isInteger(index) || index < 0) {
             throw new errors.InvalidArgumentError(`Indices must be positive integers starting from 0. Received: ${index}`);
         }
     });

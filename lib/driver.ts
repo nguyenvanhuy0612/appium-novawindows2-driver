@@ -61,6 +61,10 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
     powerShellStdOut: string = '';
     powerShellStdErr: string = '';
     commandQueue: Promise<any> = Promise.resolve();
+    // Resolves when an auto-restart of the PowerShell session is in flight; used
+    // to dedupe concurrent restart attempts so multiple commands queued behind
+    // a dead session all wait on the same recovery.
+    powerShellRestartPromise?: Promise<void>;
     keyboardState: KeyboardState = {
         pressed: new Set(),
         alt: false,

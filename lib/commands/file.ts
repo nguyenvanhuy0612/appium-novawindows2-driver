@@ -1,9 +1,15 @@
+import { errors } from '@appium/base-driver';
 import { NovaWindows2Driver } from '../driver';
+
+const BASE64_REGEX = /^[A-Za-z0-9+/=\s]*$/;
 
 export async function pushFile(this: NovaWindows2Driver, remotePath: string, base64Data: string): Promise<void> {
     this.log.debug(`Pushing file to: ${remotePath}`);
 
-    // Escape single quotes in remotePath for PowerShell
+    if (!BASE64_REGEX.test(base64Data)) {
+        throw new errors.InvalidArgumentError('pushFile: payload must be a base64-encoded string');
+    }
+
     const escapedPath = remotePath.replace(/'/g, "''");
 
     const command = `
@@ -15,8 +21,6 @@ $bytes = [Convert]::FromBase64String($base64String);
 [System.IO.File]::WriteAllBytes($targetPath, $bytes);
 `;
 
-    // Send the command to PowerShell
-    // We use sendPowerShellCommand to ensure it goes through the queue/lock mechanism
     await this.sendPowerShellCommand(command);
 }
 

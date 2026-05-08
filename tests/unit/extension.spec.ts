@@ -69,97 +69,100 @@ describe('extension — UIA pattern commands', () => {
     it('patternInvoke emits InvokePattern.Invoke()', async () => {
         const { mock, commands } = makeMock();
         await patternInvoke.call(mock, el('abc'));
-        expect(commands).to.have.length(1);
-        expect(commands[0]).to.contain('[InvokePattern]::Pattern');
-        expect(commands[0]).to.contain('.Invoke()');
-        expect(commands[0]).to.contain("'abc'");
+        expect(commands).to.have.length(2);
+        expect(commands[1]).to.contain('[InvokePattern]::Pattern');
+        expect(commands[1]).to.contain('.Invoke()');
+        expect(commands[1]).to.contain("'abc'");
     });
 
     it('patternExpand emits ExpandCollapsePattern.Expand()', async () => {
         const { mock, commands } = makeMock();
         await patternExpand.call(mock, el());
-        expect(commands[0]).to.contain('ExpandCollapsePattern');
-        expect(commands[0]).to.contain('.Expand()');
+        expect(commands[commands.length - 1]).to.contain('ExpandCollapsePattern');
+        expect(commands[commands.length - 1]).to.contain('.Expand()');
     });
 
     it('patternCollapse emits ExpandCollapsePattern.Collapse()', async () => {
         const { mock, commands } = makeMock();
         await patternCollapse.call(mock, el());
-        expect(commands[0]).to.contain('.Collapse()');
+        expect(commands[commands.length - 1]).to.contain('.Collapse()');
     });
 
     it('patternToggle emits TogglePattern.Toggle()', async () => {
         const { mock, commands } = makeMock();
         await patternToggle.call(mock, el());
-        expect(commands[0]).to.contain('TogglePattern');
-        expect(commands[0]).to.contain('.Toggle()');
+        expect(commands[commands.length - 1]).to.contain('TogglePattern');
+        expect(commands[commands.length - 1]).to.contain('.Toggle()');
     });
 
     it('patternSelect emits SelectionItemPattern.Select()', async () => {
         const { mock, commands } = makeMock();
         await patternSelect.call(mock, el());
-        expect(commands[0]).to.contain('.Select()');
+        expect(commands[commands.length - 1]).to.contain('.Select()');
     });
 
     it('patternAddToSelection emits SelectionItemPattern.AddToSelection()', async () => {
         const { mock, commands } = makeMock();
         await patternAddToSelection.call(mock, el());
-        expect(commands[0]).to.contain('.AddToSelection()');
+        expect(commands[commands.length - 1]).to.contain('.AddToSelection()');
     });
 
     it('patternRemoveFromSelection emits SelectionItemPattern.RemoveFromSelection()', async () => {
         const { mock, commands } = makeMock();
         await patternRemoveFromSelection.call(mock, el());
-        expect(commands[0]).to.contain('.RemoveFromSelection()');
+        expect(commands[commands.length - 1]).to.contain('.RemoveFromSelection()');
     });
 
     it('patternMaximize emits WindowPattern.SetWindowVisualState(Maximized)', async () => {
         const { mock, commands } = makeMock();
         await patternMaximize.call(mock, el());
-        expect(commands[0]).to.contain('WindowPattern');
-        expect(commands[0]).to.contain('Maximized');
+        expect(commands[commands.length - 1]).to.contain('WindowPattern');
+        expect(commands[commands.length - 1]).to.contain('Maximized');
     });
 
     it('patternMinimize emits WindowPattern.SetWindowVisualState(Minimized)', async () => {
         const { mock, commands } = makeMock();
         await patternMinimize.call(mock, el());
-        expect(commands[0]).to.contain('Minimized');
+        expect(commands[commands.length - 1]).to.contain('Minimized');
     });
 
     it('patternRestore emits WindowPattern.SetWindowVisualState(Normal)', async () => {
         const { mock, commands } = makeMock();
         await patternRestore.call(mock, el());
-        expect(commands[0]).to.contain('Normal');
+        expect(commands[commands.length - 1]).to.contain('Normal');
     });
 
     it('patternClose emits WindowPattern.Close() (wrapped in try/catch)', async () => {
         const { mock, commands } = makeMock();
         await patternClose.call(mock, el());
-        expect(commands[0]).to.contain('.Close()');
-        expect(commands[0]).to.contain('try {');
+        expect(commands[commands.length - 1]).to.contain('.Close()');
+        expect(commands[commands.length - 1]).to.contain('try {');
     });
 
     it('focusElement emits .SetFocus()', async () => {
         const { mock, commands } = makeMock();
         await focusElement.call(mock, el());
-        expect(commands[0]).to.contain('.SetFocus()');
+        expect(commands[commands.length - 1]).to.contain('.SetFocus()');
     });
 
     describe('patternIsMultiple', () => {
+        // The first PS response is consumed by ensureElementResolved's
+        // ($null -eq cache-table-lookup) check. Anything other than "True"
+        // means the element is in cache and resolution short-circuits.
         it('returns true when PS returns "True"', async () => {
-            const { mock } = makeMock({ defaultResponse: 'True' });
+            const { mock } = makeMock({ responses: ['False', 'True'] });
             const result = await patternIsMultiple.call(mock, el());
             expect(result).to.equal(true);
         });
 
         it('returns false when PS returns "False"', async () => {
-            const { mock } = makeMock({ defaultResponse: 'False' });
+            const { mock } = makeMock({ responses: ['False', 'False'] });
             const result = await patternIsMultiple.call(mock, el());
             expect(result).to.equal(false);
         });
 
         it('returns false when PS returns an empty string', async () => {
-            const { mock } = makeMock({ defaultResponse: '' });
+            const { mock } = makeMock({ responses: ['False', ''] });
             const result = await patternIsMultiple.call(mock, el());
             expect(result).to.equal(false);
         });
@@ -202,11 +205,12 @@ describe('extension — UIA pattern commands', () => {
     });
 
     describe('patternSetValue', () => {
+        // commands[0] is ensureElementResolved's cache check; commands[1] is the real call.
         it('uses ValuePattern.SetValue for the first attempt', async () => {
             const { mock, commands } = makeMock();
             await patternSetValue.call(mock, el(), 'hello');
-            expect(commands[0]).to.contain('ValuePattern');
-            expect(commands[0]).to.contain('SetValue(');
+            expect(commands[1]).to.contain('ValuePattern');
+            expect(commands[1]).to.contain('SetValue(');
         });
 
         it('falls back to RangeValuePattern if ValuePattern throws', async () => {
@@ -217,14 +221,18 @@ describe('extension — UIA pattern commands', () => {
                 log: { info: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
                 sendPowerShellCommand: async (cmd: string): Promise<string> => {
                     commands.push(decodePwsh(cmd));
-                    if (call++ === 0) throw new Error('ValuePattern not supported');
+                    // call 0: ensureElementResolved cache check (return non-"True" → cache hit)
+                    // call 1: ValuePattern.SetValue → throw to trigger fallback
+                    // call 2: RangeValuePattern.SetValue → succeed
+                    if (call === 0) { call++; return 'False'; }
+                    if (call++ === 1) throw new Error('ValuePattern not supported');
                     return '';
                 },
             };
             await patternSetValue.call(mock, el(), '42');
-            expect(commands).to.have.length(2);
-            expect(commands[0]).to.contain('ValuePattern');
-            expect(commands[1]).to.contain('RangeValuePattern');
+            expect(commands).to.have.length(3);
+            expect(commands[1]).to.contain('ValuePattern');
+            expect(commands[2]).to.contain('RangeValuePattern');
         });
 
         // When BOTH pattern attempts fail, the thrown error must preserve both
@@ -235,7 +243,9 @@ describe('extension — UIA pattern commands', () => {
                 caps: {},
                 log: { info: () => {}, debug: () => {}, warn: () => {}, error: () => {} },
                 sendPowerShellCommand: async (): Promise<string> => {
-                    if (call++ === 0) throw new Error('ValuePattern-not-supported-error');
+                    // call 0: cache check; call 1: ValuePattern; call 2: RangeValuePattern
+                    if (call === 0) { call++; return 'False'; }
+                    if (call++ === 1) throw new Error('ValuePattern-not-supported-error');
                     throw new Error('RangeValuePattern-out-of-range-error');
                 },
             };

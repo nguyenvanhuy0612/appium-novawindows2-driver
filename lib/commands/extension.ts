@@ -142,9 +142,17 @@ async function ensureElementResolved(
     if (isNull.toLowerCase() !== 'true') {
         return;
     }
+    // Cached entry missing — try a runtime-id lookup. UIA runtime ids are
+    // dot-separated integers ("42.2162932"); anything else (e.g. an arbitrary
+    // string id from a stale or malformed client) can't possibly match, so
+    // surface NoSuchElement immediately rather than crashing in PSInt32Array.
+    const parts = elementId.split('.').map((s) => Number(s));
+    if (parts.length === 0 || parts.some((n) => !Number.isInteger(n))) {
+        throw new errors.NoSuchElementError();
+    }
     const condition = new PropertyCondition(
         Property.RUNTIME_ID,
-        new PSInt32Array(elementId.split('.').map(Number)),
+        new PSInt32Array(parts),
     );
     const resolved = await driver.sendPowerShellCommand(
         AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand()
@@ -297,24 +305,68 @@ export async function pushCacheRequest(this: NovaWindows2Driver, cacheRequest: C
     }
 }
 
+/**
+ * Run a UIA pattern command and translate the raw PowerShell COM error
+ * "Unsupported Pattern." into a clean W3C InvalidElementStateError. Without
+ * this, callers see a multi-line PowerShell stack trace instead of a usable
+ * error.
+ */
+async function runPatternCommand(
+    driver: NovaWindows2Driver,
+    command: string,
+    patternName: string,
+): Promise<string> {
+    try {
+        return await driver.sendPowerShellCommand(command);
+    } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        if (/Unsupported Pattern/i.test(msg)) {
+            throw new errors.InvalidElementStateError(
+                `Element does not support the ${patternName} pattern.`,
+            );
+        }
+        // Stale/unknown element id → cached entry is null → PowerShell raises
+        // "You cannot call a method on a null-valued expression". Map to a
+        // proper W3C NoSuchElementError so the 500 doesn't leak.
+        if (/null-valued expression|NullReference/i.test(msg)) {
+            throw new errors.NoSuchElementError();
+        }
+        throw e;
+    }
+}
+
+/**
+ * Resolve an Element argument's W3C key into a runtime id, then run
+ * `ensureElementResolved` so stale ids surface as NoSuchElement before
+ * the underlying PowerShell command runs (which would otherwise raise a
+ * "null-valued expression" 500).
+ */
+async function resolvePatternElement(driver: NovaWindows2Driver, element: Element): Promise<string> {
+    const id = element?.[W3C_ELEMENT_KEY];
+    if (!id) {
+        throw new errors.InvalidArgumentError('Element ID is required.');
+    }
+    await ensureElementResolved(driver, id);
+    return id;
+}
+
 export async function patternInvoke(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildInvokeCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildInvokeCommand(), 'Invoke');
 }
 
 export async function patternExpand(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildExpandCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildExpandCommand(), 'ExpandCollapse');
 }
 
 export async function patternCollapse(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildCollapseCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildCollapseCommand(), 'ExpandCollapse');
 }
 
 export async function patternScrollIntoView(this: NovaWindows2Driver, element: Element): Promise<void> {
-    const elementId = element?.[W3C_ELEMENT_KEY];
-    if (!elementId) {
-        throw new errors.InvalidArgumentError('Element ID is required for scrollIntoView.');
-    }
-
+    const elementId = await resolvePatternElement(this, element);
     const automationElement = new FoundAutomationElement(elementId);
 
     try {
@@ -362,12 +414,14 @@ export async function scrollWithKeyboard(this: NovaWindows2Driver, automationEle
 }
 
 export async function patternIsMultiple(this: NovaWindows2Driver, element: Element): Promise<boolean> {
-    const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildIsMultipleSelectCommand());
+    const id = await resolvePatternElement(this, element);
+    const result = await this.sendPowerShellCommand(new FoundAutomationElement(id).buildIsMultipleSelectCommand());
     return result.toLowerCase() === 'true';
 }
 
 export async function patternGetSelectedItem(this: NovaWindows2Driver, element: Element): Promise<Element> {
-    const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetSelectionCommand());
+    const id = await resolvePatternElement(this, element);
+    const result = await this.sendPowerShellCommand(new FoundAutomationElement(id).buildGetSelectionCommand());
     const elId = result.split('\n').filter(Boolean)[0];
 
     if (!elId) {
@@ -378,28 +432,34 @@ export async function patternGetSelectedItem(this: NovaWindows2Driver, element: 
 }
 
 export async function patternGetAllSelectedItems(this: NovaWindows2Driver, element: Element): Promise<Element[]> {
-    const result = await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetSelectionCommand());
+    const id = await resolvePatternElement(this, element);
+    const result = await this.sendPowerShellCommand(new FoundAutomationElement(id).buildGetSelectionCommand());
     return result.split('\n').filter(Boolean).map((elId) => ({ [W3C_ELEMENT_KEY]: elId }));
 }
 
 export async function patternAddToSelection(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildAddToSelectionCommand());
+    const id = await resolvePatternElement(this, element);
+    await this.sendPowerShellCommand(new FoundAutomationElement(id).buildAddToSelectionCommand());
 }
 
 export async function patternRemoveFromSelection(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildRemoveFromSelectionCommand());
+    const id = await resolvePatternElement(this, element);
+    await this.sendPowerShellCommand(new FoundAutomationElement(id).buildRemoveFromSelectionCommand());
 }
 
 export async function patternSelect(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSelectCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildSelectCommand(), 'SelectionItem');
 }
 
 export async function patternToggle(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildToggleCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildToggleCommand(), 'Toggle');
 }
 
 export async function patternSetValue(this: NovaWindows2Driver, element: Element, value: string): Promise<void> {
-    const el = new FoundAutomationElement(element[W3C_ELEMENT_KEY]);
+    const id = await resolvePatternElement(this, element);
+    const el = new FoundAutomationElement(id);
     try {
         await this.sendPowerShellCommand(el.buildSetValueCommand(value));
     } catch (valueErr: any) {
@@ -421,27 +481,33 @@ export async function patternSetValue(this: NovaWindows2Driver, element: Element
 }
 
 export async function patternGetValue(this: NovaWindows2Driver, element: Element): Promise<string> {
-    return await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildGetValueCommand());
+    const id = await resolvePatternElement(this, element);
+    return await this.sendPowerShellCommand(new FoundAutomationElement(id).buildGetValueCommand());
 }
 
 export async function patternMaximize(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildMaximizeCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildMaximizeCommand(), 'Window');
 }
 
 export async function patternMinimize(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildMinimizeCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildMinimizeCommand(), 'Window');
 }
 
 export async function patternRestore(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildRestoreCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildRestoreCommand(), 'Window');
 }
 
 export async function patternClose(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildCloseCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildCloseCommand(), 'Window');
 }
 
 export async function focusElement(this: NovaWindows2Driver, element: Element): Promise<void> {
-    await this.sendPowerShellCommand(new FoundAutomationElement(element[W3C_ELEMENT_KEY]).buildSetFocusCommand());
+    const id = await resolvePatternElement(this, element);
+    await runPatternCommand(this, new FoundAutomationElement(id).buildSetFocusCommand(), 'SetFocus');
 }
 
 export async function getClipboardBase64(this: NovaWindows2Driver, contentType?: ContentType | { contentType?: ContentType }): Promise<string> {
@@ -582,6 +648,13 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
         }
     }
 
+    const mouseButton = CLICK_TYPE_BUTTON_MAP[button];
+    if (mouseButton === undefined) {
+        throw new errors.InvalidArgumentError(
+            `Invalid button '${button}'. Supported values are 'left', 'middle', 'right', 'back', 'forward'.`,
+        );
+    }
+
     let pos: [number, number];
     if (elementId) {
         await ensureElementResolved(this, elementId);
@@ -598,8 +671,6 @@ export async function executeClick(this: NovaWindows2Driver, clickArgs: {
     } else {
         pos = getCursorPosition();
     }
-
-    const mouseButton = CLICK_TYPE_BUTTON_MAP[button];
 
     await mouseMoveAbsolute(pos[0], pos[1], 0);
     for (let i = 0; i < times; i++) {

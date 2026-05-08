@@ -143,7 +143,7 @@ export class OrCondition extends Condition {
 export class NotCondition extends Condition {
     constructor(condition: Condition) {
         if (!(condition instanceof Condition)) {
-            throw new errors.InvalidArgumentError(`AndCondition expects Conditions as args but received ${(condition as unknown)?.constructor.name}.`);
+            throw new errors.InvalidArgumentError(`NotCondition expects a Condition as arg but received ${(condition as unknown)?.constructor.name}.`);
         }
 
         super(NOT_CONDITION.format(condition));

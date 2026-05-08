@@ -119,8 +119,11 @@ function waitForCommandCompletion(
                 // driver.log.debug(`[PS Output] \n${driver.powerShellStdOut}`);
                 // driver.log.debug(`[PS Error] \n${driver.powerShellStdErr}`);
                 if (driver.powerShellStdErr) {
-                    driver.log.error(`[PowerShell Error] ${driver.powerShellStdErr}`);
-                    // driver.log.debug(`PowerShell Decoded Command: \n${command}`);
+                    // Many PS pattern calls (SetFocus, InvokePattern, etc.) legitimately
+                    // fail and the caller catches and falls back. The full stderr is
+                    // already attached to the rejected promise; logging it at error
+                    // level was just noise. Demoted to debug.
+                    driver.log.debug(`[PowerShell Error] ${driver.powerShellStdErr}`);
                     const decodedCommand = decodePwsh(command || '');
                     driver.log.debug(`[PowerShell Raw Command] \n${decodedCommand}`);
                     reject(new errors.UnknownError(driver.powerShellStdErr));
@@ -161,9 +164,52 @@ function waitForCommandCompletion(
 // ============================================================================
 
 /**
+ * Returns true if the persistent PowerShell process is alive and accepting writes.
+ */
+function isPowerShellAlive(driver: NovaWindows2Driver): boolean {
+    const ps = driver.powerShell;
+    return !!ps && ps.exitCode === null && ps.stdin.writable;
+}
+
+/**
+ * Ensures the persistent PowerShell session is alive. If it has died (e.g.
+ * because a user-supplied script destabilised UIA / COM and the process
+ * exited on its own), spawn a new one and re-run the init script.
+ *
+ * Concurrent callers all await the same in-flight restart promise, so a
+ * burst of queued commands after a session death triggers exactly one
+ * restart. The element table is empty on the new session — stale element
+ * IDs surface as NoSuchElement on the next access, which is correct.
+ */
+async function ensurePowerShellSession(driver: NovaWindows2Driver): Promise<void> {
+    if (isPowerShellAlive(driver)) return;
+    if (driver.powerShellRestartPromise) {
+        await driver.powerShellRestartPromise;
+        return;
+    }
+    driver.log.warn('PowerShell session is not running; auto-restarting...');
+    driver.powerShellRestartPromise = (async () => {
+        try {
+            await startPowerShellSession.call(driver);
+            driver.log.info('PowerShell session restored');
+        } finally {
+            driver.powerShellRestartPromise = undefined;
+        }
+    })();
+    await driver.powerShellRestartPromise;
+}
+
+/**
  * Executes a PowerShell command in the persistent session
  */
 export async function sendPowerShellCommand(this: NovaWindows2Driver, command: string): Promise<string> {
+    // Pre-queue check: if the session is dead, restart it BEFORE adding to the
+    // command queue. We can't restart inside the queue's `.then` because
+    // `startPowerShellSession` itself awaits `sendPowerShellCommand` (for the
+    // init script + setupRootElement) — that nested call would deadlock waiting
+    // on its own outer queue entry.
+    await ensurePowerShellSession(this);
+
     if (!this.commandQueue) {
         this.commandQueue = Promise.resolve();
     }
@@ -171,17 +217,24 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
     this.commandQueue = this.commandQueue.catch((err) => {
         this.log.debug(`[Command Queue] Previous command failed, proceeding with next command. Error: ${err?.message || err}`);
     }).then(async () => {
+        // Re-check inside the queue: a previous queued command in this same
+        // chain may have killed the session. If so, restart again.
+        if (!isPowerShellAlive(this)) {
+            await ensurePowerShellSession(this);
+        }
         ensureSessionReady(this);
 
         this.powerShellStdOut = '';
         this.powerShellStdErr = '';
 
-        try {
-            this.powerShell!.stdin.write(`${command}\n`);
-            this.powerShell!.stdin.write(`Write-Output "${COMMAND_END_MARKER}"\n`);
-        } catch (e: any) {
-            throw new errors.UnknownError(`Failed to write to PowerShell: ${e.message}`);
+        const writeError = await new Promise<Error | null>((res) => {
+            this.powerShell!.stdin.write(`${command}\n`, (err) => err ? res(err) : res(null));
+        });
+        if (writeError) {
+            this.powerShell = undefined;
+            throw new errors.UnknownError(`Failed to write to PowerShell: ${writeError.message}`);
         }
+        this.powerShell!.stdin.write(`Write-Output "${COMMAND_END_MARKER}"\n`);
 
         const timeoutMs = (this.caps as any).powerShellCommandTimeout || 60000;
         return await waitForCommandCompletion(this, this.powerShell!, timeoutMs, command);
@@ -235,6 +288,24 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
 
     powerShell.stderr.on('data', (chunk: any) => {
         this.powerShellStdErr += chunk.toString();
+    });
+
+    // Prevent unhandled 'error' events (e.g. EPIPE when PS crashes mid-session)
+    // from taking down the Node process. ensureSessionReady() will catch the
+    // broken state on the next command.
+    powerShell.stdin.on('error', (err: any) => {
+        this.log.warn(`PowerShell stdin error (${err.code}): ${err.message}`);
+        if (this.powerShell === powerShell) {
+            this.powerShell = undefined;
+        }
+    });
+
+    // Detect unexpected process exit between commands.
+    powerShell.on('exit', (code, signal) => {
+        if (this.powerShell === powerShell) {
+            this.log.warn(`PowerShell exited unexpectedly (code=${code}, signal=${signal})`);
+            this.powerShell = undefined;
+        }
     });
 
     this.powerShell = powerShell;

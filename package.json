@@ -1,6 +1,6 @@
 {
   "name": "appium-novawindows2-driver",
-  "version": "1.2.0",
+  "version": "1.1.9",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -19,7 +19,13 @@
     "watch": "tsc -b --watch",
     "lint": "eslint .",
     "test": "mocha -r ts-node/register tests/unit/**/*.spec.ts",
-    "test:e2e:xpath": "mocha --config tests/e2e/.mocharc.json tests/e2e/xpath.e2e.spec.ts"
+    "test:e2e:xpath": "mocha --config tests/e2e/.mocharc.json tests/e2e/xpath.e2e.spec.ts",
+    "test:e2e:smoke": "mocha --config tests/e2e/.mocharc.json tests/e2e/smoke.e2e.spec.ts",
+    "test:e2e:pagesource": "mocha --no-config -r ts-node/register --timeout 120000 tests/e2e/pagesource.e2e.spec.ts",
+    "test:e2e:click": "mocha --no-config -r ts-node/register --timeout 120000 tests/e2e/click.e2e.spec.ts",
+    "test:e2e:click:root": "mocha --no-config -r ts-node/register --timeout 120000 tests/e2e/click_root.e2e.spec.ts",
+    "test:e2e:click:ext": "mocha --no-config -r ts-node/register --timeout 180000 tests/e2e/click_extension.e2e.spec.ts",
+    "test:e2e:smoke:more": "mocha --no-config -r ts-node/register --timeout 180000 tests/e2e/smoke_more.e2e.spec.ts"
   },
   "author": "nguyenvanhuy0612",
   "license": "Apache-2.0",
@@ -31,10 +37,10 @@
     "url": "https://github.com/nguyenvanhuy0612/appium-novawindows2-driver/issues"
   },
   "peerDependencies": {
+    "@appium/base-driver": "^10.1.0",
     "appium": "^3.1.0"
   },
   "dependencies": {
-    "@appium/base-driver": "^10.1.0",
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
     "xpath-analyzer": "^3.0.1"
@@ -51,6 +57,7 @@
     "mainClass": "NovaWindows2Driver"
   },
   "devDependencies": {
+    "@appium/base-driver": "^10.1.0",
     "@appium/eslint-config-appium-ts": "^2.0.3",
     "@appium/tsconfig": "^1.1.0",
     "@appium/types": "^1.1.0",

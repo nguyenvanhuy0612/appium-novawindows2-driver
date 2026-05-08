@@ -120,7 +120,7 @@ Pick one canonical app per framework. Re-run the full suite against each on each
 
 Do NOT guess XPath / AutomationId from memory. For each target element, follow this loop:
 
-1. **Dump the source first** — call `driver.getPageSource()` (or `execute('windows: getAttributes', {elementId: <root>})` for a scoped dump). Save the XML to `E2E_RESULTS/<VM>/<date>/sources/<app>-<screen>.xml` so the run is reproducible.
+1. **Dump the source first** — call `driver.getPageSource()` (or `execute('windows: getAttributes', {elementId: <root>})` for a scoped dump). Save the XML to `tests/results/<VM>/<date>/sources/<app>-<screen>.xml` so the run is reproducible.
 2. **Inspect the tree** — identify the element by its `AutomationId`, `Name`, `ClassName`, `ControlType`, and position in the tree.
 3. **Choose the narrowest reliable locator** — preference order:
    1. `accessibility id` (stable `AutomationId`)
@@ -371,10 +371,10 @@ Re-run §5.10 on every VM. Collect p50/p95/p99 for findElement latency and PS co
 ## 7. Reporting & Artifacts
 
 ### Per-run directory layout
-Create `E2E_RESULTS/<VM-name>/<YYYY-MM-DD>/` with:
+Create `tests/results/<VM-name>/<YYYY-MM-DD>/` with:
 
 ```
-E2E_RESULTS/
+tests/results/
 ├─ VM-A-Windows11/
 │  └─ 2026-XX-XX/
 │     ├─ appium-server.log       # full appium server output

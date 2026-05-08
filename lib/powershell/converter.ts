@@ -181,13 +181,15 @@ export function convertStringToCondition(selector: string): Condition {
     processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C3, (_, point1: string, point2: string) => {
         const replacementChar = String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + processedItems.length);
 
-        const p1 = POINT_PARAMETER_REGEX.exec(point1)?.groups ?? [];
-        const p2 = POINT_PARAMETER_REGEX.exec(point2)?.groups ?? [];
+        const p1g = POINT_PARAMETER_REGEX.exec(point1)?.groups ?? [];
+        const p2g = POINT_PARAMETER_REGEX.exec(point2)?.groups ?? [];
+        const p1 = [Number(p1g[0]), Number(p1g[1])];
+        const p2 = [Number(p2g[0]), Number(p2g[1])];
 
         const x = Math.min(p1[0], p2[0]);
         const y = Math.min(p1[1], p2[1]);
-        const width = Math.min(p2[0] - p1[0]);
-        const height = Math.min(p2[1] - p1[1]);
+        const width = Math.abs(p2[0] - p1[0]);
+        const height = Math.abs(p2[1] - p1[1]);
 
         processedItems.push(new PSRect({ x, y, width, height }));
         return replacementChar;

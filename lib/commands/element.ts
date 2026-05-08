@@ -10,14 +10,49 @@ import {
     PropertyCondition,
     PSBoolean,
     PSControlType,
+    PSInt32Array,
     PSString,
     TreeScope,
     TrueCondition,
 } from '../powershell';
-import { W3C_ELEMENT_KEY } from '@appium/base-driver';
+import { W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { mouseDown, mouseMoveAbsolute, mouseUp } from '../winapi/user32';
 import { Key } from '../enums';
 import { parseRectJson, sleep } from '../util';
+
+/**
+ * Confirm the element id is resolvable before issuing UIA pattern calls.
+ * Mirrors the extension-side helper. Without this guard, a stale id makes
+ * `buildGetPropertyCommand(CLICKABLE_POINT)` emit empty stdout, and
+ * `parseRectJson('')` throws `SyntaxError: Unexpected end of JSON input` —
+ * which leaks through as a generic 500 instead of a W3C NoSuchElementError.
+ */
+async function ensureElementResolved(driver: NovaWindows2Driver, elementId: string): Promise<void> {
+    const isNull = await driver.sendPowerShellCommand(
+        /* ps1 */ `$null -eq ${new FoundAutomationElement(elementId).toString()}`,
+    );
+    if (isNull.toLowerCase() !== 'true') return;
+
+    // Cached entry missing — try a runtime-id lookup. UIA runtime ids are
+    // dot-separated integers ("42.2162932"); anything else (e.g. an arbitrary
+    // string id from a stale or malformed client) can't possibly match, so
+    // surface NoSuchElement immediately rather than crashing in PSInt32Array.
+    const parts = elementId.split('.').map((s) => Number(s));
+    if (parts.length === 0 || parts.some((n) => !Number.isInteger(n))) {
+        throw new errors.NoSuchElementError();
+    }
+
+    const condition = new PropertyCondition(
+        Property.RUNTIME_ID,
+        new PSInt32Array(parts),
+    );
+    const resolved = await driver.sendPowerShellCommand(
+        AutomationElement.automationRoot.findFirst(TreeScope.SUBTREE, condition).buildCommand(),
+    );
+    if (resolved.trim() === '') {
+        throw new errors.NoSuchElementError();
+    }
+}
 
 // Maps lowercase dot-prefix to the full UIA pattern class name
 // (used as [System.Windows.Automation.<className>]::Pattern in PowerShell).
@@ -331,6 +366,8 @@ export async function elementEnabled(this: NovaWindows2Driver, elementId: string
 }
 
 export async function click(this: NovaWindows2Driver, elementId: string): Promise<void> {
+    await ensureElementResolved(this, elementId);
+
     const easingFunction = this.caps.smoothPointerMove;
     const element = new FoundAutomationElement(elementId);
 

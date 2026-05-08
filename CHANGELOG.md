@@ -2,18 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.0] (2026-04-24)
+## [1.1.9] (2026-05-08)
+
+This release bundles two batches of work that landed before publish: the upstream-sync + W3C-commands batch (originally tagged "1.2.0" internally) and the code-review-driven hardening batch (PS auto-restart, security, consistency fixes).
 
 ### Features
 
+* **PowerShell auto-restart**: `sendPowerShellCommand` now detects a dead persistent PS session (process exited or stdin not writable) and transparently re-runs `startPowerShellSession()` before queueing the next command. Concurrent callers wait on a single shared `powerShellRestartPromise` so a burst of queued commands triggers exactly one restart. The element-table is empty after restart — stale element IDs surface as `NoSuchElementError` (correct behaviour). Replaces the previous failure mode where every command after a PS crash returned "PowerShell session is not available or closed" until `deleteSession`.
 * **W3C commands**: Added `title`, `maximizeWindow`, `minimizeWindow`, `back`, `forward`, `setWindowRect`, `closeApp`, `launchApp` at the driver level. Ported from upstream 1.3.0.
 * **TransformPattern**: Added `buildMoveCommand` / `buildResizeCommand` on `AutomationElement` (`MOVE_WINDOW` / `RESIZE_WINDOW` templates) — backs `setWindowRect`.
 * **Extension routing**: Wired `windows: launchApp` and `windows: closeApp` into `EXTENSION_COMMANDS` (previously documented but unimplemented).
+* **`pushFile` payload validation**: `base64Data` is now validated against `^[A-Za-z0-9+/=\s]*$` before interpolation into PowerShell. Closes a PS-injection vector where a crafted "base64" payload could break out of the single-quoted string and execute arbitrary commands in the persistent session.
 * **Util**: New `parseRectJson()` helper in `lib/util.ts`, used at 15 previously-duplicated sites across 5 files.
 * **Extension helpers**: New `withModifierKeys(modifierKeys, fn)` and `ensureElementResolved(driver, id)` helpers; applied to `executeClick` / `executeHover` / `executeScroll` / `executeClickAndDrag`, replacing ~80 lines of copy-paste modifier handling and ~54 lines of null-check-fallback duplication.
 
 ### Bug Fixes
 
+* **EPIPE crash → graceful failure** (`lib/commands/powershell.ts`): registered `stdin.on('error')` and `process.on('exit')` handlers in `startPowerShellSession`. A persistent PS process that dies (e.g. UIA tree walk after `Shell.Application.Quit()` raised `ACCESS_DENIED`) no longer takes down the whole Node host with an unhandled `EPIPE` event. The next command observes the dead session and triggers auto-restart.
+* **Negative rect dimensions** (`lib/powershell/converter.ts:189-190`): `Rect(point1, point2)` selectors built width/height via `Math.min(p2[0]-p1[0])` — single-arg `Math.min` returns its input unchanged, so swapped point order produced a negative-dimensioned rect that the PowerShell `[System.Windows.Rect]::new(...)` constructor rejected. Now uses `Math.abs(...)`. Regex groups are coerced to numbers explicitly.
+* **`setWindow` foreground after name-based lookup** (`lib/commands/app.ts:85,105`): `handle = Number(nameOrHandle)` is `NaN` when the argument is a window name. `trySetForegroundWindow(NaN)` was a silent no-op, so windows resolved by name stayed in the background. Now fetches the native window handle (`Property.NATIVE_WINDOW_HANDLE`) from the resolved element and passes that.
+* **Pattern handlers bypassing element resolution** (`lib/commands/extension.ts`): `patternIsMultiple`, `patternGetSelectedItem`, `patternGetAllSelectedItems`, `patternAddToSelection`, `patternRemoveFromSelection`, `patternSetValue`, `patternGetValue`, and `patternScrollIntoView` accessed `element[W3C_ELEMENT_KEY]` directly. Stale IDs (after session reattach or table eviction) surfaced as raw PowerShell "null-valued expression" errors instead of W3C `NoSuchElementError`. All eight now route through `resolvePatternElement` for consistent error surfacing.
+* **UWP path heuristic too loose** (`lib/commands/app.ts:141`): `path.includes('!') && path.includes('_') && !(includes /,\)` accepted any string with `!` and `_` and no separators. Replaced with `^[\w.-]+_[A-Za-z0-9]+![\w.-]+$` matching the actual `<PackageFamilyName>_<PublisherHash>!<AppId>` AUMID shape.
+* **`NotCondition` error message** (`lib/powershell/conditions.ts:146`): copy-paste from `AndCondition` made the `InvalidArgumentError` say "AndCondition expects Conditions as args" inside the `NotCondition` constructor. Fixed.
+* **`$()` template factory validation** (`lib/util.ts:46`): `if (!Number.isInteger(index) && index < 0)` only threw for indices that were both non-integer AND negative; the constructor used `||` and caught the rest, so the bug was masked. Aligned to `||`.
 * **Actions**: `handleMouseMoveAction` used to re-parse the stale off-screen rect JSON after `scrollIntoView` — mouse moved to the original off-screen coords. Now re-fetches the rect.
 * **setValue**: Pressing two different-hand modifiers of the same type (e.g. `L_SHIFT` then `R_SHIFT`) released the wrong variant, leaking the originally-held key. Fixed to release the variant that was actually pressed.
 * **setValue**: Modifier-release cleanup was outside any try/finally; if a PS command threw mid-loop, modifiers stayed held into the next command. Now wrapped in try/finally; per-modifier release errors are caught individually.
@@ -24,22 +35,35 @@ All notable changes to this project will be documented in this file.
 
 ### Refactoring
 
+* **Driver instance state**: added `powerShellRestartPromise?: Promise<void>` field on `NovaWindows2Driver` to dedupe concurrent restart attempts.
+* **PS-session helpers**: extracted `isPowerShellAlive(driver)` predicate and `ensurePowerShellSession(driver)` recovery helper in `lib/commands/powershell.ts`.
 * **Code quality**: Exported `ModifierKeyName` type (replaces 4 inline unions), added `MODIFIER_KEY_MAP` and `CLICK_TYPE_BUTTON_MAP` module constants (replaces 2 inline object literals).
 * **setValue**: Extracted 4 copy-paste modifier switch-arms (~60 lines) into a single `toggleModifier(key, char)` closure.
 * **Naming**: Renamed `$cx`/`$cy` to `$centerX`/`$centerY` in `GET_ELEMENT_LEGACY_PROPERTY`; kept short form in `GET_ALL_ELEMENT_PROPERTIES`.
+* **Scripts** (`scripts/local/`):
+  * `build_deploy_restart.ps1` rewritten with `Invoke-RemotePs` / `Invoke-RemoteScp` helpers (eliminates ~6 inline `[Convert]::ToBase64String` boilerplate blocks); new flags `-SkipBuild`, `-SkipInstall`, `-NoRestart`, `-RestartOnly`; auto-counted step numbering; per-step `$LASTEXITCODE` validation; remote `Write-Host` → `Write-Output` so output renders once (no CLIXML noise, no duplicate lines); new `npm install --omit=dev` step (fixes first-deploy missing-`@appium/base-driver` failure).
+  * `copy_log.ps1` rewritten: parameterized `-RemoteHost` / `-RemoteUser` (defaults via `$env:TARGET_*`, matches deploy script); added `-Tail N` and `-Follow` modes; per-host log paths (`log/appium_server-<host>.log`).
+  * `Restart_Appium_Remotely.ps1` deleted (obsolete; superseded by `build_deploy_restart.ps1 -RestartOnly`).
 
 ### Tests
 
-* **Suite growth**: 594 passing → **880 passing, 0 failing** (+287 tests).
+* **Suite growth**: 594 → **880 passing, 0 failing** (+287 tests).
 * **9 new spec files**: `util.spec.ts`, `core.spec.ts`, `regex.spec.ts`, `app.spec.ts`, `element.spec.ts`, `actions.spec.ts`, `extension.spec.ts`, `extension-routing.spec.ts`, `extension-validation.spec.ts`.
+* **Pattern-handler tests adjusted**: four `extension.spec.ts` tests (`patternIsMultiple` ×3, `patternSetValue` ×3) updated to account for the new `ensureElementResolved` cache-check call that `resolvePatternElement` now makes before each pattern command — convention is `commands[0]` = cache check (return `'False'` for cache-hit), `commands[1+]` = real pattern calls.
 * **Pre-existing failures fixed**: 4 tests in `getproperty.spec.ts` / `powershell.spec.ts` updated to match the `MSAAHelper → Win32Helper` / `SetForegroundWindow → BringToForeground` refactors and the variable-name distinction in the legacy property builder.
-* **Regression tests**: Each bug fix carries a focused regression test.
+* **Regression tests**: each bug fix carries a focused regression test.
 
 ### Docs
 
-* Added `PROJECT_COMPARISON.md` — purpose + feature overview, comparison vs upstream.
-* Added `UPSTREAM_MERGE_NOTES.md` — merged/skipped upstream changes with reasoning.
-* Added `CHANGES_1.2.0.md` — detailed release notes.
+* **Restructure**: root-level docs consolidated under `docs/` and `tests/`. New layout:
+  * `docs/commands.md` — merged `app-commands.md` + `element-commands.md` + `action-sequences.md`.
+  * `docs/extensions.md` — merged `extension-commands.md` + `powershell-commands.md` + `screen-recording.md`.
+  * `docs/reference.md` — merged `architecture.md` + new `functions.md` (function-level inventory of `lib/`).
+  * `docs/project-overview.md` — absorbed `migration_to_novawindows2.md` + `upstream-merge-notes.md`.
+  * `docs/releases/1.1.9.md` — moved from root `CHANGES_1.2.0.md` and renamed to match the actual published version.
+  * `tests/E2E_TEST_PLAN.md`, `tests/results/`, `tests/analyze/` — moved from root.
+* **`docs/index.md`**: TOC restructured into "Usage" + "Internals & Reference" + "Releases" sections.
+* **New: `docs/code-review/2026-05-08.md`** — multi-agent static review tracker. 21 findings (3 critical/high, 9 medium, 8 low/notable, 1 PS auto-restart). Per-finding status (🔴 Open / 🟢 Fixed / ✅ False positive). 7 fixes landed this release; 13 remain open as documented follow-ups.
 
 ## [1.1.7] (2026-03-20)
 
