@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.10] (2026-05-08)
+
+### Bug Fixes
+
+* **Missing runtime dependencies** (`package.json`): `asyncbox` and `teen_process` were imported at runtime by `lib/commands/screen-recorder.ts` but never declared in `dependencies`. They resolved on the developer machine via the broader Appium-ecosystem `node_modules` tree, but a fresh `appium driver install --source=npm appium-novawindows2-driver` on a clean host failed with `Cannot find module 'asyncbox'`, and the driver did not load. Added both packages to `dependencies`.
+
+  Reproduction (1.1.9): `appium driver install --source=npm appium-novawindows2-driver` → start Appium → `Could not load driver 'novawindows2', so it will not be available. Error: Cannot find module 'asyncbox'`.
+
+  No source changes — only `package.json` updated. 1.1.10 is a hotfix for the publish manifest of 1.1.9.
+
 ## [1.1.9] (2026-05-08)
 
 This release bundles two batches of work that landed before publish: the upstream-sync + W3C-commands batch (originally tagged "1.2.0" internally) and the code-review-driven hardening batch (PS auto-restart, security, consistency fixes).

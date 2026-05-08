@@ -1,6 +1,6 @@
 {
   "name": "appium-novawindows2-driver",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -41,8 +41,10 @@
     "appium": "^3.1.0"
   },
   "dependencies": {
+    "asyncbox": "^6.1.0",
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
+    "teen_process": "^4.1.1",
     "xpath-analyzer": "^3.0.1"
   },
   "optionalDependencies": {
