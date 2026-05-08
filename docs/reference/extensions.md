@@ -719,3 +719,78 @@ driver.quit()
 - If the session ends while a recording is in progress (e.g., due to a crash), the recording is forcefully stopped and the temporary file is cleaned up automatically.
 - The video uses the `libx264` codec with YUV 4:2:0 pixel format for broad compatibility.
 - The `movflags +faststart` flag is used so the video is streamable without needing to download the full file.
+
+---
+
+## Security model
+
+Most extension commands are **safe by default** — they manipulate UIA elements within the targeted application, no different from a real user.
+
+Three categories require explicit security relaxation:
+
+### Privileged: PowerShell escape hatch
+
+`execute_script("powershell", ...)` runs arbitrary PowerShell in the driver's session. This is **privileged** — Appium gates it via the `power_shell` insecure feature flag.
+
+Enable on the Appium command line:
+
+```bash
+appium --allow-insecure power_shell             # allow only this feature
+# or
+appium --relaxed-security                       # allow all insecure features
+```
+
+### Sensitive: clipboard
+
+`windows: getClipboard` / `windows: setClipboard` access the user's clipboard, which may contain credentials, API keys, or other sensitive data left there by other applications. Not gated by a feature flag, but treat the data carefully — don't log clipboard contents in test artefacts.
+
+### Untrusted input — argument validation
+
+These extensions accept user-controlled string input that gets interpolated into PowerShell. The driver validates them strictly:
+
+| Command | Validation |
+|---|---|
+| `windows: cacheRequest` | `treeFilter` parsed via the [DSL](./finding-elements.md#the--windows-uiautomation-selector-dsl). Malformed input → `InvalidArgumentError` |
+| `windows: setProcessForeground` | `process` name is interpolated into a `Get-Process -Name '...'` call. Use safe characters only |
+| `pushFile` (in `commands.md`) | `data` validated as base64 since 1.1.9. `path` quotes single quotes (`'` → `''`). Closes a PS-injection vector — see [code-review #4](../code-review/2026-05-08.md) |
+
+If you're driving the driver from a context where extension args themselves are untrusted (e.g. accepting test scripts from end users), favour `appium:isolatedScriptExecution: true` for `powerShell` calls, and never pass untrusted strings through `windows: cacheRequest`'s `treeFilter`.
+
+## Choosing the right tool
+
+When multiple commands can do the same thing, pick the most direct.
+
+### Click vs invoke
+
+| Use | When |
+|---|---|
+| `element.click()` (W3C) | Standard interaction. Includes scroll-into-view + foreground + native mouse |
+| `windows: click` | Need modifier keys, multi-click, hold-duration, or coordinates instead of an element |
+| `windows: invoke` | Element exposes `InvokePattern` (most buttons do). Direct programmatic invoke — bypasses mouse, scroll, foreground |
+
+Programmatic `invoke` is fastest and most reliable but won't trigger UI behaviour that depends on actual mouse movement (hover effects, drag detection).
+
+### setValue vs keys
+
+| Use | When |
+|---|---|
+| `element.send_keys(...)` (W3C) | Standard text input. Goes through `setValue` — focus + type + ValuePattern fallback |
+| `windows: keys` | Need virtual key codes, fine-grained press/release timing, or text without focusing an element first |
+
+### Window state
+
+| Use | When |
+|---|---|
+| `driver.maximize_window()` (W3C) | Standard. Operates on the session's root window |
+| `windows: maximize` | Operates on a specific element (some apps have nested windows where the root isn't what you want) |
+
+### Recording
+
+Always via the extensions — there's no W3C standard for screen recording.
+
+## See also
+
+- [Commands](./commands.md) — W3C-standard commands (the safer alternative when there's overlap)
+- [Capabilities → PowerShell](./capabilities.md#powershell-capabilities) — `isolatedScriptExecution`, `powerShellCommandTimeout`
+- [Architecture → PowerShell session](../architecture/powershell-session.md) — how `powershell` calls actually run
+- [Error codes](./error-codes.md) — what `UnknownError` from a `windows:*` command actually means

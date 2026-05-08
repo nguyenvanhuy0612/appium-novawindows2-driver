@@ -486,3 +486,40 @@ ActionChains(driver).drag_and_drop(source, target).perform()
 element = driver.find_element(AppiumBy.NAME, "File")
 ActionChains(driver).context_click(element).perform()
 ```
+
+---
+
+## Error responses
+
+W3C-standard errors that the commands above can return. Full reference in [Error codes](./error-codes.md).
+
+| Command | Possible errors |
+|---|---|
+| `findElement` | `NoSuchElementError`, `InvalidSelectorError`, `InvalidArgumentError` (unknown strategy), `TimeoutError` |
+| `setWindow` | `NoSuchWindowError` (after 20 retries) |
+| `click`, `setValue`, `clear`, `getProperty` etc. on element | `NoSuchElementError` (stale element id), `UnknownError` (PS-side failure) |
+| `setValue` | `InvalidArgumentError` (modifier-key validation) |
+| `setWindowRect` | `InvalidArgumentError` (negative width/height), `NoSuchWindowError` (no root) |
+| `maximizeWindow` / `minimizeWindow` / `closeApp` | `NoSuchWindowError` (no root), `UnknownError` (WindowPattern unavailable on root) |
+| `launchApp` | `InvalidArgumentError` (no `app` cap set), `UnknownError` (window didn't appear in time) |
+| Any element command after a PS-session crash | `NoSuchElementError` (element table cleared by auto-restart) |
+
+## Performance notes
+
+| Command | Cost characteristic |
+|---|---|
+| `getPageSource()` | Grows with subtree depth × element count. On a heavy desktop tree with `app: 'root'`, can take 1–5 s. Anchor at a window when possible |
+| `getProperty('all')` | Reads ~30+ properties + pattern availability flags + MSAA attributes. ~50–100 ms per element. Use sparingly |
+| `getProperty('Name')` / single property | ~10–20 ms per call |
+| `click()` | ~50–200 ms — includes `BringToForeground`, scroll-into-view, optional easing |
+| `setValue()` | Linear in characters. With default `typeDelay: 0`, ~5 ms per character |
+| `findElement` (by `accessibility id`) | Fastest — single PropertyCondition, ~20–50 ms |
+| `findElement` (by deep XPath) | Slowest — depends heavily on push-down. See [Finding Elements → performance](./finding-elements.md#xpath-performance) |
+| `getElementScreenshot()` | ~100–300 ms — Graphics.CopyFromScreen + PNG encode |
+
+## See also
+
+- [Extensions](./extensions.md) — `windows:*` extension commands (covers click, hover, scroll, patterns, recording, clipboard, etc.)
+- [Finding Elements](./finding-elements.md) — how to locate elements before invoking commands
+- [Error codes](./error-codes.md) — full error reference with causes and fixes
+- [Capabilities → Interaction](./capabilities.md#interaction-capabilities) — `smoothPointerMove`, `typeDelay`, etc.
