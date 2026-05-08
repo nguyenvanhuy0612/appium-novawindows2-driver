@@ -4,13 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [1.1.10] (2026-05-08)
 
+Hotfix release. **1.1.9 published to npm fails to load on a fresh `appium driver install`** with `Cannot find module 'asyncbox'`. Driver works locally (the dev `node_modules` tree happens to satisfy these via Appium's own deps) but installs from npm only get declared deps.
+
 ### Bug Fixes
 
-* **Missing runtime dependencies** (`package.json`): `asyncbox` and `teen_process` were imported at runtime by `lib/commands/screen-recorder.ts` but never declared in `dependencies`. They resolved on the developer machine via the broader Appium-ecosystem `node_modules` tree, but a fresh `appium driver install --source=npm appium-novawindows2-driver` on a clean host failed with `Cannot find module 'asyncbox'`, and the driver did not load. Added both packages to `dependencies`.
+* **Screen-recording dependencies not declared** (`package.json` + `lib/commands/screen-recorder.ts`): `asyncbox` (`waitForCondition`) and `teen_process` (`SubProcess`) were imported eagerly at the top of `screen-recorder.ts`, which is itself eagerly re-exported by `lib/commands/index.ts`. A missing import there takes down the whole driver, not just the recording feature.
 
-  Reproduction (1.1.9): `appium driver install --source=npm appium-novawindows2-driver` → start Appium → `Could not load driver 'novawindows2', so it will not be available. Error: Cannot find module 'asyncbox'`.
+  **Fixed with the "fully optional recording stack" pattern** (matching the pre-existing `ffmpeg-static` handling, which has no Win-ARM64 prebuilt and is therefore already optional):
+  * `asyncbox` and `teen_process` declared as `optionalDependencies`. Win-ARM64 hosts (or any install where recording isn't needed) skip them.
+  * `screen-recorder.ts` switched to **lazy-require** via a `loadRecordingDeps()` helper called inside `start()` rather than at module load. If either package is missing the helper throws `Screen recording is not available: optional dependency X is not installed. Install with: npm i asyncbox teen_process ffmpeg-static`.
+  * Driver now loads cleanly on any architecture without the recording stack; only `windows: startRecordingScreen` / `stopRecordingScreen` fail (with an actionable error) if invoked without the deps.
 
-  No source changes — only `package.json` updated. 1.1.10 is a hotfix for the publish manifest of 1.1.9.
+  **Behavior matrix**:
+
+  | Scenario | Result |
+  | :--- | :--- |
+  | Win-x64 with full recording stack | ✅ recording works |
+  | Win-x64, npm hiccup → `asyncbox` missing | ✅ driver loads; `startRecordingScreen` throws clean error |
+  | Win-ARM64, recording deps intentionally skipped | ✅ driver loads; recording calls throw clean error |
+  | Win-ARM64, deps installed but no ARM FFmpeg binary | ✅ driver loads; recording call throws "ffmpeg-static binary missing or not supported on this architecture" |
+
+  Tracked as finding #22 in [`docs/code-review/2026-05-08.md`](docs/code-review/2026-05-08.md#22--undeclared-runtime-dependencies-asyncbox--teen_process).
 
 ## [1.1.9] (2026-05-08)
 

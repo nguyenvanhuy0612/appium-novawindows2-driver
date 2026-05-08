@@ -1,8 +1,45 @@
 import type { AppiumLogger } from '@appium/types';
 import { fs, net, system, util, tempDir } from 'appium/support';
-import { waitForCondition } from 'asyncbox';
-import { SubProcess } from 'teen_process';
 import { getBundledFfmpegPath } from '../util';
+
+// asyncbox and teen_process are optionalDependencies so a Win-ARM64 install
+// (or any host that doesn't need recording) can skip them. They're loaded
+// lazily here so the driver itself loads cleanly even when they're absent;
+// only the start/stop recording paths actually need them.
+type WaitForCondition = (
+    cond: () => Promise<boolean>,
+    opts: { waitMs: number; intervalMs: number },
+) => Promise<void>;
+type SubProcessCtor = new (
+    cmd: string,
+    args: string[],
+    opts?: Record<string, unknown>,
+) => any;
+
+let _recordingDeps: { waitForCondition: WaitForCondition; SubProcess: SubProcessCtor } | null = null;
+function loadRecordingDeps() {
+    if (_recordingDeps) return _recordingDeps;
+    let waitForCondition: WaitForCondition;
+    let SubProcess: SubProcessCtor;
+    try {
+        ({ waitForCondition } = require('asyncbox'));
+    } catch {
+        throw new Error(
+            "Screen recording is not available: optional dependency 'asyncbox' is not installed. "
+            + 'Install the recording stack with: npm i asyncbox teen_process ffmpeg-static',
+        );
+    }
+    try {
+        ({ SubProcess } = require('teen_process'));
+    } catch {
+        throw new Error(
+            "Screen recording is not available: optional dependency 'teen_process' is not installed. "
+            + 'Install the recording stack with: npm i asyncbox teen_process ffmpeg-static',
+        );
+    }
+    _recordingDeps = { waitForCondition, SubProcess };
+    return _recordingDeps;
+}
 
 const RETRY_PAUSE = 300;
 const RETRY_TIMEOUT = 5000;
@@ -68,7 +105,7 @@ export async function uploadRecordedMedia(
 export class ScreenRecorder {
     private log: AppiumLogger;
     private _videoPath: string;
-    private _process: SubProcess | null = null;
+    private _process: any = null;
     private _fps: number;
     private _audioInput?: string;
     private _captureCursor: boolean;
@@ -122,6 +159,7 @@ export class ScreenRecorder {
     }
 
     async start(): Promise<void> {
+        const { SubProcess, waitForCondition } = loadRecordingDeps();
         const ffmpegPath = await requireFfmpegPath();
 
         const args: string[] = [

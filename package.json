@@ -41,14 +41,14 @@
     "appium": "^3.1.0"
   },
   "dependencies": {
-    "asyncbox": "^6.1.0",
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
-    "teen_process": "^4.1.1",
     "xpath-analyzer": "^3.0.1"
   },
   "optionalDependencies": {
-    "ffmpeg-static": "^5.3.0"
+    "asyncbox": "^6.1.0",
+    "ffmpeg-static": "^5.3.0",
+    "teen_process": "^4.1.1"
   },
   "appium": {
     "driverName": "novawindows2",
