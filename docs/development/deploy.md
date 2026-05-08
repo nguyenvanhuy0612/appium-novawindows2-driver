@@ -225,6 +225,48 @@ Faster — skips the build + npm install since you only changed PowerShell.
 }
 ```
 
+## Force-reinstall from npm (skip the deploy script)
+
+For switching a VM from a `--source=local` linked install to a published version on npm, or for picking up a hotfix without rebuilding locally:
+
+```powershell
+# 1. Stop Appium so files aren't locked
+taskkill /f /fi "windowtitle eq AppiumServer" /t 2>$null
+taskkill /f /im node.exe /t 2>$null
+
+# 2. Clear the registry entry (otherwise a fresh `install` may error
+#    "already installed" on top of a stale --source=local link)
+appium driver uninstall novawindows2 2>$null
+
+# 3. Nuke the driver directory + npm caches under ~/.appium
+$p = "$env:USERPROFILE\.appium\node_modules"
+ri -r -fo -ea 0 "$p\appium-novawindows2-driver","$p\.cache","$p\.package-lock.json"
+
+# 4. Clean the user-global npm cache and install latest from npm
+npm cache clean --force
+appium driver install --source=npm appium-novawindows2-driver@latest
+
+# 5. Verify, then restart Appium (use the Scheduled Task pattern from the deploy script)
+appium driver list --installed
+```
+
+After step 5, restart Appium via the same Scheduled-Task pattern step 8 of the deploy script uses (Session 1 vs Session 0 — see [§ Restart Appium](#8-restart-appium--scheduled-task--why)).
+
+**One-liner shorthand** (your command-line form, condensed):
+
+```powershell
+appium driver uninstall novawindows2 2>$null; $p="$env:USERPROFILE\.appium\node_modules"; ri -r -fo -ea 0 "$p\appium-novawindows2-driver","$p\.cache","$p\.package-lock.json"; npm cache clean --force; appium driver install --source=npm appium-novawindows2-driver@latest
+```
+
+> **Why step 2 matters**: skipping the `uninstall` works on a clean VM but fails partially on a VM where the driver was previously installed via `--source=local` (e.g. through `build_deploy_restart.ps1`). The new install completes the npm fetch but registry update can be inconsistent — symptom is a successful `appium driver list --installed` showing the new version but a freshly-launched Appium not loading the driver. Running `appium driver uninstall novawindows2` first removes both the registry entry and any stale linked path, putting the install into a clean state.
+
+**Run remotely via SSH** (same effect as on-host execution):
+
+```powershell
+$cmd = "appium driver uninstall novawindows2 2>$null; ri -r -fo -ea 0 `"`$env:USERPROFILE\.appium\node_modules\appium-novawindows2-driver`",`"`$env:USERPROFILE\.appium\node_modules\.cache`",`"`$env:USERPROFILE\.appium\node_modules\.package-lock.json`"; npm cache clean --force; appium driver install --source=npm appium-novawindows2-driver@latest"
+ssh admin@<VM> "powershell -Command `"$cmd`""
+```
+
 ## Troubleshooting
 
 ### `Cannot find module '@appium/base-driver'` on first deploy
