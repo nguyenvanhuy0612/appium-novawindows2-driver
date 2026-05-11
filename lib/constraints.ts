@@ -56,7 +56,15 @@ export const UI_AUTOMATION_DRIVER_CONSTRAINTS = {
     },
     'ms:forcequit': {
         isBoolean: true,
-    }
+    },
+    // When false, PS commands that write to stderr no longer reject the
+    // call; only native-exe non-zero exits (detected via $LASTEXITCODE)
+    // and process death still do. Useful for user scripts that invoke
+    // tools like curl / git / ffmpeg, which write progress / banners to
+    // stderr while succeeding. Defaults to true (current behaviour).
+    treatStderrAsError: {
+        isBoolean: true,
+    },
 } as const satisfies Constraints;
 
 export default UI_AUTOMATION_DRIVER_CONSTRAINTS;
