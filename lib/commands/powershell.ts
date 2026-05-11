@@ -238,21 +238,31 @@ function waitForCommandCompletion(
         driver.powerShellCommandContext = ctx;
         powerShell.once('close', onClose);
 
-        // Write the framed command as five lines:
+        // Write the framed command as four lines (no & { ... } wrap — see
+        // below for why):
         //   1. $LASTEXITCODE = 0        - reset the native-exit slot so we
         //                                 don't pick up a stale value from
         //                                 an earlier command in the session.
-        //   2. & { <user command> }     - subshell wrap prevents an open
-        //                                 pipe/brace from absorbing the
-        //                                 marker lines.
-        //   3. if ($LASTEXITCODE -ne 0) { ... } - if the user command
-        //                                 invoked a native exe that exited
-        //                                 non-zero, surface that as a
-        //                                 "[NativeExit] N" line on stderr so
-        //                                 check() can detect it. PS cmdlet
-        //                                 failures don't touch
-        //                                 $LASTEXITCODE; they already write
-        //                                 to stderr.
+        //   2. <user command>           - sent raw. If the command contains
+        //                                 'using namespace', defines vars
+        //                                 we need to persist (e.g.
+        //                                 $cacheRequest, $elementTable),
+        //                                 or relies on session-scope state,
+        //                                 wrapping in & { } would break it.
+        //                                 In particular, 'using namespace'
+        //                                 inside & { } silently hangs the
+        //                                 PS stdin parser.
+        //                                 Trade-off: a malformed user
+        //                                 command (open pipe, unclosed
+        //                                 brace) will absorb the marker
+        //                                 lines and time out. That's the
+        //                                 caller's bug, surfaced as a 60s
+        //                                 timeout rather than silent
+        //                                 corruption.
+        //   3. if ($LASTEXITCODE -ne 0) { ... } - emit "[NativeExit] N" on
+        //                                 stderr when the command's last
+        //                                 native exe exited non-zero, so
+        //                                 check() can surface it.
         //   4. Write-Output "<marker>"  - stdout completion marker.
         //   5. [Console]::Error.WriteLine("<marker>") - stderr completion
         //                                 marker; resolving on both ensures
@@ -265,7 +275,7 @@ function waitForCommandCompletion(
         // command timeout — no per-write callback needed.
         try {
             powerShell.stdin.write(`$LASTEXITCODE = 0\n`);
-            powerShell.stdin.write(`& { ${command} }\n`);
+            powerShell.stdin.write(`${command}\n`);
             powerShell.stdin.write(`if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("[NativeExit] $LASTEXITCODE") }\n`);
             powerShell.stdin.write(`Write-Output "${marker}"\n`);
             powerShell.stdin.write(`[Console]::Error.WriteLine("${marker}")\n`);
@@ -407,21 +417,30 @@ export async function sendIsolatedPowerShellCommand(this: NovaWindows2Driver, co
 // ============================================================================
 
 /**
- * Init script broken into named stages. Each stage is sent as its own framed
- * command so a failure surfaces with the stage name, and per-stage timing
- * shows up in the debug log.
+ * Init script as one combined script. Sent as a single sendPowerShellCommand
+ * call so that:
+ *   - `using namespace` at the top applies to the whole script
+ *   - $cacheRequest, $elementTable and other variables defined here persist
+ *     to subsequent commands (each line is part of the same script-scope)
+ *   - Add-Type assembly loads complete before later lines reference the
+ *     short type names.
+ *
+ * Earlier 1.1.11 split this into stages with individual framed sends; that
+ * broke `using namespace System.Windows.Automation` (which silently hung the
+ * PS stdin parser when wrapped, and may not persist across REPL inputs even
+ * unwrapped). Reverted to the upstream-style single-block init.
  */
-const INIT_STAGES: ReadonlyArray<{ name: string; script: string }> = [
-    { name: 'utf8-encoding', script: SET_UTF8_ENCODING },
-    { name: 'using-namespace', script: USE_UI_AUTOMATION_CLIENT },
-    { name: 'add-assemblies', script: ADD_NECESSARY_ASSEMBLIES },
-    { name: 'win32-helper', script: WIN32_HELPER_SCRIPT },
-    { name: 'cache-request', script: INIT_CACHE_REQUEST },
-    { name: 'element-table', script: INIT_ELEMENT_TABLE },
-    { name: 'page-source', script: PAGE_SOURCE },
-    { name: 'find-children', script: FIND_CHILDREN_RECURSIVELY },
-    { name: 'find-descendants', script: FIND_DESCENDANTS_FUNCTIONS },
-];
+const INIT_SCRIPT: string = [
+    USE_UI_AUTOMATION_CLIENT, // 'using namespace ...' must come first
+    SET_UTF8_ENCODING,
+    ADD_NECESSARY_ASSEMBLIES,
+    WIN32_HELPER_SCRIPT,
+    INIT_CACHE_REQUEST,
+    INIT_ELEMENT_TABLE,
+    PAGE_SOURCE,
+    FIND_CHILDREN_RECURSIVELY,
+    FIND_DESCENDANTS_FUNCTIONS,
+].join('\n');
 
 export async function startPowerShellSession(this: NovaWindows2Driver): Promise<void> {
     this.log.debug('Starting PowerShell session...');
@@ -497,21 +516,11 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
             await sendPowerShellCommand.call(this, `Set-Location -Path '${expandedDir}'`);
         }
 
-        // Initialise PS environment one stage at a time. Failures point to
-        // the offending stage; timings highlight slow ones.
+        // Init runs as ONE combined script so `using namespace` applies to
+        // the whole block and variables persist for later commands.
         this.log.info('Initializing PowerShell environment...');
         const initStart = Date.now();
-        for (const stage of INIT_STAGES) {
-            const stageStart = Date.now();
-            try {
-                await sendPowerShellCommand.call(this, stage.script);
-            } catch (e: any) {
-                throw new errors.UnknownError(
-                    `PowerShell init stage '${stage.name}' failed: ${e?.message ?? e}`
-                );
-            }
-            this.log.debug(`  init stage '${stage.name}' completed in ${Date.now() - stageStart}ms`);
-        }
+        await sendPowerShellCommand.call(this, INIT_SCRIPT);
         this.log.debug(`PowerShell environment initialized in ${Date.now() - initStart}ms`);
 
         // Setup root element based on capabilities

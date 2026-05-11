@@ -116,7 +116,7 @@ describe('PowerShell Runtime', () => {
     // -----------------------------------------------------------------------
 
     describe('command framing', () => {
-        it('wraps the command in & { ... } and writes stdout + stderr markers', async () => {
+        it('sends the user command raw and writes stdout + stderr markers', async () => {
             const ps = new FakePowerShell();
             const driver = makeDriver(ps);
 
@@ -124,7 +124,11 @@ describe('PowerShell Runtime', () => {
             const marker = await awaitMarker(ps);
 
             const written = ps.stdin.text();
-            expect(written).to.contain('& { Get-Process }');
+            // Command is NOT wrapped in & { } — that wrap broke `using namespace`
+            // and variable persistence across calls. See powershell.ts framing
+            // comment for the trade-off.
+            expect(written).to.contain('Get-Process');
+            expect(written).to.not.contain('& { Get-Process }');
             expect(written).to.contain(`Write-Output "${marker}"`);
             expect(written).to.contain(`[Console]::Error.WriteLine("${marker}")`);
 
@@ -379,8 +383,11 @@ describe('PowerShell Runtime', () => {
 
             // Only the first command should have written to stdin so far.
             const marker1 = await awaitMarker(ps);
-            expect(ps.stdin.text()).to.contain('& { A }');
-            expect(ps.stdin.text()).to.not.contain('& { B }');
+            // Command lines are written as plain "$cmd\n", surrounded by the
+            // $LASTEXITCODE reset and marker lines.
+            const writtenForA = ps.stdin.text();
+            expect(writtenForA).to.match(/\nA\n/);
+            expect(writtenForA).to.not.match(/\nB\n/);
 
             // Finish A
             ps.stdout.push(`A-out\n${marker1}\n`);
@@ -390,7 +397,7 @@ describe('PowerShell Runtime', () => {
             // Now B should start. Its marker is different.
             const marker2 = await awaitMarker(ps, marker1);
             expect(marker2).to.not.equal(marker1);
-            expect(ps.stdin.text()).to.contain('& { B }');
+            expect(ps.stdin.text()).to.match(/\nB\n/);
 
             ps.stdout.push(`B-out\n${marker2}\n`);
             ps.stderr.push(`${marker2}\n`);
