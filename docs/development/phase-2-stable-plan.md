@@ -25,14 +25,29 @@ The version bump to `2.0.0` signals "we've made this robust" — the API surface
 | | |
 |---|---|
 | npm | `1.1.13` published, `1.1.11` deprecated |
-| Git | `main` at `80bdb12` (after the v1.1.13 release notes commit), all tags pushed |
+| Git | `main` at `514c1a8` (after the workflows-disabled commit), all tags pushed |
 | Tests | 906 unit + 82 stable E2E, all green |
-| CI | `.github/workflows/lint-build.yml` runs lint+build on Ubuntu; **does NOT run `npm test`**, **does NOT run E2E** |
+| CI | **DISABLED.** Both `lint-build.yml` and `release.yml` were moved to `.github/workflows.disabled/` on 2026-05-12 (commit `514c1a8`). GitHub Actions fires nothing on PR or push. Files preserved for reference; see `.github/workflows.disabled/README.md` for re-enable instructions. |
 | Open backlog | [`stable-readiness-review.md` §10](stable-readiness-review.md#10-stable-cut-go-no-go-checklist) — 5 🔴/🟠 items still open |
+
+> **Note on the CI disable:** the workflows in `workflows.disabled/` are starting points, not endpoints — they only do lint+build on Ubuntu. They lack `npm test`, the E2E suite, and PSScriptAnalyzer. Phase 2's Day 1 plan was already going to add those; the disable just means Day 1 also re-enables the workflows (one `git mv`) before extending them.
 
 ## 3. Day-by-day plan
 
-### Day 1 — CI hardening (highest leverage, lowest risk)
+### Day 1 — CI re-enable + hardening (highest leverage, lowest risk)
+
+**Task 1.0 — Re-enable the workflow files** (~2 min)
+
+CI was disabled at the end of Phase 1 (commit `514c1a8`). Move the files back so GitHub Actions sees them:
+
+```sh
+git mv .github/workflows.disabled/lint-build.yml .github/workflows/
+git mv .github/workflows.disabled/release.yml .github/workflows/
+# leave the README in .github/workflows.disabled/ if you want a record of
+# the disable; or git rm it
+```
+
+Then continue with Tasks 1.1+ to extend what they do.
 
 **Task 1.1 — Wire `npm test` into the PR workflow** (~30 min)
 
@@ -298,7 +313,11 @@ When to **abort** Phase 2:
 ```sh
 # Confirm starting state
 git status                          # → clean
-git log --oneline -3                # → 80bdb12 docs(releases)...
+git log --oneline -3                # → 514c1a8 ci: disable...
+
+# Day 1 task 1.0 — re-enable the workflows (2 min):
+git mv .github/workflows.disabled/lint-build.yml .github/workflows/
+git mv .github/workflows.disabled/release.yml .github/workflows/
 
 # Day 1 task 1.1 (5 min):
 $EDITOR .github/workflows/lint-build.yml   # add npm test step
@@ -311,7 +330,7 @@ $EDITOR .github/workflows/lint-build.yml   # add windows-latest job
 $EDITOR package.json                # add "engines": { "node": ">=18" }
 
 # Commit + open PR for end-of-day-1 checkpoint
-git commit -am "ci: gate PRs on npm test, PSScriptAnalyzer, Node>=18"
+git commit -am "ci: re-enable workflows, gate PRs on npm test, PSScriptAnalyzer, Node>=18"
 git push origin <branch>
 gh pr create --fill
 ```
