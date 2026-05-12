@@ -12,7 +12,10 @@ import { remote, type Browser } from 'webdriverio';
 import { expect } from 'chai';
 
 const APPIUM_URL = process.env.APPIUM_URL ?? 'http://127.0.0.1:4723';
-const TARGET_APP = process.env.TARGET_APP ?? 'C:\\Windows\\System32\\notepad.exe';
+// Default to 'Root' (desktop): all assertions are against PS execution,
+// no app-specific UI is needed. shouldCloseApp is a no-op when app is Root
+// (see driver.ts:268), so the cap setting is harmless.
+const TARGET_APP = process.env.TARGET_APP ?? 'Root';
 const url = new URL(APPIUM_URL);
 
 function buildOpts(extra: Record<string, any> = {}) {

@@ -21,7 +21,9 @@ import { remote, type Browser } from 'webdriverio';
 import { expect } from 'chai';
 
 const APPIUM_URL = process.env.APPIUM_URL ?? 'http://127.0.0.1:4723';
-const TARGET_APP = process.env.TARGET_APP ?? 'C:\\Windows\\System32\\notepad.exe';
+// Default to 'Root' (desktop): all assertions are against PS round-trips,
+// no app-specific UI is needed. Skipping the launch saves ~6s per session.
+const TARGET_APP = process.env.TARGET_APP ?? 'Root';
 const url = new URL(APPIUM_URL);
 
 /** Build a PS expression that constructs a unicode string from codepoints. */

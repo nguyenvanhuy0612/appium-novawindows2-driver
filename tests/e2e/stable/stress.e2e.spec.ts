@@ -14,7 +14,9 @@ import { remote, type Browser } from 'webdriverio';
 import { expect } from 'chai';
 
 const APPIUM_URL = process.env.APPIUM_URL ?? 'http://127.0.0.1:4723';
-const TARGET_APP = process.env.TARGET_APP ?? 'C:\\Windows\\System32\\notepad.exe';
+// Default to 'Root' (desktop): exercises a richer UIA tree than Notepad
+// (taskbar + system tray + multiple windows), and skips the ~6s app launch.
+const TARGET_APP = process.env.TARGET_APP ?? 'Root';
 const url = new URL(APPIUM_URL);
 
 describe('NovaWindows2 — stress & robustness', function () {

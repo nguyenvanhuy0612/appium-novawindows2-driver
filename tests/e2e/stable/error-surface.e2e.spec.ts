@@ -18,7 +18,10 @@ import { remote, type Browser } from 'webdriverio';
 import { expect } from 'chai';
 
 const APPIUM_URL = process.env.APPIUM_URL ?? 'http://127.0.0.1:4723';
-const TARGET_APP = process.env.TARGET_APP ?? 'C:\\Windows\\System32\\notepad.exe';
+// Default to 'Root' (desktop): negative-path tests don't need an app launch,
+// and skipping it cuts ~6s of setup per session. Override with TARGET_APP if
+// you want to repro a Notepad-specific bug.
+const TARGET_APP = process.env.TARGET_APP ?? 'Root';
 const url = new URL(APPIUM_URL);
 
 /**
