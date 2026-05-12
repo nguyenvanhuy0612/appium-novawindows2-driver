@@ -1448,6 +1448,47 @@ describe('4.4: Number Functions (W3C §4.4)', () => {
     it('round(4.0) = 4', async () => {
         expect(await evalNum('round(4.0)')).to.equal(4);
     });
+
+    // --- W3C §4.4 implicit number() coercion ---
+    // Per spec, floor/ceiling/round take "number". Non-number arguments
+    // are coerced via number() implicitly: strings parse, booleans → 1/0,
+    // empty/unparseable → NaN. Previously the driver rejected non-numbers
+    // with InvalidArgumentError; this batch asserts the spec behaviour.
+    it('floor(string-as-number) coerces "3.7" → 3', async () => {
+        expect(await evalNum('floor("3.7")')).to.equal(3);
+    });
+
+    it('ceiling(string-as-number) coerces "3.2" → 4', async () => {
+        expect(await evalNum('ceiling("3.2")')).to.equal(4);
+    });
+
+    it('round(string-as-number) coerces "3.5" → 4', async () => {
+        expect(await evalNum('round("3.5")')).to.equal(4);
+    });
+
+    it('floor(boolean) coerces true → 1', async () => {
+        expect(await evalNum('floor(true())')).to.equal(1);
+    });
+
+    it('floor(boolean) coerces false → 0', async () => {
+        expect(await evalNum('floor(false())')).to.equal(0);
+    });
+
+    it('floor("not-a-number") → NaN', async () => {
+        expect(await evalNum('floor("abc")')).to.be.NaN;
+    });
+
+    it('ceiling("not-a-number") → NaN', async () => {
+        expect(await evalNum('ceiling("abc")')).to.be.NaN;
+    });
+
+    it('round("not-a-number") → NaN', async () => {
+        expect(await evalNum('round("abc")')).to.be.NaN;
+    });
+
+    it('floor(string-length("hello")) = 5 (already-numeric path still works)', async () => {
+        expect(await evalNum('floor(string-length("hello"))')).to.equal(5);
+    });
 });
 
 

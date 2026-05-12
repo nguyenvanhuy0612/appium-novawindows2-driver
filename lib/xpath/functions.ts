@@ -140,11 +140,17 @@ export async function handleFunctionCall<T>(name: FunctionName, context: Automat
                 throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'exactly 1 argument'));
             }
 
+            // XPath 1.0 §4.4: floor/ceiling/round take "number". Per the
+            // spec, non-number arguments are implicitly converted via
+            // number(): strings parse, booleans → 1/0, elements / unparseable
+            // strings → NaN, empty node-sets → NaN. Math.floor(NaN) === NaN,
+            // matching the spec output.
             const resultArray = await processArgs(args[0]);
-            const [num] = resultArray[0];
-            if (typeof num !== 'number') {
-                throw new errors.InvalidArgumentError(FUNCTION_ARGUMENT_ERROR.format(name, 'the first argument to be a number'));
-            }
+            const argResult = resultArray[0] ?? [];
+            // Multi-item node-set: take first per number() / string() semantics
+            // (matches the same treatment in the NUMBER/STRING case above).
+            const singleArg = argResult.length > 1 ? [argResult[0]] : argResult;
+            const [num] = convertProcessedExprNodesToNumbers(...singleArg);
 
             const mathMethodMap = {
                 [ROUND]: 'round',
