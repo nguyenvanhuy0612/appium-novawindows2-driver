@@ -128,10 +128,23 @@ export class PSCultureInfo extends PSObject {
     constructor(name: string, useUserOverride?: boolean)
     constructor(culture: number, useUserOverride?: boolean)
     constructor(nameOrCulture: string | number, useUserOverride?: boolean) {
-        if (typeof nameOrCulture !== 'string' || (typeof nameOrCulture === 'number' && nameOrCulture < 0)) {
-            throw new errors.InvalidArgumentError('PSCultureInfo accepts a string or positive integer value in the constructor.');
+        // Pre-fix the OR guard `typeof !== 'string' || (typeof === 'number' && < 0)`
+        // rejected every numeric value (the first clause fires on numbers),
+        // making the number overload unreachable. Now: accept string OR
+        // non-negative number; reject everything else.
+        const isString = typeof nameOrCulture === 'string';
+        const isNonNegativeNumber = typeof nameOrCulture === 'number'
+            && Number.isFinite(nameOrCulture)
+            && nameOrCulture >= 0;
+        if (!isString && !isNonNegativeNumber) {
+            throw new errors.InvalidArgumentError('PSCultureInfo accepts a string or non-negative integer value in the constructor.');
         }
 
-        super(/* ps1 */ `[System.Globalization.CultureInfo]::new(${typeof nameOrCulture === 'string' ? `'${nameOrCulture}'` : nameOrCulture}${useUserOverride !== undefined ? `$${useUserOverride}` : ''})`);
+        // Pre-fix the boolean append `${useUserOverride !== undefined ? `$${useUserOverride}` : ''}`
+        // produced PS like `::new('en-US'$true)` — missing the comma between
+        // arguments, which is a PS parse error. Add ', ' before the bool.
+        const cultureArg = isString ? `'${nameOrCulture}'` : String(nameOrCulture);
+        const overrideArg = useUserOverride !== undefined ? `, $${useUserOverride}` : '';
+        super(/* ps1 */ `[System.Globalization.CultureInfo]::new(${cultureArg}${overrideArg})`);
     }
 }

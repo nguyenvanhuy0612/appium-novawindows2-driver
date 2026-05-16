@@ -162,13 +162,20 @@ export function convertStringToCondition(selector: string): Condition {
         return replacementChar;
     });
 
-    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C1, (_, point: string, size: string) => {
+    // For RECT_PARAMETER_REGEX_C{1,3,4,5}, the outer regex *embeds* the inner
+    // matchers (Point / Size / Vector / floating-point number) verbatim, so
+    // each nested matcher's capture groups become flat numbered captures on
+    // the outer regex. The replaceAll callback receives them as positional
+    // args after the full match. Two pre-fix bugs lived here:
+    //   1. The callback signatures only declared 1-2 args (point/size as
+    //      strings) — they were actually getting the inner X/Y as strings.
+    //   2. The body re-ran the inner regex with `.groups` (unnamed groups
+    //      → undefined → fallback to []) → Number(undefined) = NaN.
+    // Both fixed below by reading the four flat captures directly.
+    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C1, (_, px: string, py: string, sw: string, sh: string) => {
+        // Rect(Point(x, y), Size(w, h)) — 4 numeric captures.
         const replacementChar = String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + processedItems.length);
-
-        const p = POINT_PARAMETER_REGEX.exec(point)?.groups ?? [];
-        const s = SIZE_PARAMETER_REGEX.exec(size)?.groups ?? [];
-
-        processedItems.push(new PSRect({ x: Number(p[0]), y: Number(p[1]), width: Number(s[0]), height: Number(s[1]) }));
+        processedItems.push(new PSRect({ x: Number(px), y: Number(py), width: Number(sw), height: Number(sh) }));
         return replacementChar;
     });
 
@@ -178,44 +185,34 @@ export function convertStringToCondition(selector: string): Condition {
         return replacementChar;
     });
 
-    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C3, (_, point1: string, point2: string) => {
+    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C3, (_, p1x: string, p1y: string, p2x: string, p2y: string) => {
+        // Rect(Point(x1, y1), Point(x2, y2)) — 4 numeric captures.
         const replacementChar = String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + processedItems.length);
-
-        const p1g = POINT_PARAMETER_REGEX.exec(point1)?.groups ?? [];
-        const p2g = POINT_PARAMETER_REGEX.exec(point2)?.groups ?? [];
-        const p1 = [Number(p1g[0]), Number(p1g[1])];
-        const p2 = [Number(p2g[0]), Number(p2g[1])];
-
-        const x = Math.min(p1[0], p2[0]);
-        const y = Math.min(p1[1], p2[1]);
-        const width = Math.abs(p2[0] - p1[0]);
-        const height = Math.abs(p2[1] - p1[1]);
+        const x = Math.min(Number(p1x), Number(p2x));
+        const y = Math.min(Number(p1y), Number(p2y));
+        const width = Math.abs(Number(p2x) - Number(p1x));
+        const height = Math.abs(Number(p2y) - Number(p1y));
 
         processedItems.push(new PSRect({ x, y, width, height }));
         return replacementChar;
     });
 
-    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C4, (_, point: string, vector: string) => {
+    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C4, (_, px: string, py: string, vx: string, vy: string) => {
+        // Rect(Point(x, y), Vector(vx, vy)) — 4 numeric captures.
         const replacementChar = String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + processedItems.length);
-
-        const p = POINT_PARAMETER_REGEX.exec(point)?.groups ?? [];
-        const v = VECTOR_PARAMETER_REGEX.exec(vector)?.groups ?? [];
-
-        const x = Number(v[0]) < 0 ? Number(p[0]) + Number(v[0]) : Number(p[0]);
-        const y = Number(v[1]) < 0 ? Number(p[1]) + Number(v[1]) : Number(p[1]);
-        const width = Number(v[0]) < 0 ? Math.abs(Number(v[0])) : Number(v[0]);
-        const height = Number(v[1]) < 0 ? Math.abs(Number(v[1])) : Number(v[1]);
+        const x = Number(vx) < 0 ? Number(px) + Number(vx) : Number(px);
+        const y = Number(vy) < 0 ? Number(py) + Number(vy) : Number(py);
+        const width = Number(vx) < 0 ? Math.abs(Number(vx)) : Number(vx);
+        const height = Number(vy) < 0 ? Math.abs(Number(vy)) : Number(vy);
 
         processedItems.push(new PSRect({ x, y, width, height }));
         return replacementChar;
     });
 
-    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C5, (_, point: string) => {
+    processedSelector = processedSelector.replaceAll(RECT_PARAMETER_REGEX_C5, (_, sw: string, sh: string) => {
+        // Rect(Size(w, h)) — 2 numeric captures.
         const replacementChar = String.fromCharCode(MAGIC_PLACEHOLDER_UNICODE_BEGIN + processedItems.length);
-
-        const p = POINT_PARAMETER_REGEX.exec(point)?.groups ?? [];
-
-        processedItems.push(new PSRect({ x: 0, y: 0, width: Number(p[0]), height: Number(p[1]) }));
+        processedItems.push(new PSRect({ x: 0, y: 0, width: Number(sw), height: Number(sh) }));
         return replacementChar;
     });
 

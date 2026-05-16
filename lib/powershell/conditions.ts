@@ -86,7 +86,10 @@ export class PropertyCondition extends Condition {
             } catch (e) {
                 if (value instanceof PSAutomationHeadingLevel && value.originalValue.toLowerCase() === AutomationHeadingLevel.NONE) {
                     value = new PSOrientationType(OrientationType.NONE);
-                } else if (!(value instanceof PSInt32) || Number(value.toString()) < 0 || Number(value.toString()) >= Object.keys(AutomationHeadingLevel).length) {
+                } else if (!(value instanceof PSInt32) || Number(value.toString()) < 0 || Number(value.toString()) >= Object.keys(OrientationType).length) {
+                    // Bound check must use OrientationType (the property type
+                    // we're validating), not AutomationHeadingLevel — they're
+                    // independent enums with different cardinalities.
                     throw e;
                 }
             }
@@ -98,7 +101,9 @@ export class PropertyCondition extends Condition {
             } catch (e) {
                 if (value instanceof PSOrientationType && value.originalValue.toLowerCase() === OrientationType.NONE) {
                     value = new PSAutomationHeadingLevel(AutomationHeadingLevel.NONE);
-                } else if (!(value instanceof PSInt32) || Number(value.toString()) < 0 || Number(value.toString()) >= Object.keys(OrientationType).length) {
+                } else if (!(value instanceof PSInt32) || Number(value.toString()) < 0 || Number(value.toString()) >= Object.keys(AutomationHeadingLevel).length) {
+                    // Bound check must use AutomationHeadingLevel (mirror of
+                    // the swap above).
                     throw e;
                 }
             }

@@ -697,8 +697,12 @@ async function sendMouseMoveInput(args: { x: number, y: number, relative: boolea
 
         // the lines below assume that the validation has been made on createSession
         if (easingFunction.startsWith('cubic-bezier')) {
-            const bezierArgs = /\((.*?)\)/.exec(easingFunction)?.groups?.[0]
-                .split(',').map((n) => parseFloat(n.trim())) ?? [0, 0, 1, 1];
+            // The regex has an unnamed capture group, so .groups is
+            // undefined. Read the first numbered capture (index 1) instead.
+            // Pre-fix this silently fell back to [0,0,1,1] (identity), so
+            // every cubic-bezier(...) caller got linear interpolation.
+            const bezierArgs = /\((.*?)\)/.exec(easingFunction)?.[1]
+                ?.split(',').map((n) => parseFloat(n.trim())) ?? [0, 0, 1, 1];
 
             calculatePoint = bezier.apply(bezierArgs);
         } else {
