@@ -569,16 +569,24 @@ export async function executeKeys(this: NovaWindows2Driver, keyActions: { action
     keyActions.forceUnicode ??= false;
 
     for (const action of keyActions.actions) {
-        if (Number(!!action.pause) + Number(!!action.text) + Number(!!action.virtualKeyCode) !== 1) {
-            throw new errors.InvalidArgumentError('Either pause, text or virtualKeyCode should be set.');
+        // Count fields that are explicitly *set* (not just truthy). `!!`
+        // rejected `pause: 0`, `text: ''`, `virtualKeyCode: 0` — none of
+        // those are absurd from an API standpoint, even if the runtime
+        // behaviour is a no-op.
+        const setCount =
+            Number(action.pause !== undefined)
+            + Number(action.text !== undefined)
+            + Number(action.virtualKeyCode !== undefined);
+        if (setCount !== 1) {
+            throw new errors.InvalidArgumentError('Exactly one of pause, text or virtualKeyCode must be set.');
         }
 
-        if (action.pause) {
+        if (action.pause !== undefined) {
             await sleep(action.pause);
             continue;
         }
 
-        if (action.virtualKeyCode) {
+        if (action.virtualKeyCode !== undefined) {
             if (action.down === undefined) {
                 sendKeyboardEvents([{
                     wVk: action.virtualKeyCode as VirtualKey,

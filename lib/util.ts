@@ -67,10 +67,18 @@ export class DeferredStringTemplate {
     }
 
     format(...args: any[]): string {
+        // A tagged template with N literals has N-1 substitutions interleaved
+        // between them (lit[0] sub[0] lit[1] sub[1] ... lit[N-1]). Walk the
+        // literals and only emit a substitution between consecutive literals.
+        // The previous implementation walked one slot too far and wrote a
+        // trailing `args[undefined]` whose stringification happened to join
+        // as empty — correct output but easy to misread.
         const out: string[] = [];
-        for (let i = 0, k = 0; i < this.literals.length; i++, k++) {
-            out[k] = this.literals[i];
-            out[++k] = args[this.substitutions[i]]?.toString();
+        for (let i = 0; i < this.literals.length; i++) {
+            out.push(this.literals[i]);
+            if (i < this.substitutions.length) {
+                out.push(args[this.substitutions[i]]?.toString() ?? '');
+            }
         }
         return out.join('');
     }

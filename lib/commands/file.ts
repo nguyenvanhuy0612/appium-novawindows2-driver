@@ -47,11 +47,15 @@ $targetPath = '${escapedPath}';
 $tempGuid = [Guid]::NewGuid().ToString();
 $zipPath = Join-Path $env:TEMP "appium_$tempGuid.zip";
 if (-not (Test-Path -Path $targetPath -PathType Container)) { throw "Folder not found: $targetPath" };
-Compress-Archive -Path $targetPath -DestinationPath $zipPath -Force;
-$bytes = [System.IO.File]::ReadAllBytes($zipPath);
-$base64 = [Convert]::ToBase64String($bytes);
-Remove-Item -Path $zipPath -Force;
-$base64;
+try {
+    Compress-Archive -Path $targetPath -DestinationPath $zipPath -Force;
+    $bytes = [System.IO.File]::ReadAllBytes($zipPath);
+    [Convert]::ToBase64String($bytes);
+} finally {
+    # Always clean up the staging zip, even if Compress-Archive or
+    # ReadAllBytes threw partway through.
+    Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue;
+}
 `;
 
     return await this.sendPowerShellCommand(command);

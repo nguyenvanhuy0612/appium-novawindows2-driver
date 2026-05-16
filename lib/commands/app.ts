@@ -143,7 +143,10 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
     const UWP_AUMID_REGEX = /^[\w.-]+_[A-Za-z0-9]+![\w.-]+$/;
     if (UWP_AUMID_REGEX.test(path)) {
         this.log.debug('Detected app path to be in the UWP format.');
-        await this.sendPowerShellCommand(/* ps1 */ `Start-Process 'explorer.exe' 'shell:AppsFolder\\${path}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
+        // Escape single quotes in appArguments so a value like
+        // `--flag='value'` doesn't break the PS single-quoted string.
+        const escapedArgs = this.caps.appArguments ? this.caps.appArguments.replace(/'/g, "''") : '';
+        await this.sendPowerShellCommand(/* ps1 */ `Start-Process 'explorer.exe' 'shell:AppsFolder\\${path}'${escapedArgs ? ` -ArgumentList '${escapedArgs}'` : ''}`);
         await sleep((this.caps['ms:waitForAppLaunch'] as number ?? 0) * 1000 || 500);
         for (let i = 1; i <= 20; i++) {
             const result = await this.sendPowerShellCommand(/* ps1 */ `(Get-Process -Name 'ApplicationFrameHost' | Sort-Object StartTime -Descending).Id`);
@@ -163,7 +166,12 @@ export async function changeRootElement(this: NovaWindows2Driver, pathOrNativeWi
     } else {
         this.log.debug('Detected app path to be in the classic format.');
         const normalizedPath = normalize(path);
-        await this.sendPowerShellCommand(/* ps1 */ `Start-Process '${normalizedPath}'${this.caps.appArguments ? ` -ArgumentList '${this.caps.appArguments}'` : ''}`);
+        // Escape single quotes for PS single-quoted strings *only* in the
+        // PS-interpolated copies — `normalizedPath` itself is reused below
+        // for breadcrumb extraction and must keep the original quotes.
+        const psPath = normalizedPath.replace(/'/g, "''");
+        const escapedArgs = this.caps.appArguments ? this.caps.appArguments.replace(/'/g, "''") : '';
+        await this.sendPowerShellCommand(/* ps1 */ `Start-Process '${psPath}'${escapedArgs ? ` -ArgumentList '${escapedArgs}'` : ''}`);
         await sleep((this.caps['ms:waitForAppLaunch'] as number ?? 0) * 1000 || 500);
         const breadcrumbs = normalizedPath.toLowerCase().split('\\').flatMap((x) => x.split('/'));
         const executable = breadcrumbs[breadcrumbs.length - 1];
