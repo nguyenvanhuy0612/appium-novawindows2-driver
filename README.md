@@ -692,7 +692,9 @@ Starts screen recording using ffmpeg.
 | `captureClicks` | `boolean` | no | Whether to capture mouse clicks. | `true` |
 
 > [!IMPORTANT]
-> This feature requires `ffmpeg-static`. It is currently **not supported** on ARM architecture.
+> This feature requires the optional recording stack to be installed separately:
+> `npm i -g asyncbox teen_process ffmpeg-static`
+> Recording is currently **not supported** on ARM architecture (no ARM build of `ffmpeg-static`).
 
 #### `windows: stopRecordingScreen`
 Stops screen recording and returns the video as base64 string.
