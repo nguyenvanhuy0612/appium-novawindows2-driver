@@ -1,4 +1,4 @@
-import { spawn, ChildProcessWithoutNullStreams, execSync } from 'node:child_process';
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { NovaWindows2Driver } from '../driver';
 import { errors } from '@appium/base-driver';
@@ -27,6 +27,25 @@ const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collecti
 const MARKER_PREFIX = '___NOVA_END_';
 const MARKER_SUFFIX = '___';
 
+/**
+ * Default cap on a single PowerShell command's wall-clock time.
+ *
+ * Bumped from 60s -> 300s in 1.1.14 after production failures on SecureAge:
+ *   - SecureAge UIA queries can be ~500ms per property (see secureage_slow_uia
+ *     memory note). A FindFirst that walks ~100 elements on a complex dialog
+ *     hits ~50s; ~200 elements hits ~100s; pathological scopes can exceed
+ *     that. 60s was borderline; 120s still occasionally clipped real work.
+ *     300s is a generous ceiling that should only fire on a genuine hang.
+ *   - Longer timeouts are now cheap: killProcessTree is non-blocking, so a
+ *     stuck command no longer freezes Appium's event loop while it's being
+ *     killed. The only cost of a higher cap is a slower failure when a
+ *     command genuinely hangs.
+ *
+ * Tests / specific callers that care about a tighter ceiling should pass
+ * `appium:powerShellCommandTimeout` in caps.
+ */
+export const DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS = 300_000;
+
 // ============================================================================
 // Per-command context
 // ============================================================================
@@ -42,6 +61,15 @@ export interface CommandContext {
     stdout: string;
     stderr: string;
     marker: string;
+    /**
+     * Indices we've already scanned for the marker in each buffer. Used by
+     * `check()` to avoid re-scanning the whole accumulated buffer on every
+     * data chunk (which would be O(n²) for large outputs). We back up by
+     * `marker.length - 1` from the end of the prior buffer before scanning
+     * the new tail, so a marker straddling a chunk boundary is still found.
+     */
+    stdoutScanIdx: number;
+    stderrScanIdx: number;
     check: () => void;
 }
 
@@ -89,7 +117,15 @@ function ensureSessionReady(driver: NovaWindows2Driver): void {
 function killProcessTree(pid: number, log: any): void {
     try {
         log.debug(`Forcefully killing process tree for PID ${pid}`);
-        execSync(`taskkill /F /T /PID ${pid}`);
+        // spawn + unref so the kill is fire-and-forget — execSync would block
+        // the Node.js event loop (sometimes for several seconds on Windows when
+        // the target process holds COM/UIA resources), causing TCP connect
+        // timeouts on any Appium request that arrives during the wait.
+        const child = spawn('taskkill', ['/F', '/T', '/PID', String(pid)], {
+            stdio: 'ignore',
+            detached: true,
+        });
+        child.unref();
     } catch (e: any) {
         log.warn(`Failed to kill process tree for PID ${pid}: ${e.message}`);
     }
@@ -120,8 +156,18 @@ function waitForCommandCompletion(
             stdout: '',
             stderr: '',
             marker,
+            stdoutScanIdx: 0,
+            stderrScanIdx: 0,
             check: () => check(),
         };
+
+        // Memoised marker-presence flags so `check()` can avoid re-scanning
+        // a buffer once we've already confirmed the marker is in it. The
+        // companion stdout/stderr indices on ctx are advanced incrementally
+        // by check() so the worst-case scan stays O(total bytes), not
+        // O(total bytes × chunks).
+        let stdoutHasMarker = false;
+        let stderrHasMarker = false;
 
         const cleanup = () => {
             settled = true;
@@ -137,8 +183,31 @@ function waitForCommandCompletion(
 
         const check = () => {
             if (settled) return;
-            if (!ctx.stdout.includes(marker)) return;
-            if (!ctx.stderr.includes(marker)) return;
+
+            // Incremental marker scan. Only walk the bytes we haven't
+            // already inspected; back up by marker.length - 1 first so a
+            // marker straddling a chunk boundary is still detected.
+            if (!stdoutHasMarker) {
+                const fromIdx = Math.max(0, ctx.stdoutScanIdx - (marker.length - 1));
+                const found = ctx.stdout.indexOf(marker, fromIdx);
+                if (found !== -1) {
+                    stdoutHasMarker = true;
+                } else {
+                    ctx.stdoutScanIdx = ctx.stdout.length;
+                }
+            }
+            if (!stdoutHasMarker) return;
+
+            if (!stderrHasMarker) {
+                const fromIdx = Math.max(0, ctx.stderrScanIdx - (marker.length - 1));
+                const found = ctx.stderr.indexOf(marker, fromIdx);
+                if (found !== -1) {
+                    stderrHasMarker = true;
+                } else {
+                    ctx.stderrScanIdx = ctx.stderr.length;
+                }
+            }
+            if (!stderrHasMarker) return;
 
             cleanup();
             const stderrText = stripMarker(ctx.stderr);
@@ -205,10 +274,15 @@ function waitForCommandCompletion(
             }
 
             if (driver.powerShellTerminating) {
-                // Intentional teardown - the rejection here would float up as
-                // an unhandled rejection. Resolve silently.
+                // Teardown path: reject with NoSuchDriverError so callers
+                // (and Appium's HTTP layer) see "session is terminating"
+                // instead of an ambiguous empty success. Resolving with ''
+                // here used to surface as NoSuchElementError to find* callers
+                // and as silent "empty result" to others — both misleading.
                 driver.log.debug('PowerShell process closed during session teardown');
-                resolve('');
+                reject(new errors.NoSuchDriverError(
+                    'PowerShell session terminated while command was in flight'
+                ));
                 return;
             }
 
@@ -373,7 +447,12 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
         // await the queue we are currently holding).
         ensureSessionReady(this);
 
-        const timeoutMs = (this.caps as any).powerShellCommandTimeout || 60000;
+        // `??` (not `||`) so 0 / negative don't silently become the default,
+        // and so we surface invalid configurations rather than masking them.
+        const rawTimeout = (this.caps as any).powerShellCommandTimeout as unknown;
+        const timeoutMs = (typeof rawTimeout === 'number' && Number.isFinite(rawTimeout) && rawTimeout > 0)
+            ? rawTimeout
+            : DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS;
         return await waitForCommandCompletion(this, this.powerShell!, command, timeoutMs);
     });
 
@@ -513,7 +592,10 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
         if (this.caps.appWorkingDir) {
             const expandedDir = expandEnvironmentVariables(this.caps.appWorkingDir, this.log);
             this.caps.appWorkingDir = expandedDir;
-            await sendPowerShellCommand.call(this, `Set-Location -Path '${expandedDir}'`);
+            // Escape single quotes for PS single-quoted string (doubled-quote
+            // is the PS literal-string escape).
+            const psEscaped = expandedDir.replace(/'/g, "''");
+            await sendPowerShellCommand.call(this, `Set-Location -Path '${psEscaped}'`);
         }
 
         // Init runs as ONE combined script so `using namespace` applies to
@@ -552,9 +634,17 @@ export async function startPowerShellSession(this: NovaWindows2Driver): Promise<
 async function setupRootElement(this: NovaWindows2Driver): Promise<void> {
     const { app, appTopLevelWindow } = this.caps;
 
-    // No app specified
-    if ((!app && !appTopLevelWindow) || (!app || app.toLowerCase() === 'none')) {
-        this.log.info('No app specified. Setting root element to null.');
+    // Nothing specified at all — null root.
+    if (!app && !appTopLevelWindow) {
+        this.log.info('No app or appTopLevelWindow specified. Setting root element to null.');
+        await sendPowerShellCommand.call(this, NULL_ROOT_ELEMENT);
+        return;
+    }
+
+    // app=none explicitly disables root scoping (even if appTopLevelWindow
+    // is also set, the explicit opt-out wins).
+    if (app && app.toLowerCase() === 'none') {
+        this.log.info('app=none specified. Setting root element to null.');
         await sendPowerShellCommand.call(this, NULL_ROOT_ELEMENT);
         return;
     }
@@ -566,19 +656,23 @@ async function setupRootElement(this: NovaWindows2Driver): Promise<void> {
         return;
     }
 
-    // Launch application
-    if (app && app.toLowerCase() !== 'none') {
+    // Launch application by path / AUMID
+    if (app) {
         const expandedApp = expandEnvironmentVariables(app, this.log);
         this.log.info(`Launching application: ${expandedApp}`);
         await this.changeRootElement(expandedApp);
+        return;
     }
 
-    // Set by window handle
+    // No app, but appTopLevelWindow is set — scope to that window handle.
+    // (driver.createSession already rejects the case where BOTH app and
+    // appTopLevelWindow are set, so we don't have to handle it here.)
     if (appTopLevelWindow) {
         const handle = Number(appTopLevelWindow);
         if (isNaN(handle)) {
             throw new errors.InvalidArgumentError('Invalid appTopLevelWindow: not a valid window handle');
         }
+        this.log.info(`Setting root element to window handle: ${handle}`);
         await this.changeRootElement(handle);
     }
 }

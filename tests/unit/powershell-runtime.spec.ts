@@ -307,7 +307,11 @@ describe('PowerShell Runtime', () => {
     // -----------------------------------------------------------------------
 
     describe('lifecycle', () => {
-        it('silences PowerShell errors during intentional teardown', async () => {
+        it('rejects in-flight command with NoSuchDriverError during intentional teardown', async () => {
+            // Per 1.1.14: in-flight commands now reject with NoSuchDriverError
+            // when PS closes during teardown (was previously resolve(''), which
+            // surfaced misleadingly as NoSuchElementError downstream). The
+            // error path must still be quiet — no error log.
             const ps = new FakePowerShell();
             const driver = makeDriver(ps);
             let errorLogged = false;
@@ -321,10 +325,12 @@ describe('PowerShell Runtime', () => {
             driver.powerShellTerminating = true;
             ps.close(null);
 
-            const result = await inflight;
-            expect(result).to.equal('');
+            let err: any;
+            try { await inflight; } catch (e) { err = e; }
+            expect(err, 'must reject during teardown').to.exist;
+            expect(err.name || String(err)).to.match(/NoSuchDriver/);
             expect(errorLogged).to.equal(false,
-                'unexpected error log during teardown');
+                'teardown rejection should not log at error level');
         });
 
         it('reports an error when PS dies unexpectedly (not during teardown)', async () => {
@@ -424,20 +430,20 @@ describe('PowerShell Runtime', () => {
             driver.powerShell = undefined;
             ps.close(null);
 
-            // In-flight command resolves silently (teardown semantics).
-            const r1 = await p1;
-            expect(r1).to.equal('');
-
-            // Queued commands must reject with NoSuchDriverError, NOT spawn a
-            // fresh PowerShell. The fake stdin should not see any new command
-            // writes after teardown.
+            // In-flight command rejects with NoSuchDriverError (1.1.14).
+            // Queued commands also reject with NoSuchDriverError and must NOT
+            // spawn a fresh PowerShell. The fake stdin should not see any new
+            // command writes after teardown.
             const stdinBefore = ps.stdin.text();
 
-            let err2: any, err3: any;
+            let err1: any, err2: any, err3: any;
+            try { await p1; } catch (e) { err1 = e; }
             try { await p2; } catch (e) { err2 = e; }
             try { await p3; } catch (e) { err3 = e; }
-            expect(err2, 'B must reject').to.exist;
-            expect(err3, 'C must reject').to.exist;
+            expect(err1, 'A (in-flight) must reject').to.exist;
+            expect(err2, 'B (queued) must reject').to.exist;
+            expect(err3, 'C (queued) must reject').to.exist;
+            expect(err1.name || String(err1)).to.match(/NoSuchDriver/);
             expect(err2.name || String(err2)).to.match(/NoSuchDriver/);
             expect(err3.name || String(err3)).to.match(/NoSuchDriver/);
 

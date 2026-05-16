@@ -2,6 +2,7 @@ import { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { BaseDriver, W3C_ELEMENT_KEY, errors } from '@appium/base-driver';
 import { system } from 'appium/support';
 import commands from './commands';
+import { DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS } from './commands/powershell';
 import {
     UI_AUTOMATION_DRIVER_CONSTRAINTS,
     NovaWindowsDriverConstraints
@@ -227,8 +228,14 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
             if (this.caps.shouldCloseApp === undefined) {
                 this.caps.shouldCloseApp = true; // set default value
             }
-            if (this.caps.powerShellCommandTimeout === undefined) {
-                this.caps.powerShellCommandTimeout = 60000; // set default value
+            const rawPsTimeout = this.caps.powerShellCommandTimeout as unknown;
+            if (
+                rawPsTimeout === undefined
+                || typeof rawPsTimeout !== 'number'
+                || !Number.isFinite(rawPsTimeout)
+                || rawPsTimeout <= 0
+            ) {
+                this.caps.powerShellCommandTimeout = DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS;
             }
             if (this.caps.convertAbsoluteXPathToRelativeFromElement === undefined) {
                 this.caps.convertAbsoluteXPathToRelativeFromElement = true; // set default value

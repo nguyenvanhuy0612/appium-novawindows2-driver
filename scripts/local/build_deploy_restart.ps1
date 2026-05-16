@@ -195,13 +195,16 @@ if (-not (Test-Path '$remoteRoot')) { New-Item -Path '$remoteRoot' -ItemType Dir
 if ($plan.StopAppium) {
     Write-Step (++$step) $total 'Stopping existing Appium server...'
     Invoke-RemotePs -StepLabel 'stop Appium' -Script @'
-$title = 'AppiumServer'
-taskkill /f /fi "windowtitle eq $title" /t 2>$null | Out-Null
-taskkill /f /im node.exe /t                  2>$null | Out-Null
-Get-Process -Name powershell, pwsh -ErrorAction SilentlyContinue |
-    Where-Object { $_.Id -ne $PID } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+try {
+    $title = 'AppiumServer'
+    taskkill /f /fi "windowtitle eq $title" /t 2>$null | Out-Null
+    taskkill /f /im node.exe /t                  2>$null | Out-Null
+    Get-Process -Name powershell, pwsh -ErrorAction SilentlyContinue |
+        Where-Object { $_.Id -ne $PID } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+} catch { }
 Write-Output 'appium processes stopped'
+exit 0
 '@
     Write-Ok 'Appium stopped'
 }
@@ -282,6 +285,7 @@ if ($plan.Restart) {
         Invoke-RemotePs -StepLabel 'stop Appium (restart-only)' -Script @'
 taskkill /f /fi "windowtitle eq AppiumServer" /t 2>$null | Out-Null
 taskkill /f /im node.exe /t                   2>$null | Out-Null
+exit 0
 '@
     }
     Invoke-RemotePs -StepLabel 'start Appium' -Script @'
