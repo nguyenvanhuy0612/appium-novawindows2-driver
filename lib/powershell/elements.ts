@@ -613,20 +613,31 @@ const CLOSE_WINDOW = pwsh$ /* ps1 */ `try { ${0}.GetCurrentPattern([WindowPatter
 const MOVE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TransformPattern]::Pattern).Move(${1}, ${2})`;
 const RESIZE_WINDOW = pwsh$ /* ps1 */ `${0}.GetCurrentPattern([TransformPattern]::Pattern).Resize(${1}, ${2})`;
 
+// Pre-encoded 1x1 transparent PNG. Used by the screenshot fallback paths so
+// the catch handler never re-enters GDI+. GDI+ surfaces many failure modes
+// (handle exhaustion, oversized/invalid bitmap dims, mid-OOM CLR state) as
+// OutOfMemoryException — if the outer try threw one of those, re-allocating
+// a Bitmap in the catch can throw OOM again, which escapes the script,
+// escapes pwsh's REPL, and terminates the PS child with 0xE0434352.
+//
+// GDI+ also rejects bitmap dims > 32767; an oversized rect from a transient
+// virtual-desktop measurement would otherwise throw OOM on New-Object Bitmap.
 const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
     try {
         $el = ${0};
-        $rect = $el.Current.BoundingRectangle;
+        if ($el -eq $null) { return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC'; }
 
-        if ($el -eq $null -or $rect.Width -le 0 -or $rect.Height -le 0) {
-            $bitmap = New-Object Drawing.Bitmap 1, 1;
-            $stream = New-Object IO.MemoryStream;
-            $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
-            $bitmap.Dispose();
-            return [Convert]::ToBase64String($stream.ToArray());
+        $rect = $el.Current.BoundingRectangle;
+        $w = [int32]$rect.Width;
+        $h = [int32]$rect.Height;
+
+        # UIA can return Rect.Empty (+/- infinity) for a transient root, or
+        # huge values mid-redraw; GDI+ would throw OOM on the New-Object below.
+        if ($w -le 0 -or $h -le 0 -or $w -gt 32767 -or $h -gt 32767) {
+            return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC';
         }
 
-        $bitmap = New-Object Drawing.Bitmap([int32]$rect.Width, [int32]$rect.Height);
+        $bitmap = New-Object Drawing.Bitmap($w, $h);
         $graphics = [Drawing.Graphics]::FromImage($bitmap);
         try {
             $graphics.CopyFromScreen([int32]$rect.Left, [int32]$rect.Top, 0, 0, $bitmap.Size);
@@ -640,14 +651,9 @@ const GET_ELEMENT_SCREENSHOT = pwsh$ /* ps1 */ `
         $bitmap.Dispose();
         [Convert]::ToBase64String($stream.ToArray());
     } catch {
-        $bitmap = New-Object Drawing.Bitmap 1, 1;
-        $stream = New-Object IO.MemoryStream;
-        $graphics = [Drawing.Graphics]::FromImage($bitmap);
-        $graphics.Clear([Drawing.Color]::Red);
-        $graphics.Dispose();
-        $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png);
-        $bitmap.Dispose();
-        [Convert]::ToBase64String($stream.ToArray());
+        # No GDI+ in this catch block: see the comment above. A real Bitmap
+        # allocation here can re-throw OOM and escape the pwsh REPL.
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC'
     }
 `;
 

@@ -251,7 +251,12 @@ function waitForCommandCompletion(
             const stdoutText = stripMarker(ctx.stdout).trim();
 
             const elapsedMs = Date.now() - startedAt;
-            const shortCmd = `${command.slice(0, 80)}${command.length > 80 ? '…' : ''}`;
+            // Full decoded command in logs (was truncated at 80 chars of the
+            // base64-wrapped form, which produced uninformative
+            // `(Invoke-Expression -Command ([System.Text.Encoding]::UTF8...…`
+            // entries). decodePwsh unwraps the base64 sandwich back into the
+            // original PS source.
+            const shortCmd = decodePwsh(command);
 
             // Native-exe failure: our $LASTEXITCODE injection emitted
             // "[NativeExit] N" on stderr. ALWAYS a failure regardless of
@@ -267,7 +272,6 @@ function waitForCommandCompletion(
                     ? `Native command exited with code ${nativeCode}. stderr: ${otherStderr}`
                     : `Native command exited with code ${nativeCode}`;
                 driver.log.debug(`[PS Command Failed] (${elapsedMs}ms) ${shortCmd}`);
-                driver.log.debug(`[PowerShell Raw Command] \n${decodePwsh(command)}`);
                 reject(new errors.UnknownError(msg));
                 return;
             }
@@ -277,7 +281,25 @@ function waitForCommandCompletion(
                 if (treatAsError) {
                     driver.log.debug(`[PS Command Failed] (${elapsedMs}ms) ${shortCmd}`);
                     driver.log.debug(`[PowerShell Error] ${stderrText}`);
-                    driver.log.debug(`[PowerShell Raw Command] \n${decodePwsh(command)}`);
+                    // CLR-fatal exceptions (OOM, StackOverflow, ExecutionEngine,
+                    // AccessViolation) leave the AppDomain in a state where the
+                    // next command will also fail. GDI+ in particular surfaces
+                    // many error modes as OutOfMemoryException; once it does,
+                    // every subsequent GDI+ call in the same process throws OOM
+                    // too, and pwsh eventually self-terminates with 0xE0434352.
+                    // Pre-empt the cascade by killing this PS child now so the
+                    // next sendPowerShellCommand respawns a clean session.
+                    if (/OutOfMemoryException|StackOverflowException|ExecutionEngineException|AccessViolationException/.test(stderrText)) {
+                        driver.log.warn(`Detected fatal CLR exception in stderr; recycling PowerShell session to avoid cascade.`);
+                        try {
+                            if (driver.powerShell === powerShell && powerShell.pid) {
+                                killProcessTree(powerShell.pid, driver.log);
+                                driver.powerShell = undefined;
+                            }
+                        } catch (e) {
+                            driver.log.warn(`Failed to recycle PowerShell after fatal CLR exception: ${e}`);
+                        }
+                    }
                     reject(new errors.UnknownError(stderrText));
                     return;
                 }
