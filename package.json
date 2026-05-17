@@ -1,6 +1,6 @@
 {
   "name": "appium-novawindows2-driver",
-  "version": "1.1.17",
+  "version": "1.1.18",
   "description": "Appium driver for Windows",
   "keywords": [
     "appium",
@@ -40,10 +40,10 @@
     "url": "https://github.com/nguyenvanhuy0612/appium-novawindows2-driver/issues"
   },
   "peerDependencies": {
-    "@appium/base-driver": "^10.1.0",
     "appium": "^3.1.0"
   },
   "dependencies": {
+    "@appium/base-driver": "^10.1.0",
     "bezier-easing": "^2.1.0",
     "koffi": "^2.14.1",
     "xpath-analyzer": "^3.0.1"
