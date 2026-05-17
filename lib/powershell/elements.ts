@@ -257,11 +257,31 @@ const AUTOMATION_ROOT = /* ps1 */ `$rootElement`;
 const FOCUSED_ELEMENT = /* ps1 */ `[AutomationElement]::FocusedElement`;
 const ROOT_ELEMENT = /* ps1 */ `[AutomationElement]::RootElement`;
 
+// FIFO-bounded insert into $elementTable. The order queue and the
+// $ELEMENT_TABLE_MAX constant are initialised by INIT_ELEMENT_TABLE in
+// lib/commands/powershell.ts. Eviction is necessary because long-running
+// poll-loop sessions otherwise accumulate dead UIA COM proxies until PS
+// OOMs. When a client references an evicted runtime id, the TS-side
+// `ensureElementResolved` helper re-finds the element by its RuntimeId
+// and re-caches it transparently — so eviction is invisible to callers
+// unless the element itself has been destroyed.
 const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
     ${0} | Where-Object { $null -ne $_ } | ForEach-Object {
         $runtimeId = $_.GetCurrentPropertyValue([AutomationElement]::RuntimeIdProperty) -join '.';
 
-        $elementTable[$runtimeId] = $_;
+        if (-not $elementTable.ContainsKey($runtimeId)) {
+            $elementTable[$runtimeId] = $_;
+            $elementTableOrder.Enqueue($runtimeId);
+            while ($elementTable.Count -gt $ELEMENT_TABLE_MAX) {
+                $oldest = $elementTableOrder.Dequeue();
+                [void]$elementTable.Remove($oldest);
+            }
+        } else {
+            # Already cached. Refresh the proxy in case the previous one
+            # is stale, but don't re-enqueue (avoids unbounded duplicate
+            # entries in the order queue when the same id is saved twice).
+            $elementTable[$runtimeId] = $_;
+        }
 
         $runtimeId
     }

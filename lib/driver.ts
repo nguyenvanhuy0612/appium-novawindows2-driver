@@ -69,6 +69,12 @@ export class NovaWindows2Driver extends BaseDriver<NovaWindowsDriverConstraints,
     // a dead session all wait on the same recovery.
     powerShellRestartPromise?: Promise<void>;
     powerShellTerminating: boolean = false;
+    // Number of PS commands currently queued or running. Incremented when a
+    // command is appended to commandQueue, decremented when it settles.
+    // Used to enforce a depth cap so a client (or buggy code) sending PS
+    // calls faster than they can be drained doesn't push the queue into
+    // unbounded growth that holds memory + delays graceful shutdown.
+    powerShellQueueDepth: number = 0;
     keyboardState: KeyboardState = {
         pressed: new Set(),
         alt: false,
@@ -304,6 +310,22 @@ if ($null -ne $rootElement) {
 
         // Close the whole process
         await this.terminatePowerShellSession();
+
+        // Release per-session refs so the GC can reclaim them. Each
+        // queued .then() in a Promise chain holds closure refs to
+        // command bytes + markers + driver state; resetting to a fresh
+        // Promise.resolve() drops all those references at once.
+        this.commandQueue = Promise.resolve();
+        this.powerShellQueueDepth = 0;
+        this.powerShellCommandContext = undefined;
+        // Clear any held modifier state from performActions so a reused
+        // driver instance doesn't carry SHIFT/CTRL into the next session.
+        // (Per-session releaseActions is tracked separately under A20.)
+        this.keyboardState.pressed.clear();
+        this.keyboardState.shift = false;
+        this.keyboardState.ctrl = false;
+        this.keyboardState.alt = false;
+        this.keyboardState.meta = false;
 
         await super.deleteSession(sessionId);
     }

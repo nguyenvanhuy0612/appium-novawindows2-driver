@@ -27,7 +27,8 @@
     "test:e2e:click:root": "mocha --no-config -r ts-node/register --timeout 120000 tests/e2e/click_root.e2e.spec.ts",
     "test:e2e:click:ext": "mocha --no-config -r ts-node/register --timeout 180000 tests/e2e/click_extension.e2e.spec.ts",
     "test:e2e:smoke:more": "mocha --no-config -r ts-node/register --timeout 180000 tests/e2e/smoke_more.e2e.spec.ts",
-    "test:e2e:killtree": "mocha --no-config -r ts-node/register --timeout 120000 tests/e2e/stable/killtree-nonblocking.e2e.spec.ts"
+    "test:e2e:killtree": "mocha --no-config -r ts-node/register --timeout 120000 tests/e2e/stable/killtree-nonblocking.e2e.spec.ts",
+    "test:e2e:session-stress": "mocha --no-config -r ts-node/register --timeout 1800000 tests/e2e/stable/session-stress.e2e.spec.ts"
   },
   "author": "nguyenvanhuy0612",
   "license": "Apache-2.0",

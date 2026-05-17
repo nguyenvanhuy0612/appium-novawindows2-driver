@@ -22,7 +22,27 @@ $cacheRequest.Push()
 `;
 const INIT_ROOT_ELEMENT = /* ps1 */ `$rootElement = [AutomationElement]::RootElement`;
 const NULL_ROOT_ELEMENT = /* ps1 */ `$rootElement = $null`;
-const INIT_ELEMENT_TABLE = /* ps1 */ `$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]`;
+/**
+ * Maximum number of UIA elements cached in the PS-side `$elementTable`.
+ *
+ * Hit on long-running sessions that issue many findAll calls (each saves
+ * every returned element). Pre-1.1.17 the table grew unboundedly, holding
+ * dead UIA COM proxies that the runtime can't GC eagerly. Eventually PS
+ * threw OOM (separate from the FindAll(Subtree) OOM fixed in A14).
+ *
+ * 10 000 entries is generous for a single test; bounded so a poll-loop
+ * session can't blow PS memory. Eviction is FIFO over insertion order.
+ * When a client references an evicted ID, `ensureElementResolved` re-finds
+ * the element by its runtime ID and re-caches it transparently (one extra
+ * UIA call, no test-visible failure unless the underlying element is gone).
+ */
+const ELEMENT_TABLE_MAX = 10_000;
+
+const INIT_ELEMENT_TABLE = /* ps1 */ `
+$elementTable = New-Object System.Collections.Generic.Dictionary[[string]\`,[AutomationElement]]
+$elementTableOrder = New-Object System.Collections.Generic.Queue[string]
+$ELEMENT_TABLE_MAX = ${ELEMENT_TABLE_MAX}
+`;
 
 const MARKER_PREFIX = '___NOVA_END_';
 const MARKER_SUFFIX = '___';
@@ -45,6 +65,23 @@ const MARKER_SUFFIX = '___';
  * `appium:powerShellCommandTimeout` in caps.
  */
 export const DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS = 300_000;
+
+/**
+ * Maximum number of in-flight + queued PS commands per session.
+ *
+ * Hit when a client sends commands faster than the PS subprocess can
+ * drain them (poll loops with no debounce, parallel finds, runaway test
+ * harness, etc.). Without a cap, the commandQueue Promise chain grows
+ * unboundedly: each pending entry holds command bytes, the marker UUID,
+ * onClose handler refs, and prolongs graceful shutdown.
+ *
+ * 200 is high enough that legitimate test bursts pass through but low
+ * enough that a runaway client surfaces as a clear error after a couple
+ * of seconds instead of accumulating for minutes. New commands above the
+ * cap reject with UnknownError; the queued commands continue to drain
+ * normally.
+ */
+export const MAX_POWERSHELL_QUEUE_DEPTH = 200;
 
 // ============================================================================
 // Per-command context
@@ -424,6 +461,20 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
     // on its own outer queue entry.
     await ensurePowerShellSession(this);
 
+    // Depth cap: refuse new commands once the queue is saturated. Keeps the
+    // commandQueue Promise chain bounded, surfaces runaway clients quickly,
+    // and prevents the queue from holding gigabytes of pending command
+    // bytes during graceful shutdown. The increment must happen BEFORE
+    // chaining onto commandQueue so that concurrent callers see the cap
+    // correctly without interleaving.
+    if (this.powerShellQueueDepth >= MAX_POWERSHELL_QUEUE_DEPTH) {
+        throw new errors.UnknownError(
+            `PowerShell command queue is full (${this.powerShellQueueDepth} pending, cap ${MAX_POWERSHELL_QUEUE_DEPTH}). `
+            + `Slow down callers or raise MAX_POWERSHELL_QUEUE_DEPTH. Rejecting this command.`
+        );
+    }
+    this.powerShellQueueDepth++;
+
     if (!this.commandQueue) {
         this.commandQueue = Promise.resolve();
     }
@@ -431,29 +482,36 @@ export async function sendPowerShellCommand(this: NovaWindows2Driver, command: s
     this.commandQueue = this.commandQueue.catch((err) => {
         this.log.debug(`[Command Queue] Previous command failed, proceeding with next command. Error: ${err?.message || err}`);
     }).then(async () => {
-        // Teardown may have started while we were waiting our turn in the
-        // queue. Bail before doing any I/O so we don't trigger an auto-
-        // restart of the very process the session is trying to terminate.
-        if (this.powerShellTerminating) {
-            throw new errors.NoSuchDriverError(
-                'PowerShell session is being terminated'
-            );
-        }
-        // If PS died between our pre-queue check and our turn, fail this
-        // single command. The next sendPowerShellCommand call will hit
-        // ensurePowerShellSession (pre-queue) and restart cleanly — which
-        // avoids the deadlock that would occur if we tried to restart from
-        // inside the queue (startPowerShellSession's own init commands
-        // await the queue we are currently holding).
-        ensureSessionReady(this);
+        try {
+            // Teardown may have started while we were waiting our turn in the
+            // queue. Bail before doing any I/O so we don't trigger an auto-
+            // restart of the very process the session is trying to terminate.
+            if (this.powerShellTerminating) {
+                throw new errors.NoSuchDriverError(
+                    'PowerShell session is being terminated'
+                );
+            }
+            // If PS died between our pre-queue check and our turn, fail this
+            // single command. The next sendPowerShellCommand call will hit
+            // ensurePowerShellSession (pre-queue) and restart cleanly — which
+            // avoids the deadlock that would occur if we tried to restart from
+            // inside the queue (startPowerShellSession's own init commands
+            // await the queue we are currently holding).
+            ensureSessionReady(this);
 
-        // `??` (not `||`) so 0 / negative don't silently become the default,
-        // and so we surface invalid configurations rather than masking them.
-        const rawTimeout = (this.caps as any).powerShellCommandTimeout as unknown;
-        const timeoutMs = (typeof rawTimeout === 'number' && Number.isFinite(rawTimeout) && rawTimeout > 0)
-            ? rawTimeout
-            : DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS;
-        return await waitForCommandCompletion(this, this.powerShell!, command, timeoutMs);
+            // `??` (not `||`) so 0 / negative don't silently become the default,
+            // and so we surface invalid configurations rather than masking them.
+            const rawTimeout = (this.caps as any).powerShellCommandTimeout as unknown;
+            const timeoutMs = (typeof rawTimeout === 'number' && Number.isFinite(rawTimeout) && rawTimeout > 0)
+                ? rawTimeout
+                : DEFAULT_POWERSHELL_COMMAND_TIMEOUT_MS;
+            return await waitForCommandCompletion(this, this.powerShell!, command, timeoutMs);
+        } finally {
+            // Decrement on settle (success or failure) so the depth cap is
+            // an in-flight count, not a lifetime count. Wrapped in try {}
+            // to avoid leaking a stale increment if the inner await throws.
+            this.powerShellQueueDepth--;
+        }
     });
 
     return await this.commandQueue;
