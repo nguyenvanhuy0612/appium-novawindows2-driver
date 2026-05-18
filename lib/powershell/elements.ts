@@ -274,7 +274,12 @@ const SAVE_TO_ELEMENT_TABLE_AND_RETURN_ID = pwsh$ /* ps1 */ `
             $elementTableOrder.Enqueue($runtimeId);
             while ($elementTable.Count -gt $ELEMENT_TABLE_MAX) {
                 $oldest = $elementTableOrder.Dequeue();
+                $evicted = $null;
+                [void]$elementTable.TryGetValue($oldest, [ref]$evicted);
                 [void]$elementTable.Remove($oldest);
+                if ($null -ne $evicted) {
+                    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($evicted);
+                }
             }
         } else {
             # Already cached. Refresh the proxy in case the previous one

@@ -68,6 +68,8 @@ const EXTENSION_COMMANDS = Object.freeze({
     stopRecordingScreen: 'stopRecordingScreen',
     launchApp: 'launchApp',
     closeApp: 'closeApp',
+    scopeSession: 'executeScopeSession',
+    resetSessionRoot: 'executeResetSessionRoot',
 } as const);
 
 const ContentType = Object.freeze({
@@ -82,7 +84,7 @@ const TREE_SCOPE_COMMAND = $ /* ps1 */ `$cacheRequest.Pop(); $cacheRequest.TreeS
 const AUTOMATION_ELEMENT_MODE = $ /* ps1 */ `$cacheRequest.Pop(); $cacheRequest.AutomationElementMode = ${0}; $cacheRequest.Push()`;
 
 const SET_PLAINTEXT_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `Set-Clipboard -Value ([System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${0}')))`;
-const GET_PLAINTEXT_CLIPBOARD_BASE64 = /* ps1 */ `[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Clipboard)))`;
+const GET_PLAINTEXT_CLIPBOARD_BASE64 = /* ps1 */ `[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes((Get-Clipboard -Raw)))`;
 
 const SET_IMAGE_CLIPBOARD_FROM_BASE64 = $ /* ps1 */ `$b = [Convert]::FromBase64String('${0}'); $s = New-Object IO.MemoryStream; $s.Write($b, 0, $b.Length); $s.Position = 0; $i = [System.Windows.Media.Imaging.BitmapFrame]::Create($s); [Windows.Clipboard]::SetImage($i); $s.Close()`;
 const GET_IMAGE_CLIPBOARD_BASE64 = pwsh /* ps1 */ `

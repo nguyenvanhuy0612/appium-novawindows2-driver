@@ -7,6 +7,7 @@ import * as system from './system';
 import * as app from './app';
 import * as file from './file';
 import * as screenRecorder from './screen-recorder';
+import * as scopeSession from './scope-session';
 
 const commands = {
     ...actions,
@@ -18,6 +19,7 @@ const commands = {
     ...app,
     ...file,
     ...screenRecorder,
+    ...scopeSession,
     // add the rest of the commands here
 };
 

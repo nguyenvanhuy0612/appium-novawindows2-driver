@@ -30,6 +30,8 @@ if (-not ([System.Management.Automation.PSTypeName]'Win32Helper').Type) {
 using System;
 using System.Runtime.InteropServices;
 using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Security;
@@ -328,6 +330,60 @@ public static class Win32Helper {
         uint pid = 0;
         GetWindowThreadProcessId(hwnd, out pid);
         return pid;
+    }
+
+    // ==================================================================
+    // Window enumeration (for scope-session)
+    // ==================================================================
+
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam, System.Text.StringBuilder lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
+
+    private const uint WM_GETTEXT = 0x000D;
+    private const uint SMTO_ABORTIFHUNG = 0x0002;
+    private const uint SMTO_BLOCK = 0x0001;
+
+    /// <summary>
+    /// Find a top-level window by exact Name and Win32 ClassName.
+    /// Uses EnumWindows + SendMessageTimeout(WM_GETTEXT) — avoids UIA FindFirst
+    /// which blocks for 20+ s against SecureAge's slow UIA provider.
+    /// Polls for up to timeoutMs milliseconds (pollMs interval). Returns IntPtr.Zero on timeout.
+    /// </summary>
+    public static IntPtr FindWindowByName(string targetName, string targetClass, int timeoutMs, int pollMs) {
+        var sw = Stopwatch.StartNew();
+        do {
+            var candidates = new List<IntPtr>();
+            EnumWindowsProc cb = (h, l) => {
+                if (!IsWindowVisible(h)) return true;
+                if (!string.IsNullOrEmpty(targetClass)) {
+                    var cls = new System.Text.StringBuilder(256);
+                    GetClassName(h, cls, 256);
+                    if (cls.ToString() != targetClass) return true;
+                }
+                candidates.Add(h);
+                return true;
+            };
+            EnumWindows(cb, IntPtr.Zero);
+            foreach (var h in candidates) {
+                var tb = new System.Text.StringBuilder(512);
+                IntPtr res = IntPtr.Zero;
+                IntPtr rc = SendMessageTimeout(h, WM_GETTEXT, (IntPtr)512, tb,
+                    SMTO_ABORTIFHUNG | SMTO_BLOCK, 500, out res);
+                if (rc != IntPtr.Zero && tb.ToString() == targetName) return h;
+            }
+            long elapsed = sw.ElapsedMilliseconds;
+            if (elapsed >= timeoutMs) break;
+            if (pollMs > 0) Thread.Sleep(Math.Min(pollMs, (int)(timeoutMs - elapsed)));
+        } while (true);
+        return IntPtr.Zero;
     }
 
     private static void SendAltKey(bool keyUp) {

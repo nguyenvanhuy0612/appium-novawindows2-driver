@@ -299,7 +299,7 @@ export async function setValue(this: NovaWindows2Driver, value: string | string[
                             await sleep(typeDelay);
                         }
                     } else {
-                        keysToSend.push(char.replace(/[+^%~()]/g, '{$&}'));
+                        keysToSend.push(char.replace(/[+^%~(){}]/g, '{$&}'));
                         if (typeDelay) {
                             await sendKeysAndResetArray();
                             await sleep(typeDelay);
